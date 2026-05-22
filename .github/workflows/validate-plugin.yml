@@ -1,0 +1,68 @@
+name: validate-plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  manifest:
+    name: Manifest schema check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout host manifest schema
+        uses: actions/checkout@v4
+        with:
+          repository: humdek-unibe-ch/sh-selfhelp_backend
+          path: .host
+      - name: Validate plugin.json
+        run: |
+          npx -y ajv-cli@5 validate \
+            -s .host/docs/plugins/plugin-manifest.schema.json \
+            -d plugin.json \
+            --strict=false
+
+  backend:
+    name: Backend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo,pdo_mysql,intl,zip,xml
+          coverage: none
+      - name: Composer install
+        run: composer install --no-interaction --no-progress
+        working-directory: backend
+      - name: PHPStan
+        run: composer phpstan
+        working-directory: backend
+      - name: PHPUnit
+        run: composer test
+        working-directory: backend
+
+  frontend:
+    name: Frontend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix frontend
+      - run: npm run typecheck --prefix frontend
+      - run: npm run build --prefix frontend
+
+  mobile:
+    name: Mobile lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix mobile
+      - run: npm run typecheck --prefix mobile
+      - run: npm run build --prefix mobile
