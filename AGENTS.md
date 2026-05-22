@@ -1,0 +1,220 @@
+# AGENTS.md
+
+Before returning anything print in chat `❤️AGENTS.md` so that we know the rules are used.
+
+## Project Overview
+
+This is the SelfHelp plugin `sh2-shp-survey-js`. It provides SurveyJS v2 integration for the SelfHelp CMS: a Mantine-themed Survey Creator for admins, a public-runtime SurveyJS style, optional GPX / Video / rich-text custom question types, a response dashboard, and a readonly mobile renderer.
+
+## Critical execution rule
+
+This project lives inside the multi-repository SelfHelp ecosystem.
+
+The AI agent must always obey the `AGENTS.md` of the repository whose files are being modified, regardless of where the agent was started.
+
+When working inside this plugin repository, choose the governing repository rules by the part of the plugin being edited:
+
+- `backend/` changes: follow this plugin `AGENTS.md` and the host backend repository `AGENTS.md`.
+- `frontend/` changes: follow this plugin `AGENTS.md` and the host frontend repository `AGENTS.md`.
+- `mobile/` changes: follow this plugin `AGENTS.md` and the host mobile repository `AGENTS.md`.
+- changes that import from or depend on `@selfhelp/shared`: also read and follow the shared package `AGENTS.md`.
+- changes that touch more than one area: read and apply the rules for each affected repository separately.
+
+Do not use backend conventions for frontend files, frontend conventions for mobile files, or mobile conventions for backend files.
+
+### Rule precedence
+
+When editing `backend/` files:
+
+1. Runtime code and existing implementation.
+2. Host backend repository `AGENTS.md`.
+3. Canonical multi-repository rules.
+4. This plugin `AGENTS.md`.
+5. Documentation.
+
+Plugin rules supplement backend rules and do not replace them unless explicitly stated.
+
+When editing `frontend/` files:
+
+1. Runtime code and existing implementation.
+2. Host frontend repository `AGENTS.md`.
+3. Canonical multi-repository rules.
+4. This plugin `AGENTS.md`.
+5. Documentation.
+
+Plugin rules supplement frontend rules and do not replace them unless explicitly stated.
+
+When editing `mobile/` files:
+
+1. Runtime code and existing implementation.
+2. Host mobile repository `AGENTS.md`.
+3. Canonical multi-repository rules.
+4. This plugin `AGENTS.md`.
+5. Documentation.
+
+Plugin rules supplement mobile rules and do not replace them unless explicitly stated.
+
+When editing code that imports from or depends on `@selfhelp/shared`:
+
+1. Runtime code and existing implementation.
+2. The `AGENTS.md` of the host repository owning the edited files.
+3. Shared package `AGENTS.md`.
+4. Canonical multi-repository rules.
+5. This plugin `AGENTS.md`.
+6. Documentation.
+
+If two rule sources conflict, the repository that owns the edited files wins unless this plugin `AGENTS.md` explicitly declares an additional plugin-specific constraint.
+
+### Repository discovery
+
+Repository locations are environment-specific.
+
+Do not assume absolute paths such as:
+
+- `D:\...`
+- `/home/...`
+- `/Users/...`
+
+Discover repositories from:
+
+- the current workspace;
+- sibling repositories in the current workspace;
+- repository names;
+- explicitly provided user paths;
+- local developer configuration files such as `AGENTS.local.md`.
+
+If `AGENTS.local.md` exists, use it as the first place to resolve the local paths of:
+
+- `sh-selfhelp_backend`
+- `sh-selfhelp_frontend`
+- `sh-selfhelp_shared`
+- `sh-selfhelp_mobile`
+- sibling plugin repositories when relevant
+
+### Required repository rules
+
+Before modifying any plugin area, identify which host repository owns the conventions for that area and read its `AGENTS.md`.
+
+- For `backend/`, read the backend repo `AGENTS.md`.
+- For `frontend/`, read the frontend repo `AGENTS.md`.
+- For `mobile/`, read the mobile repo `AGENTS.md`.
+- For changes involving `@selfhelp/shared`, read the shared repo `AGENTS.md`.
+- Follow that repository's rules for architecture, coding style, migrations, testing, validation, commits, and documentation.
+- Do not apply conventions from one repository to another unless explicitly documented.
+
+Typical repositories participating in plugin development are:
+
+- `sh-selfhelp_backend`
+- `sh-selfhelp_frontend`
+- `sh-selfhelp_shared`
+- `sh-selfhelp_mobile`
+- affected plugin repositories
+
+### Canonical multi-repository rules
+
+The canonical Multi-Repository AGENTS.md Rule lives in the backend repository:
+
+```text
+docs/plugins/multi-repo-agents-md.md
+```
+
+If the backend repository is available, read that document before making multi-repository changes.
+
+If it is unavailable:
+
+- continue using the rules in the current repository;
+- clearly state that the canonical document could not be located.
+
+### Required-before-coding checklist
+
+- [ ] Identify all repositories affected by the task.
+- [ ] Locate each repository in the current environment.
+- [ ] Read `AGENTS.md` in every affected repository.
+- [ ] Read the canonical multi-repository rule if available.
+- [ ] Summarize relevant rules per repository.
+- [ ] Confirm planned file changes per repository.
+- [ ] Apply changes repository-by-repository.
+- [ ] Run validation commands from the matching repository.
+- [ ] Do not mix backend, frontend, shared, mobile, and plugin conventions.
+
+### Quick routing guide
+
+Use this guide before editing:
+
+- editing `backend/**`: plugin rules + backend repo rules
+- editing `frontend/**`: plugin rules + frontend repo rules
+- editing `mobile/**`: plugin rules + mobile repo rules
+- editing code that imports `@selfhelp/shared`: also apply shared repo rules
+- editing docs or root files only: use this plugin `AGENTS.md`, and add host repo rules only if the change is tied to one of the areas above
+
+## Doctrine Migration Rules
+
+### Backend schema inheritance
+
+When creating or modifying plugin backend database objects:
+
+- Follow all backend repository database rules.
+- Follow all backend naming conventions.
+- Follow all backend migration rules.
+- Follow all backend foreign-key naming rules.
+- Follow all backend relation-table naming rules.
+
+Plugin database schema must be indistinguishable from native backend schema unless an explicit compatibility exception is documented.
+
+Examples:
+
+- plural `lowercase_snake_case` table names
+- `id_<table_name>` foreign keys
+- `rel_<table_a>_<table_b>` relation tables
+- Symfony-generated Doctrine migrations
+
+### Doctrine migrations are mandatory
+
+- Database changes must use Symfony/Doctrine migrations.
+- Doctrine migrations are the only supported schema migration mechanism.
+- Do not modify existing applied migrations unless explicitly instructed.
+- Create a new migration for every schema change.
+
+### Migration generation (MANDATORY)
+
+- Never manually create Doctrine migration filenames.
+- Never manually create Doctrine migration class names.
+- Never invent migration names such as:
+  - `Version20260521150000`
+  - `Version20260521150100`
+  - or any other hand-written timestamp-based migration class.
+- Always generate migrations using the repository's official Symfony/Doctrine migration generation command.
+- The generated filename and generated class name are the only allowed migration names.
+- After generation, modify the migration contents if required.
+- Do not rename generated migrations.
+- Do not manually create migration files inside the migrations directory.
+- Do not guess future migration version numbers.
+- Do not create migration classes by copying previous migrations.
+
+### Migration execution
+
+- Existing editor rules prohibit automatically executing migrations.
+- Generate migration files only.
+- Let the development team execute migrations manually.
+- Do not run migration commands automatically unless explicitly instructed.
+
+### Migration review requirements
+
+Before creating a migration:
+
+- Inspect existing entities.
+- Inspect existing Doctrine mappings.
+- Inspect existing migrations.
+- Verify naming conventions.
+- Verify foreign key conventions.
+- Verify index naming conventions.
+- Verify compatibility with existing repository architecture.
+
+### Audit requirements
+
+During audits and code reviews:
+
+- Treat manually-created migration filenames as a repository rule violation.
+- Treat manually-created migration class names as a repository rule violation.
+- Treat invented timestamp-based migration names as a repository rule violation.
+- Verify migrations were generated through the repository's official Symfony/Doctrine migration workflow.

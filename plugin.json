@@ -1,0 +1,195 @@
+{
+    "id": "sh2-shp-survey-js",
+    "name": "SurveyJS",
+    "description": "SurveyJS v2 integration for SelfHelp CMS. Provides a Mantine-themed Survey Creator (admin), a survey runtime style, and a public submission pipeline that writes into the existing data_tables / data_rows / data_cells. Includes optional GPX, Video, and rich-text custom question types.",
+    "version": "1.0.0",
+    "pluginApiVersion": "1.0",
+    "author": {
+        "name": "Humdek, University of Bern",
+        "email": "selfhelp@unibe.ch",
+        "url": "https://github.com/humdek-unibe-ch"
+    },
+    "license": "MPL-2.0",
+    "homepage": "https://github.com/humdek-unibe-ch/sh2-shp-survey-js",
+    "compatibility": {
+        "selfhelp": "^2.0",
+        "php": "^8.4",
+        "node": "^22",
+        "react": "^19",
+        "reactNative": "^0.83",
+        "expoSdk": "^55"
+    },
+    "dependencies": [],
+    "conflicts": [
+        {
+            "pluginId": "sh-shp-survey_js",
+            "version": "*",
+            "reason": "Replaced by SurveyJS v2 (sh2-shp-survey-js)."
+        }
+    ],
+    "backend": {
+        "package": "humdek/sh2-shp-survey-js",
+        "bundleClass": "Humdek\\SurveyJsBundle\\HumdekSurveyJsBundle",
+        "migrationsNamespace": "Humdek\\SurveyJsBundle\\Migrations"
+    },
+    "frontend": {
+        "package": "@humdek/sh2-shp-survey-js",
+        "version": "1.0.0"
+    },
+    "mobile": {
+        "package": "@humdek/sh2-shp-survey-js-mobile",
+        "version": "1.0.0",
+        "readonly": true
+    },
+    "security": {
+        "trustLevel": "official",
+        "capabilities": [
+            "backendBundle",
+            "databaseMigrations",
+            "readDataTables",
+            "writeDataTables",
+            "frontendStyles",
+            "mobileStyles",
+            "adminPages",
+            "realtimePublish",
+            "secretAccess"
+        ],
+        "cspRules": {
+            "img-src": [
+                "https://*.tile.openstreetmap.org",
+                "https://*.basemaps.cartocdn.com"
+            ]
+        },
+        "externalHosts": [
+            {
+                "host": "*.tile.openstreetmap.org",
+                "type": "image",
+                "reason": "Leaflet tile layers used by the GPX question type preview."
+            },
+            {
+                "host": "*.basemaps.cartocdn.com",
+                "type": "image",
+                "reason": "Fallback basemap tiles for the GPX preview."
+            }
+        ]
+    },
+    "permissions": [
+        {"key": "surveyjs.surveys.manage", "description": "Create, edit, publish, delete surveys.", "defaultRoles": ["admin"]},
+        {"key": "surveyjs.surveys.view-responses", "description": "View survey responses + dashboard.", "defaultRoles": ["admin"]},
+        {"key": "surveyjs.surveys.export-pdf", "description": "Export survey responses as PDF.", "defaultRoles": ["admin"]}
+    ],
+    "dataAccess": {
+        "read": [
+            "data_tables",
+            "data_rows",
+            "data_cells",
+            "lookups",
+            "languages"
+        ],
+        "write": [
+            "data_tables",
+            "data_rows",
+            "data_cells"
+        ]
+    },
+    "realtimeTopics": [
+        {
+            "key": "surveys/{surveyId}/responses",
+            "description": "Realtime stream of new survey responses. New entries arrive without polling.",
+            "requiredPermission": "surveyjs.surveys.view-responses"
+        },
+        {
+            "key": "surveys/{surveyId}/editing",
+            "description": "Collaborative-edit presence + save notifications for the Survey Creator.",
+            "requiredPermission": "surveyjs.surveys.manage"
+        }
+    ],
+    "featureFlags": [
+        {"key": "gpx", "description": "Enable GPX track question type.", "defaultEnabled": false},
+        {"key": "video", "description": "Enable video question type.", "defaultEnabled": false},
+        {"key": "rich-text", "description": "Enable Tiptap-based rich-text question + Creator property editors.", "defaultEnabled": true},
+        {"key": "pdf-export", "description": "Enable PDF export of survey responses.", "defaultEnabled": false},
+        {"key": "dashboard", "description": "Enable response dashboard view.", "defaultEnabled": true},
+        {"key": "collab-editing", "description": "Enable collaborative-edit Mercure notifications in the Creator.", "defaultEnabled": true}
+    ],
+    "lookups": {
+        "extends": [
+            {
+                "typeCode": "surveyJsTheme",
+                "ownership": "plugin_owned",
+                "entries": [
+                    {"code": "default", "value": "Default", "description": "Mantine-bridged default theme."},
+                    {"code": "modern", "value": "Modern"},
+                    {"code": "high-contrast", "value": "High contrast"}
+                ]
+            }
+        ]
+    },
+    "styles": [
+        {
+            "name": "surveyjs",
+            "description": "Embeds a published SurveyJS survey at runtime.",
+            "canHaveChildren": false,
+            "capability": "frontendStyles"
+        },
+        {
+            "name": "gpxMap",
+            "description": "Standalone Leaflet-based map renderer for a GPX answer field.",
+            "canHaveChildren": false,
+            "capability": "frontendStyles"
+        }
+    ],
+    "adminPages": [
+        {
+            "slug": "surveys",
+            "label": "Surveys",
+            "permission": "surveyjs.surveys.manage",
+            "icon": "tabler-clipboard-list"
+        },
+        {
+            "slug": "surveys/designer",
+            "label": "Survey Designer",
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "slug": "surveys/responses",
+            "label": "Responses",
+            "permission": "surveyjs.surveys.view-responses",
+            "icon": "tabler-database"
+        },
+        {
+            "slug": "surveys/dashboard",
+            "label": "Dashboard",
+            "permission": "surveyjs.surveys.view-responses",
+            "icon": "tabler-chart-bar"
+        },
+        {
+            "slug": "surveys/settings",
+            "label": "Settings",
+            "permission": "surveyjs.surveys.manage",
+            "icon": "tabler-settings"
+        }
+    ],
+    "apiRoutes": [
+        {"name": "surveyjs_admin_list", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys", "methods": ["GET", "POST"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_get", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}", "methods": ["GET", "PUT", "DELETE"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_versions_create", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/versions", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_dashboard", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/dashboard", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
+        {"name": "surveyjs_admin_responses", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/responses", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
+        {"name": "surveyjs_admin_response_pdf", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/responses/{rid}/pdf", "methods": ["GET"], "permission": "surveyjs.surveys.export-pdf"},
+        {"name": "surveyjs_admin_license_key", "path": "/cms-api/v1/admin/plugins/surveyjs/license-key", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_health", "path": "/cms-api/v1/admin/plugins/surveyjs/health", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_public_published", "path": "/cms-api/v1/plugins/surveyjs/published/{key}", "methods": ["GET"]},
+        {"name": "surveyjs_public_submit", "path": "/cms-api/v1/plugins/surveyjs/published/{key}/submit", "methods": ["POST"]}
+    ],
+    "scheduledJobs": [],
+    "assets": [],
+    "health": {
+        "endpoint": "/cms-api/v1/admin/plugins/surveyjs/health",
+        "serviceId": "humdek.surveyjs.health_check"
+    },
+    "labels": {
+        "category": "forms",
+        "namespace": "surveyjs"
+    }
+}
