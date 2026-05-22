@@ -10,6 +10,8 @@ SurveyJS v2 plugin for the SelfHelp CMS. Provides:
 - A response dashboard, response list, PDF export, and collaborative-edit notifications via Mercure.
 
 > **Looking for end-user documentation?**
+> - **[Install guide](docs/install.md) — start here.** Three ways to install (two UI flows + one terminal one-liner).
+> - [Publish guide](docs/publish.md) — how to publish the plugin so others can install it from the UI.
 > - [User guide](docs/user-guide.md) — create surveys, publish, restore versions, embed, configure.
 > - [Mobile guide](docs/mobile-guide.md) — what the mobile renderer does and does not support today.
 > - [Architecture](docs/architecture.md) — internals, services, schema, security.
@@ -46,29 +48,19 @@ sh2-shp-survey-js/
     └── src/index.ts                 Exports `registerMobile`
 ```
 
-## Installation (development mode)
+## Installation — pick one
 
-1. Build / publish locally (or use `npm link` and `composer link`) so the host can resolve the plugin packages.
-2. From the SelfHelp backend:
+See [`docs/install.md`](docs/install.md) for the full guide. The TL;DR is:
 
-   ```bash
-   php bin/console selfhelp:plugin:install /d/TPF/SelfHelp/plugins/sh2-shp-survey-js/plugin.json
-   ```
+| Option | Where         | Command                                        |
+| ------ | ------------- | ---------------------------------------------- |
+| 1      | Admin UI      | Plugins → **Sources** → add registry → **Available** → Install |
+| 2      | Admin UI      | Plugins → **Install plugin** → paste `plugin.json` |
+| 3      | Terminal      | `./scripts/install-local.ps1` (Windows) or `./scripts/install-local.sh` (macOS/Linux) |
 
-3. From the SelfHelp frontend (one-shot, regenerates the frontend lock file):
+Option 3 also wires the local Composer + npm links so the host frontend resolves the plugin without restarting the dev server.
 
-   ```bash
-   npm run plugins:sync --backend http://localhost:8000
-   npm install
-   ```
-
-4. From the SelfHelp mobile app (for an EAS profile):
-
-   ```bash
-   SELFHELP_API_TOKEN=... npm run plugins:sync -- production-default --backend https://cms.example.com
-   npm install
-   eas build --profile production-default
-   ```
+To publish the plugin so other instances can install it via Option 1, follow [`docs/publish.md`](docs/publish.md).
 
 ## Configuration
 
