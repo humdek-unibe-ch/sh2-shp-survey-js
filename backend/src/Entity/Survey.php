@@ -19,8 +19,8 @@ use Humdek\SurveyJsBundle\Repository\SurveyRepository;
  * `SurveyVersion` snapshots (one is "current") and many `SurveyRun` rows.
  */
 #[ORM\Entity(repositoryClass: SurveyRepository::class)]
-#[ORM\Table(name: 'survey')]
-#[ORM\Index(columns: ['key_slug'], name: 'idx_survey_key_slug')]
+#[ORM\Table(name: 'surveys')]
+#[ORM\Index(columns: ['key_slug'], name: 'idx_surveys_key_slug')]
 class Survey
 {
     #[ORM\Id]
@@ -51,7 +51,7 @@ class Survey
     private DateTimeImmutable $updatedAt;
 
     #[ORM\ManyToOne(targetEntity: SurveyVersion::class)]
-    #[ORM\JoinColumn(name: 'id_current_version', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    #[ORM\JoinColumn(name: 'id_current_survey_versions', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?SurveyVersion $currentVersion = null;
 
     /** @var Collection<int, SurveyVersion> */

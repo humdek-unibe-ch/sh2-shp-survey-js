@@ -18,10 +18,10 @@ use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
  * caches the question kind so SQL filters can stay fast.
  */
 #[ORM\Entity(repositoryClass: SurveyAnswerLinkRepository::class)]
-#[ORM\Table(name: 'survey_answer_link')]
-#[ORM\Index(columns: ['id_survey_run'], name: 'idx_survey_answer_link_run')]
-#[ORM\Index(columns: ['id_data_cell'], name: 'idx_survey_answer_link_cell')]
-#[ORM\UniqueConstraint(name: 'uq_survey_answer_link_run_question', columns: ['id_survey_run', 'question_name'])]
+#[ORM\Table(name: 'survey_answer_links')]
+#[ORM\Index(columns: ['id_survey_runs'], name: 'idx_survey_answer_links_survey_runs')]
+#[ORM\Index(columns: ['id_data_cells'], name: 'idx_survey_answer_links_data_cells')]
+#[ORM\UniqueConstraint(name: 'uq_survey_answer_links_survey_runs_question_name', columns: ['id_survey_runs', 'question_name'])]
 class SurveyAnswerLink
 {
     #[ORM\Id]
@@ -30,7 +30,7 @@ class SurveyAnswerLink
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: SurveyRun::class, inversedBy: 'answerLinks')]
-    #[ORM\JoinColumn(name: 'id_survey_run', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'id_survey_runs', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private SurveyRun $run;
 
     #[ORM\Column(name: 'question_name', type: 'string', length: 191)]
@@ -40,7 +40,7 @@ class SurveyAnswerLink
     private string $questionType;
 
     /** FK into core `data_cells.id`. */
-    #[ORM\Column(name: 'id_data_cell', type: 'integer', nullable: true)]
+    #[ORM\Column(name: 'id_data_cells', type: 'integer', nullable: true)]
     private ?int $idDataCell = null;
 
     #[ORM\Column(name: 'sanitized_html', type: 'boolean', options: ['default' => false])]

@@ -17,8 +17,8 @@ use Humdek\SurveyJsBundle\Entity\SurveyRun;
  * Submission flow.
  *
  * Receives the SurveyJS answer JSON from the public submission
- * endpoint, normalizes + sanitizes it, persists `survey_run` /
- * `survey_answer_link` metadata, and emits the realtime event the
+ * endpoint, normalizes + sanitizes it, persists `survey_runs` /
+ * `survey_answer_links` metadata, and emits the realtime event the
  * Responses dashboard listens to. The actual answer values land in
  * the host `data_tables` / `data_rows` / `data_cells` via the
  * `DataTableWriterInterface` injected by the host (decoupled so the

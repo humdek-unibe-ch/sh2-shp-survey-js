@@ -18,9 +18,9 @@ use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
  * `SurveyVersion` row and updates `Survey::currentVersion` atomically.
  */
 #[ORM\Entity(repositoryClass: SurveyVersionRepository::class)]
-#[ORM\Table(name: 'survey_version')]
-#[ORM\Index(columns: ['id_survey'], name: 'idx_survey_version_survey')]
-#[ORM\UniqueConstraint(name: 'uq_survey_version_revision', columns: ['id_survey', 'revision'])]
+#[ORM\Table(name: 'survey_versions')]
+#[ORM\Index(columns: ['id_surveys'], name: 'idx_survey_versions_surveys')]
+#[ORM\UniqueConstraint(name: 'uq_survey_versions_surveys_revision', columns: ['id_surveys', 'revision'])]
 class SurveyVersion
 {
     #[ORM\Id]
@@ -29,7 +29,7 @@ class SurveyVersion
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: Survey::class, inversedBy: 'versions')]
-    #[ORM\JoinColumn(name: 'id_survey', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'id_surveys', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Survey $survey;
 
     #[ORM\Column(type: 'integer')]
@@ -47,7 +47,7 @@ class SurveyVersion
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private DateTimeImmutable $createdAt;
 
-    #[ORM\Column(name: 'created_by_user_id', type: 'integer', nullable: true)]
+    #[ORM\Column(name: 'id_created_by_users', type: 'integer', nullable: true)]
     private ?int $createdByUserId = null;
 
     #[ORM\Column(name: 'definition_sha256', type: 'string', length: 64)]

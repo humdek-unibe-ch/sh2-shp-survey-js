@@ -79,6 +79,13 @@
         {"key": "surveyjs.surveys.export-pdf", "description": "Export survey responses as PDF.", "defaultRoles": ["admin"]}
     ],
     "dataAccess": {
+        "ownedTables": [
+            "surveys",
+            "survey_versions",
+            "survey_runs",
+            "survey_answer_links"
+        ],
+        "ownedDataTablePrefix": "sh2_surveyjs_",
         "read": [
             "data_tables",
             "data_rows",

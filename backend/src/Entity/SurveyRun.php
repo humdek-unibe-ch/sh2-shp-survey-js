@@ -23,10 +23,10 @@ use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
  * trawling form storage.
  */
 #[ORM\Entity(repositoryClass: SurveyRunRepository::class)]
-#[ORM\Table(name: 'survey_run')]
-#[ORM\Index(columns: ['id_survey'], name: 'idx_survey_run_survey')]
-#[ORM\Index(columns: ['id_survey_version'], name: 'idx_survey_run_version')]
-#[ORM\Index(columns: ['id_data_row'], name: 'idx_survey_run_data_row')]
+#[ORM\Table(name: 'survey_runs')]
+#[ORM\Index(columns: ['id_surveys'], name: 'idx_survey_runs_surveys')]
+#[ORM\Index(columns: ['id_survey_versions'], name: 'idx_survey_runs_survey_versions')]
+#[ORM\Index(columns: ['id_data_rows'], name: 'idx_survey_runs_data_rows')]
 class SurveyRun
 {
     public const STATUS_IN_PROGRESS = 'in_progress';
@@ -39,18 +39,18 @@ class SurveyRun
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: Survey::class, inversedBy: 'runs')]
-    #[ORM\JoinColumn(name: 'id_survey', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'id_surveys', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Survey $survey;
 
     #[ORM\ManyToOne(targetEntity: SurveyVersion::class)]
-    #[ORM\JoinColumn(name: 'id_survey_version', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'id_survey_versions', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private SurveyVersion $version;
 
-    #[ORM\Column(name: 'id_user', type: 'integer', nullable: true)]
+    #[ORM\Column(name: 'id_users', type: 'integer', nullable: true)]
     private ?int $idUser = null;
 
     /** Foreign key into core `data_rows.id`. Kept as a plain int because the core repo owns the canonical mapping. */
-    #[ORM\Column(name: 'id_data_row', type: 'integer', nullable: true)]
+    #[ORM\Column(name: 'id_data_rows', type: 'integer', nullable: true)]
     private ?int $idDataRow = null;
 
     #[ORM\Column(name: 'status', type: 'string', length: 32)]

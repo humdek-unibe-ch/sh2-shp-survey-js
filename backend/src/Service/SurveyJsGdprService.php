@@ -16,10 +16,10 @@ use Humdek\SurveyJsBundle\Entity\SurveyRun;
  * tagged service interfaces (`PluginDataExportInterface`,
  * `PluginDataCleanupInterface`).
  *
- * The plugin only owns the metadata rows (`survey_run`,
- * `survey_answer_link`). Actual answer values stored in `data_cells`
+ * The plugin only owns the metadata rows (`survey_runs`,
+ * `survey_answer_links`). Actual answer values stored in `data_cells`
  * are exported / deleted by the core GDPR pipeline, which uses our
- * `survey_answer_link.id_data_cell` mappings to find them.
+ * `survey_answer_links.id_data_cells` mappings to find them.
  */
 final class SurveyJsGdprService
 {
