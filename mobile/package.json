@@ -26,10 +26,14 @@
         "react": "^19",
         "react-native": "^0.83",
         "expo-router": "^55",
-        "@selfhelp/shared": "^1.0.3"
+        "@selfhelp/shared": "^1.0.4"
     },
     "devDependencies": {
+        "@selfhelp/shared": "^1.0.4",
         "@types/react": "^19",
+        "react": "^19",
+        "react-native": "^0.83",
+        "expo-router": "^55",
         "tsup": "^8.3.5",
         "typescript": "^5.6.0"
     },
