@@ -218,3 +218,84 @@ During audits and code reviews:
 - Treat manually-created migration class names as a repository rule violation.
 - Treat invented timestamp-based migration names as a repository rule violation.
 - Verify migrations were generated through the repository's official Symfony/Doctrine migration workflow.
+
+## Plugin Registry / Publishing Rules
+
+This plugin (and every SelfHelp plugin we own) is published to the
+official Humdek plugin registry at
+<https://github.com/humdek-unibe-ch/sh2-plugin-registry> which is
+served at <https://humdek-unibe-ch.github.io/sh2-plugin-registry/>.
+
+### Required scripts
+
+Every plugin MUST ship the following files:
+
+- `scripts/publish-to-registry.ps1` — PowerShell publish script.
+- `scripts/publish-to-registry.sh`  — Bash publish script.
+- `.github/workflows/publish-to-registry.yml` — CI workflow that runs
+  the bash script on `v*` tag pushes and on manual dispatch.
+
+Both scripts must be **functionally identical** so a maintainer on
+either platform observes the same behaviour. See this plugin's
+implementation for the canonical pattern.
+
+### What the publish script does
+
+1. Reads `plugin.json` for `id`, `version`, `name`, `description`,
+   `homepage`, and `security.trustLevel`.
+2. Validates the manifest against the vendored schema at
+   `docs/plugins/plugin-manifest.schema.json` (best-effort — passes
+   silently if `ajv-cli` is not installed).
+3. Builds the frontend + mobile npm packages (skippable with
+   `--skip-build`).
+4. Copies `plugin.json` to
+   `<registry>/manifests/<plugin-id>-<version>.json`.
+5. Updates `<registry>/registry.json`:
+   - Removes any pre-existing entry with the same `id`.
+   - Inserts a new entry with the current version + channel +
+     trust level + `manifestUrl`.
+   - Re-sorts entries by `id`.
+   - Updates `publishedAt` to the current UTC timestamp.
+6. Commits the change in the registry repo with a
+   `publish: <id>@<version> (<channel>/<trust>)` message.
+7. Optional `--push` flag pushes to the registry's `origin`.
+8. Optional `--publish-npm` flag also runs `npm publish` on the
+   frontend + mobile packages.
+
+### Sibling-folder convention
+
+By default the script expects the registry checkout to be a sibling
+of the plugin checkout:
+
+```text
+plugins/
+├── sh2-shp-survey-js/       ← this plugin
+└── sh2-plugin-registry/     ← official registry repo
+```
+
+A different location may be passed via `-RegistryPath` (PowerShell)
+or `--registry` (bash).
+
+### CI publishing
+
+The plugin's `publish-to-registry.yml` workflow runs on:
+
+- `push: tags: ["v*"]` — automatic on release tags.
+- `workflow_dispatch` — manual trigger from the **Actions** tab,
+  with a `channel` input.
+
+The workflow uses a `REGISTRY_PUSH_TOKEN` repo secret (a PAT with
+`contents:write` on `humdek-unibe-ch/sh2-plugin-registry`). If the
+secret is unset the job still builds + validates but skips the
+push step and prints a warning.
+
+### Do not bypass the script
+
+When adding a new plugin to the registry, run the publish script.
+Do NOT hand-edit `registry.json` or hand-copy manifests, because
+the script enforces:
+
+- Schema validation.
+- Consistent sorting.
+- Atomic registry commits with a uniform message format.
+- Updated `publishedAt`.
