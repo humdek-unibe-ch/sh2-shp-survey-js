@@ -21,6 +21,7 @@ temp/
 backend/vendor/
 backend/.phpunit.cache/
 backend/.phpunit.result.cache
+backend/composer.lock
 
 # Frontend / Node
 frontend/node_modules/
@@ -41,5 +42,6 @@ mobile/.turbo/
 mobile/.vite/
 mobile/coverage/
 mobile/*.tsbuildinfo
+node_modules/
 
 AGENTS.local.md

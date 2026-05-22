@@ -1,0 +1,23 @@
+parameters:
+    level: 6
+    paths:
+        - src
+    excludePaths:
+        - src/Migrations/*
+    # Stub the host's `App\Plugin\Event\*` classes so PHPStan can
+    # resolve their public surface without checking out the host
+    # repository. The runtime classes live in
+    # `humdek-unibe-ch/sh-selfhelp_backend/src/Plugin/Event/`; the
+    # stubs below mirror only the public methods the plugin calls.
+    bootstrapFiles:
+        - stubs/host-events.php
+    ignoreErrors:
+        - identifier: missingType.iterableValue
+        # Doctrine writes `$id` via reflection on persist; PHPStan only
+        # sees the type declaration `?int` and never finds an assign.
+        # Keep the nullable so generated proxies stay valid, but tell
+        # PHPStan to skip the "unused null type" check for entity IDs.
+        -
+            identifier: property.unusedType
+            path: src/Entity/*.php
+    treatPhpDocTypesAsCertain: false

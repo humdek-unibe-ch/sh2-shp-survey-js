@@ -75,8 +75,9 @@ final class SurveysAdminController
         if (isset($body['name'])) {
             $survey->setName((string) $body['name']);
         }
-        if (isset($body['themeCode'])) {
-            $survey->setThemeCode($body['themeCode'] === null ? null : (string) $body['themeCode']);
+        if (array_key_exists('themeCode', $body)) {
+            $themeCode = $body['themeCode'];
+            $survey->setThemeCode($themeCode === null ? null : (string) $themeCode);
         }
         if (isset($body['archived'])) {
             $survey->setArchived((bool) $body['archived']);

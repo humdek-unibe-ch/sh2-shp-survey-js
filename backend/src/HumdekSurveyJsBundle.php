@@ -8,9 +8,10 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle;
 
-use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
-use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
 /**
  * SurveyJS v2 Symfony bundle.
@@ -19,17 +20,20 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
  * file when the plugin is installed + enabled. Loading happens through the
  * usual `bundles.php` discovery; the host installer is responsible for
  * keeping that file in sync with `plugins` table state.
+ *
+ * Symfony 7.4's `AbstractBundle::loadExtension()` declares the signature as
+ * `(array $config, ContainerConfigurator $configurator, ContainerBuilder $container)`.
+ * We import the configurator's `service(...)` helper inside
+ * `Resources/config/services.php`, so the configurator handle is passed
+ * straight through to the PHP loader.
  */
 final class HumdekSurveyJsBundle extends AbstractBundle
 {
     protected string $extensionAlias = 'humdek_surveyjs';
 
-    public function loadExtension(array $config, ContainerBuilder $builder, ?PhpFileLoader $loader = null): void
+    public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
-        if ($loader === null) {
-            $loader = new PhpFileLoader($builder, new \Symfony\Component\Config\FileLocator($this->getPath() . '/Resources/config'));
-        }
-        $loader->load('services.php');
+        $configurator->import($this->getPath() . '/Resources/config/services.php');
     }
 
     public function getPath(): string

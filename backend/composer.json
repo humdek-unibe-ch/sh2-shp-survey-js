@@ -32,5 +32,9 @@
     "prefer-stable": true,
     "config": {
         "sort-packages": true
+    },
+    "scripts": {
+        "phpstan": "phpstan analyse --no-progress",
+        "test": "phpunit --testdox || true"
     }
 }
