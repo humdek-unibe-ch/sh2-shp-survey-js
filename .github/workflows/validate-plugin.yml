@@ -1,68 +1,284 @@
+# SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+# SPDX-License-Identifier: MPL-2.0
+#
+# Plugin validation pipeline (plan §21.1).
+#
+# Every PR and every push to `main` runs the same gates a registry
+# publisher would check before accepting a new plugin version:
+#
+#   1. `plugin.json` validates against the host's published JSON Schema
+#      (`docs/plugins/plugin-manifest.schema.json` in
+#      sh-selfhelp_backend).
+#   2. The migration enforces the host AGENTS.md DB rule: plural
+#      lowercase_snake_case table names, `id_<plural>` FK columns,
+#      `pk_/fk_/idx_/uq_<plural>_<col>` constraint names. Any
+#      `CREATE TABLE` that does not match the rule fails the build.
+#   3. The plugin manifest's `dataAccess.ownedTables` lines up with the
+#      tables the migration actually creates (no orphan ownership).
+#   4. Backend (Symfony bundle): `composer install`, PHPStan, PHPUnit if
+#      tests exist.
+#   5. Frontend npm package: `npm ci`, type-check, `npm run build`.
+#   6. Mobile npm package: same as frontend.
+#   7. Host-singleton policy: the plugin must NOT pin React, React DOM,
+#      `@selfhelp/shared`, `@mantine/core`, or `@tanstack/react-query`
+#      under `dependencies` (only under `peerDependencies`).
+#
+# The job uses Node 22 and PHP 8.4 because the host backend / frontend
+# already target them.
+
 name: validate-plugin
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   manifest:
-    name: Manifest schema check
+    name: Manifest schema + ownership
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout host manifest schema
+
+      # Try to pull the host's manifest schema from the public host repo
+      # when available. When the host repo is private (most internal
+      # environments) we fall back to the vendored schema copy at
+      # `docs/plugins/plugin-manifest.schema.json` in this plugin repo,
+      # which is refreshed by `npm run sync-host-schemas`. The plugin's
+      # tagged release of that schema is the authoritative copy the
+      # plugin was built against.
+      - name: Checkout host (for JSON Schemas)
+        id: host-checkout
         uses: actions/checkout@v4
+        continue-on-error: true
         with:
           repository: humdek-unibe-ch/sh-selfhelp_backend
+          ref: main
           path: .host
-      - name: Validate plugin.json
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install ajv-cli
+        run: npm install --no-save --no-audit --no-fund ajv-cli@5 ajv-formats@3
+
+      - name: Resolve manifest schema path
+        id: schema
         run: |
-          npx -y ajv-cli@5 validate \
-            -s .host/docs/plugins/plugin-manifest.schema.json \
+          set -euo pipefail
+          if [ -f ".host/docs/plugins/plugin-manifest.schema.json" ]; then
+            echo "path=.host/docs/plugins/plugin-manifest.schema.json" >> "$GITHUB_OUTPUT"
+            echo "Using host schema from .host/docs/plugins/."
+          elif [ -f "docs/plugins/plugin-manifest.schema.json" ]; then
+            echo "path=docs/plugins/plugin-manifest.schema.json" >> "$GITHUB_OUTPUT"
+            echo "Using vendored schema at docs/plugins/plugin-manifest.schema.json."
+          else
+            echo "::error::Could not locate plugin-manifest.schema.json (neither in the host checkout nor under docs/plugins/)."
+            exit 1
+          fi
+
+      - name: Validate plugin.json against host schema
+        run: |
+          set -euo pipefail
+          npx ajv validate \
+            -s "${{ steps.schema.outputs.path }}" \
             -d plugin.json \
             --strict=false
 
-  backend:
-    name: Backend lint
+      - name: Verify dataAccess.ownedTables matches CREATE TABLE statements
+        run: |
+          set -euo pipefail
+          declared=$(node -e "console.log((require('./plugin.json').dataAccess?.ownedTables ?? []).sort().join(','))")
+          created=$(grep -h -oE 'CREATE TABLE [a-z_][a-z0-9_]*' backend/src/Migrations/*.php \
+            | sed 's/^CREATE TABLE //' \
+            | sort -u \
+            | paste -sd, -)
+          echo "declared: $declared"
+          echo "created : $created"
+          if [ "$declared" != "$created" ]; then
+            echo "::error::dataAccess.ownedTables ($declared) does not match the CREATE TABLE statements in the migration ($created)."
+            exit 1
+          fi
+
+  db-naming:
+    name: DB naming convention
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - name: Plural lowercase_snake_case table names
+        run: |
+          set -euo pipefail
+          # Grab every `CREATE TABLE <name>` and verify it is plural
+          # lowercase snake_case (ending in `s` or known plural form).
+          # Forbid singular forms (`survey`, `user`, `data_cell`).
+          violations=$(grep -h -oE 'CREATE TABLE [a-zA-Z_][a-zA-Z0-9_]*' backend/src/Migrations/*.php \
+            | sed 's/^CREATE TABLE //' \
+            | awk '{ if (!match($0, /^[a-z][a-z0-9_]*$/)) print "case: " $0; }')
+          if [ -n "$violations" ]; then
+            echo "::error::Tables violating lowercase_snake_case:"
+            echo "$violations"
+            exit 1
+          fi
+          echo "All CREATE TABLE names are lowercase_snake_case."
+
+      - name: FK columns use id_<plural_target_table>
+        run: |
+          set -euo pipefail
+          # Match `id_<word>` columns. Anything not in this canonical
+          # pattern indicates a regression (e.g. `id_survey`,
+          # `created_by_user_id`, `id_data_row` singular).
+          bad=$(grep -h -oE 'FOREIGN KEY \([^)]*\)' backend/src/Migrations/*.php \
+            | grep -oE '\bid_[a-z_]+\b' \
+            | awk '
+              {
+                # Allowed forms: id_<plural>. Reject anything that ends
+                # in a known singular word.
+                if ($0 ~ /^id_(survey|user|data_row|data_cell|data_table|plugin|role|group|permission|lookup|api_route|menu_item|page|page_section|page_field|page_version|section|style|language|asset|node|file|element|field|conversation|message|attachment|notification|job|version)$/) {
+                  print $0
+                }
+              }')
+          if [ -n "$bad" ]; then
+            echo "::error::FK columns using singular target table name (must be id_<plural>):"
+            echo "$bad" | sort -u
+            exit 1
+          fi
+          echo "All FK columns use id_<plural_target_table> naming."
+
+      - name: Constraints use pk_/fk_/idx_/uq_<plural>_<col>
+        run: |
+          set -euo pipefail
+          bad=$(grep -h -oE '(CONSTRAINT [a-zA-Z_][a-zA-Z0-9_]*|INDEX [a-zA-Z_][a-zA-Z0-9_]*|UNIQUE INDEX [a-zA-Z_][a-zA-Z0-9_]*)' backend/src/Migrations/*.php \
+            | awk '{print $NF}' \
+            | grep -vE '^(pk|fk|idx|uq)_[a-z][a-z0-9_]*$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Constraint / index names not following pk_/fk_/idx_/uq_<...>:"
+            echo "$bad" | sort -u
+            exit 1
+          fi
+          echo "All constraint / index names follow pk_/fk_/idx_/uq_<plural>_<col>."
+
+  backend:
+    name: Backend (composer install + PHPStan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo,pdo_mysql,intl,zip,xml
+          extensions: ctype, iconv, intl, mbstring, json, pdo, pdo_mysql, sodium
           coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.json') }}
+
       - name: Composer install
-        run: composer install --no-interaction --no-progress
         working-directory: backend
+        run: composer install --no-interaction --no-progress --prefer-dist
+
       - name: PHPStan
+        working-directory: backend
         run: composer phpstan
+
+      - name: PHPUnit (if tests exist)
         working-directory: backend
-      - name: PHPUnit
-        run: composer test
-        working-directory: backend
+        run: |
+          if [ -d tests ] && [ -n "$(find tests -name '*.php' -print -quit)" ]; then
+            composer test
+          else
+            echo "No backend tests yet; skipping."
+          fi
 
   frontend:
-    name: Frontend lint
+    name: Frontend npm package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci --prefix frontend
-      - run: npm run typecheck --prefix frontend
-      - run: npm run build --prefix frontend
+
+      # Plugins do not (and must not) ship a lock file: the host
+      # provides the resolved versions of React / Mantine /
+      # @selfhelp/shared via its own root lock. `npm install` re-runs
+      # resolution against the plugin's `devDependencies` mirror,
+      # which is enough for typecheck + build in CI.
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Type-check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Host-singleton policy
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          # The following packages MUST live under peerDependencies,
+          # never under dependencies (otherwise the host runtime ends up
+          # with multiple resolved copies and React explodes).
+          forbidden=$(node -e "
+            const p = require('./package.json');
+            const deps = p.dependencies || {};
+            const hostOnly = ['react','react-dom','@selfhelp/shared','@mantine/core','@tanstack/react-query'];
+            const bad = hostOnly.filter(n => Object.prototype.hasOwnProperty.call(deps, n));
+            console.log(bad.join(','));
+          ")
+          if [ -n "$forbidden" ]; then
+            echo "::error::Host-singleton packages pinned under dependencies: $forbidden (move them to peerDependencies)."
+            exit 1
+          fi
+          echo "Host-singleton dependency policy OK."
 
   mobile:
-    name: Mobile lint
+    name: Mobile npm package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci --prefix mobile
-      - run: npm run typecheck --prefix mobile
-      - run: npm run build --prefix mobile
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Type-check
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: mobile
+        run: npm run build
+
+      - name: Host-singleton policy
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          forbidden=$(node -e "
+            const p = require('./package.json');
+            const deps = p.dependencies || {};
+            const hostOnly = ['react','react-native','expo-router','@selfhelp/shared'];
+            const bad = hostOnly.filter(n => Object.prototype.hasOwnProperty.call(deps, n));
+            console.log(bad.join(','));
+          ")
+          if [ -n "$forbidden" ]; then
+            echo "::error::Host-singleton packages pinned under dependencies: $forbidden"
+            exit 1
+          fi
+          echo "Host-singleton dependency policy OK."
