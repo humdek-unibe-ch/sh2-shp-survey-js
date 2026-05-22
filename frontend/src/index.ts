@@ -25,6 +25,7 @@ import { SurveyDesignerPage } from './admin/SurveyDesignerPage';
 import { SurveyResponsesPage } from './admin/SurveyResponsesPage';
 import { SurveyDashboardPage } from './admin/SurveyDashboardPage';
 import { SurveySettingsPage } from './admin/SurveySettingsPage';
+import { setPluginApi } from './runtime/pluginApi';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
 export const PLUGIN_VERSION = '1.0.0';
@@ -33,9 +34,14 @@ export const PLUGIN_VERSION = '1.0.0';
  * Called by `PluginRuntime.registerOne()`. The runtime captures the
  * returned registration; the same module exports `register` as the
  * default factory expected by the host loader.
+ *
+ * `setPluginApi(api)` stashes the host api so deeper modules (the
+ * Survey Designer page, the Tiptap-on-Creator wiring, the GPX
+ * renderer, etc.) can read it without React-context plumbing.
  */
-export const register = (_api: IPluginApi): IPluginRegistration =>
-    definePlugin({
+export const register = (api: IPluginApi): IPluginRegistration => {
+    setPluginApi(api);
+    return definePlugin({
         id: PLUGIN_ID,
         version: PLUGIN_VERSION,
         pluginApiVersion: '1.0',
@@ -157,5 +163,6 @@ export const register = (_api: IPluginApi): IPluginRegistration =>
             },
         ],
     });
+};
 
 export default register;

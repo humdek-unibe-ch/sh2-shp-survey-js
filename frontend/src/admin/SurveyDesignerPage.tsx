@@ -18,13 +18,17 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { useEffect, useState } from 'react';
+import { Alert, Loader, Paper, Stack, Text, Title } from '@mantine/core';
 
 import { fetchLicenseKey, getSurvey, publishVersion, type IAdminSurveyDetail } from '../api/surveys-admin';
 import { buildSurveyJsTheme } from '../theme/mantineBridge';
+import { getPluginApi } from '../runtime/pluginApi';
+import { isRichTextEditorEnabled, registerTiptapPropertyEditors } from '../creator/richTextEditorAdapter';
 
 interface ICreatorBridge {
     SurveyCreatorComponent: React.ComponentType<{ creator: unknown }>;
     SurveyCreator: new (options: Record<string, unknown>) => unknown;
+    rawModule: Record<string, unknown>;
 }
 
 async function loadCreator(): Promise<ICreatorBridge> {
@@ -32,6 +36,7 @@ async function loadCreator(): Promise<ICreatorBridge> {
     return {
         SurveyCreatorComponent: mod.SurveyCreatorComponent as unknown as React.ComponentType<{ creator: unknown }>,
         SurveyCreator: mod.SurveyCreator as unknown as new (options: Record<string, unknown>) => unknown,
+        rawModule: mod as unknown as Record<string, unknown>,
     };
 }
 
@@ -85,6 +90,34 @@ export function SurveyDesignerPage({ surveyId }: ISurveyDesignerPageProps = {}):
             if (survey?.definition) {
                 (instance as { JSON: Record<string, unknown> }).JSON = survey.definition;
             }
+
+            // Expose a `richTextEditor` boolean on the Survey root so the
+            // setting is editable from the property grid (Settings > General).
+            // Falls back gracefully if the Serializer API shape changed.
+            try {
+                const SurveyMod = (bridge.rawModule as { Serializer?: { addProperty: (cls: string, prop: Record<string, unknown>) => void; getProperty?: (cls: string, name: string) => unknown } }).Serializer
+                    ?? (await import('survey-core')).Serializer;
+                if (SurveyMod && typeof SurveyMod.addProperty === 'function' && !(SurveyMod.getProperty?.('survey', 'richTextEditor'))) {
+                    SurveyMod.addProperty('survey', {
+                        name: 'richTextEditor:boolean',
+                        category: 'general',
+                        default: false,
+                        displayName: 'Rich-text editor (Tiptap)',
+                    });
+                }
+            } catch {
+                // serializer registration is best-effort; designer still works.
+            }
+
+            // Per-survey opt-in: wire the host's Tiptap rich-text adapter
+            // into the Creator property editors when the survey JSON has
+            // `richTextEditor: true`. The registrar is a no-op when the
+            // setting is missing/false or when the host did not provide a
+            // `richTextEditor` adapter on `IPluginApi`.
+            const pluginApi = getPluginApi();
+            if (pluginApi && isRichTextEditorEnabled(survey?.definition ?? {})) {
+                registerTiptapPropertyEditors(bridge.rawModule as never, pluginApi);
+            }
             const saveHandler = async (
                 _id: unknown,
                 success: (saved: boolean) => void,
@@ -111,22 +144,39 @@ export function SurveyDesignerPage({ surveyId }: ISurveyDesignerPageProps = {}):
 
     if (error) {
         return (
-            <div role="alert" style={{ padding: 12, border: '1px solid #fa5252', borderRadius: 4 }}>
+            <Alert color="red" title="Survey Designer">
                 {error}
-            </div>
+            </Alert>
         );
     }
     if (!surveyId) {
         return (
-            <div style={{ padding: 16 }}>
-                <h2>Survey Designer</h2>
-                <p>Select a survey from the list to start designing.</p>
-            </div>
+            <Paper withBorder p="md">
+                <Stack gap="xs">
+                    <Title order={3}>Survey Designer</Title>
+                    <Text c="dimmed">Select a survey from the list to start designing.</Text>
+                </Stack>
+            </Paper>
         );
     }
     if (!bridge || !creator) {
-        return <div aria-busy>Loading designer…</div>;
+        return (
+            <Paper withBorder p="md">
+                <Stack align="center" gap="xs">
+                    <Loader size="md" />
+                    <Text>Loading designer…</Text>
+                </Stack>
+            </Paper>
+        );
     }
     const Component = bridge.SurveyCreatorComponent;
-    return <Component creator={creator} />;
+    // The Creator paints its own chrome (toolbox + tabs + property
+    // grid). Wrapping it in a Mantine `Paper` keeps padding/borders
+    // consistent with the rest of the admin shell while leaving the
+    // Creator free to manage its internal layout.
+    return (
+        <Paper withBorder p={0} className="surveyjs-creator-shell">
+            <Component creator={creator} />
+        </Paper>
+    );
 }

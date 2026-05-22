@@ -52,6 +52,10 @@ declare module 'survey-core' {
             add: (descriptor: { name: string; title: string; questionJSON: Record<string, unknown> }) => void;
         };
     };
+    export const Serializer: {
+        addProperty: (className: string, descriptor: Record<string, unknown>) => void;
+        getProperty: (className: string, name: string) => unknown;
+    };
 }
 
 declare module 'survey-react-ui' {

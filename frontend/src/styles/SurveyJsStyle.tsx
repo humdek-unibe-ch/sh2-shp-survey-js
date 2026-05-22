@@ -19,6 +19,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Loader, Stack, Text } from '@mantine/core';
 
 import { buildSurveyJsTheme } from '../theme/mantineBridge';
 import { fetchPublishedSurvey, submitSurveyAnswers, type IPublishedSurvey } from '../api/surveys';
@@ -103,30 +104,42 @@ export function SurveyJsStyle({ section }: ISurveyJsStyleProps): React.ReactElem
 
     if (!keySlug) {
         return (
-            <div role="alert" style={{ padding: 12, border: '1px solid #fab005', borderRadius: 4 }}>
+            <Alert color="yellow" title="Configuration error">
                 The SurveyJS style is missing a <code>key_slug</code> field on this section.
-            </div>
+            </Alert>
         );
     }
     if (error) {
         return (
-            <div role="alert" style={{ padding: 12, border: '1px solid #fa5252', borderRadius: 4 }}>
+            <Alert color="red" title="Survey unavailable">
                 {error}
-            </div>
+            </Alert>
         );
     }
     if (!runtime || !published || !model) {
-        return <div aria-busy>Loading survey…</div>;
+        return (
+            <Stack align="center" gap="xs" py="md">
+                <Loader size="md" />
+                <Text>Loading survey…</Text>
+            </Stack>
+        );
     }
     if (submittedAt) {
         return (
-            <div role="status" style={{ padding: 12, border: '1px solid #51cf66', borderRadius: 4 }}>
+            <Alert color="green" title="Response recorded">
                 Thank you — your response was recorded at {submittedAt}.
-            </div>
+            </Alert>
         );
     }
     const Survey = runtime.Survey;
-    return <Survey model={model} />;
+    // Wrap in a Mantine `Box` so plugin authors and admins can target
+    // `.surveyjs-runtime-host` from custom CSS, and the SurveyJS sizing
+    // logic inherits the host page's container width.
+    return (
+        <Box className="surveyjs-runtime-host">
+            <Survey model={model} />
+        </Box>
+    );
 }
 
 function extractKeySlug(section: ISurveyJsStyleProps['section']): string | null {
