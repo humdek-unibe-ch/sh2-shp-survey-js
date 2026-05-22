@@ -48,6 +48,7 @@
             "databaseMigrations",
             "readDataTables",
             "writeDataTables",
+            "lookupOwnGroup",
             "frontendStyles",
             "mobileStyles",
             "adminPages",
