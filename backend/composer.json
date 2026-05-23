@@ -3,6 +3,7 @@
     "description": "SelfHelp CMS plugin: SurveyJS v2 backend (Symfony bundle).",
     "type": "symfony-bundle",
     "license": "MPL-2.0",
+    "version": "0.1.0",
     "require": {
         "php": ">=8.4",
         "doctrine/dbal": "^4.4.3",

@@ -212,5 +212,8 @@
     "labels": {
         "category": "forms",
         "namespace": "surveyjs"
+    },
+    "archive": {
+        "mode": "standalone"
     }
 }
