@@ -21,8 +21,9 @@
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
         "@mantine/core": "^9.0.0",
-        "@selfhelp/shared": "^1.0.4",
+        "@selfhelp/shared": "^1.0.5",
         "survey-core": "^2",
+        "survey-creator-core": "^2",
         "survey-creator-react": "^2",
         "survey-react-ui": "^2"
     },
@@ -35,6 +36,7 @@
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "survey-core": "^2",
+        "survey-creator-core": "^2",
         "survey-creator-react": "^2",
         "survey-react-ui": "^2",
         "typescript": "^5.9.3",

@@ -23,7 +23,6 @@ SPDX-License-Identifier: MPL-2.0
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'node:path';
 
 const EXTERNAL_PEERS = [
     'react',
@@ -35,6 +34,11 @@ const EXTERNAL_PEERS = [
     '@mantine/notifications',
     '@selfhelp/shared',
     '@selfhelp/shared/plugin-sdk',
+    // Optional runtime dep. The GpxMap style does `await import('leaflet').catch(...)`
+    // and gracefully degrades when leaflet is not available at runtime.
+    // Externalising it keeps the plugin bundle small and avoids a hard
+    // build-time requirement for a peer that may not be installed.
+    'leaflet',
 ];
 
 export default defineConfig({
@@ -52,14 +56,28 @@ export default defineConfig({
         sourcemap: true,
         cssCodeSplit: false,
         lib: {
-            entry: resolve(__dirname, 'src/index.ts'),
+            entry: 'src/index.ts',
             formats: ['es'],
             fileName: () => 'plugin.esm.js',
         },
         rollupOptions: {
             external: (id) => EXTERNAL_PEERS.some((peer) => id === peer || id.startsWith(peer + '/')),
             output: {
-                assetFileNames: (asset) => (asset.name === 'style.css' ? 'plugin.css' : 'assets/[name][extname]'),
+                // Rename the single merged CSS bundle to `plugin.css` so it
+                // matches `plugin.json#frontend.runtime.stylesheet`. With
+                // `cssCodeSplit: false` Vite emits exactly one .css asset,
+                // so a simple extension match is unambiguous.
+                //
+                // Vite ≤ 5 named that asset `style.css`; Vite 6+ derives the
+                // name from the lib name (e.g. `sh2-shp-survey-js.css`),
+                // so the prior `name === 'style.css'` check silently
+                // dropped the rename and parked the file under `assets/`,
+                // which broke the manifest contract. Match by extension to
+                // stay version-agnostic.
+                assetFileNames: (asset) =>
+                    asset.name && asset.name.toLowerCase().endsWith('.css')
+                        ? 'plugin.css'
+                        : 'assets/[name][extname]',
             },
         },
     },

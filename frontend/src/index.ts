@@ -10,10 +10,26 @@ SPDX-License-Identifier: MPL-2.0
  * style, admin page, menu item, feature flag, realtime topic, and
  * health check we contribute.
  *
- * No top-level side effects: SurveyJS modules are imported lazily
+ * No top-level JS side effects: SurveyJS modules are imported lazily
  * inside the component bodies so a plugin disabled at runtime does
  * not pull a 1 MB bundle into the host shell.
+ *
+ * The `.css` imports below are the only top-level side effects. They
+ * are NOT executed as JavaScript — Vite extracts them at build time
+ * into `dist/plugin.css` (referenced by `plugin.json#frontend.runtime
+ * .stylesheet`). The host loads that single stylesheet via a `<link>`
+ * tag once when the plugin activates, so without them no SurveyJS
+ * styling reaches the page and the Designer + runtime render unstyled.
+ *
+ * `cssCodeSplit: false` in `vite.config.ts` merges every `.css` import
+ * across the bundle (including dynamically-imported chunks) into the
+ * same `plugin.css`, so we keep the imports here for a single point of
+ * truth. Neither CSS file ships any `url(...)` references, so no
+ * fonts/images need to be staged into `dist/assets/`.
  */
+
+import 'survey-core/survey-core.css';
+import 'survey-creator-core/survey-creator-core.css';
 
 import { definePlugin } from '@selfhelp/shared/plugin-sdk';
 import type { IPluginApi, IPluginRegistration } from '@selfhelp/shared/plugin-sdk';
@@ -33,7 +49,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * `PluginRuntime.registerOne()` refuses to apply a registration whose
  * `version` differs from the manifest entry the host loaded, so a
  * mismatch silently breaks the plugin. Keep these three values in sync
- * for every release; the publish script (`scripts/publish-to-registry.*`)
+ * for every release; the publish script (`scripts/publish-to-registry.mjs`)
  * already enforces the same alignment server-side.
  */
 export const PLUGIN_VERSION = '0.1.0';
