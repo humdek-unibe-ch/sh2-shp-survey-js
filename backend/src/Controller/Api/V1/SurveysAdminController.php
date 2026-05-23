@@ -10,10 +10,13 @@ namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
+use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
+use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 
 /**
@@ -29,8 +32,10 @@ final class SurveysAdminController
 {
     public function __construct(
         private readonly SurveyRepository $surveys,
+        private readonly SurveyRunRepository $runs,
         private readonly SurveyService $surveyService,
         private readonly SurveyDashboardService $dashboardService,
+        private readonly SurveyPdfService $pdfService,
     ) {
     }
 
@@ -123,6 +128,66 @@ final class SurveysAdminController
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
         return new JsonResponse(['data' => $this->dashboardService->buildSummary($survey)]);
+    }
+
+    /**
+     * List responses for a survey. Used by the admin Responses tab.
+     *
+     * Paginated; default page=1, limit=50. The full answer payload is
+     * NOT inlined here — clients should follow `/responses/{rid}` (when
+     * implemented) for the answer cells.
+     */
+    public function responses(int $id, Request $request): JsonResponse
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+
+        $page = max(1, (int) $request->query->get('page', 1));
+        $limit = min(200, max(1, (int) $request->query->get('limit', 50)));
+        $offset = ($page - 1) * $limit;
+
+        $items = $this->runs->findRecentForSurvey($survey, $limit, $offset);
+        $total = $this->runs->countForSurvey($survey);
+
+        return new JsonResponse([
+            'data' => [
+                'items' => array_map(static fn($run) => [
+                    'id' => $run->getId(),
+                    'surveyId' => $survey->getId(),
+                    'revision' => $run->getVersion()->getRevision(),
+                    'userId' => $run->getIdUser(),
+                    'startedAt' => $run->getStartedAt()->format(DATE_ATOM),
+                    'completedAt' => $run->getCompletedAt()?->format(DATE_ATOM),
+                    'status' => $run->getStatus(),
+                ], $items),
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+            ],
+        ]);
+    }
+
+    /**
+     * PDF export of a single survey response. Gated by the
+     * `surveyjs.surveys.export-pdf` permission and the `pdf-export`
+     * feature flag (off by default). The actual rendering is delegated
+     * to `SurveyPdfService`, which currently returns a 501 stub —
+     * implementation follows the PDF question's roadmap.
+     */
+    public function responsePdf(int $id, int $rid): Response
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $run = $this->runs->find($rid);
+        if ($run === null || $run->getSurvey()->getId() !== $survey->getId()) {
+            return new JsonResponse(['error' => 'Response not found.'], 404);
+        }
+
+        return $this->pdfService->renderResponse($survey, $run);
     }
 
     /**

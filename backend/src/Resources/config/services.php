@@ -10,6 +10,7 @@ use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysAdminController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysHealthController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysLicenseController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysPublicController;
+use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsApiRouteSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsLookupRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsRealtimeTopicSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsStyleRegistrySubscriber;
@@ -25,6 +26,7 @@ use Humdek\SurveyJsBundle\Service\SurveyJsGdprService;
 use Humdek\SurveyJsBundle\Service\SurveyJsHealthCheck;
 use Humdek\SurveyJsBundle\Service\SurveyJsHtmlSanitizer;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
+use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -57,6 +59,7 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyResponseService::class)->autowire();
     $services->set(SurveyDashboardService::class)->autowire();
     $services->set(SurveyJsGdprService::class)->autowire();
+    $services->set(SurveyPdfService::class)->autowire();
 
     // Default null publisher. The host's `PluginRealtimePublisher`
     // (`App\Plugin\Realtime\PluginRealtimePublisherInterface`) is
@@ -83,4 +86,5 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsStyleRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsLookupRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsRealtimeTopicSubscriber::class)->tag('kernel.event_subscriber');
+    $services->set(SurveyJsApiRouteSubscriber::class)->tag('kernel.event_subscriber');
 };
