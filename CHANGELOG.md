@@ -6,43 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- `scripts/build-shplugin.mjs` now writes archive-root-relative paths
+  in `artifacts/SHA256SUMS` (`<hash>  artifacts/<file>`). The host's
+  `PluginArchiveValidator` rejects unprefixed paths as a
+  zip-slip / signed-payload-smuggling defence, so the previous
+  layout produced "SHA256SUMS entry must be archive-root-relative
+  and live under artifacts/" install errors.
+- `scripts/build-shplugin.mjs` now feeds `sha256-`-prefixed digests
+  into `sign.mjs build-payload` (matches the SRI /
+  `PluginArchiveValidator::normaliseChecksum()` convention).
+  Previously the canonical signed payload diverged from the host's
+  recomputed payload by exactly that prefix, surfacing as
+  "Canonical signed payload mismatch" once the SHA256SUMS layout
+  was fixed.
+- `selfValidate()` resolves SHA256SUMS lines from the staging root
+  instead of the staging `artifacts/` dir so it matches the new
+  prefixed layout.
+
 ### Changed
 
-- `plugin.json` `compatibility.selfhelp` bumped from `^2.0` to
-  `>=8.0.0-dev <9.0.0` so the install policy accepts the current
-  SelfHelp host (which reports `8.0.0-dev`). Standard caret/tilde
-  semver ranges exclude pre-release identifiers like `-dev`, so the
-  explicit range is required for development hosts.
-
-### Docs
-
-- `docs/install.md` and `docs/publish.md` rewritten to drop every
-  `plugins.example.org` placeholder and point exclusively at the
-  official Humdek registry at
-  <https://github.com/humdek-unibe-ch/sh2-plugin-registry>. The
-  install guide now covers the new drag-and-drop / file-picker /
-  Monaco-editor options in the host UI and an "Optional — adding
-  additional plugin sources" section for private mirrors.
+- Single cross-platform Node scripts replace the previous PowerShell
+  / Bash duplicates:
+  - `scripts/install-local.{ps1,sh}` → `scripts/install-local.mjs`.
+  - `scripts/publish-to-registry.{ps1,sh}` → `scripts/publish-to-registry.mjs`.
+  Same command on PowerShell, Git Bash, WSL, macOS, and Linux —
+  no more "wrong shell" syntax errors.
+- `.github/workflows/publish-to-registry.yml` calls
+  `node scripts/publish-to-registry.mjs` instead of `bash`.
 
 ### Added
 
-- `scripts/publish-to-registry.ps1` and `scripts/publish-to-registry.sh`:
-  one-shot scripts that validate the manifest, build the frontend +
-  mobile packages, copy `plugin.json` into the sibling
-  `sh2-plugin-registry/manifests/` folder, update its `registry.json`,
-  commit the change, and optionally push. PowerShell + Bash scripts are
-  functionally identical.
-- `.github/workflows/publish-to-registry.yml`: CI workflow that runs
-  the same publish flow on `v*` tag pushes and on manual dispatch
-  (with a `channel` input). Uses a `REGISTRY_PUSH_TOKEN` secret to
-  push into `humdek-unibe-ch/sh2-plugin-registry`; absence of the
-  secret degrades to "build + validate only" with a CI warning.
-- `docs/publish.md` now opens with a **fast path** section describing
-  the publish script + workflow. The original manual steps remain
-  for power users.
-- `AGENTS.md` gains a "Plugin Registry / Publishing Rules" section
-  declaring publish scripts + workflow as a mandatory plugin
-  deliverable.
+- `.env.example` documents every env variable the build / install /
+  publish scripts read (signing keys, admin token, host base URL,
+  backend path, registry path). Every script auto-loads
+  `<plugin>/.env` via Node 22's `process.loadEnvFile`, so plugin
+  authors can keep their local dev keypair next to `plugin.json`
+  instead of exporting it in every shell. Real `process.env`
+  values still override `.env`, which keeps CI secrets dominant.
+
+- `plugin.json` `compatibility.selfhelp` bumped from `^2.0` to
+  `>=8.0.0-dev <9.0.0` so the install policy accepts the current
+  SelfHelp host (which reports `8.0.0-dev`).
+
+### Docs
+
+- `README.md`, `docs/install.md`, `docs/publish.md`, `docs/secrets-setup.md`
+  and `AGENTS.md` updated to reflect the `.mjs`-only script layout,
+  the `.env` workflow, and the SHA256SUMS prefix fix. Every
+  reference to `install-local.{ps1,sh}` / `publish-to-registry.{ps1,sh}`
+  has been replaced with the canonical `node scripts/<name>.mjs`
+  invocation.
 
 ## [0.1.0] — 2026-05-22 (pre-release)
 

@@ -52,14 +52,23 @@ sh2-shp-survey-js/
 
 See [`docs/install.md`](docs/install.md) for the full guide. The TL;DR is:
 
-| Option | Where         | Command                                        |
-| ------ | ------------- | ---------------------------------------------- |
-| 1      | Admin UI      | Plugins → **Sources** → add registry → **Available** → Install |
-| 2      | Admin UI      | Plugins → **Install plugin** → drag the `.shplugin` from the latest GitHub Release |
-| 3      | Admin UI      | Plugins → **Install plugin** → paste `plugin.json` |
-| 4      | Terminal      | `./scripts/install-local.ps1` (Windows) or `./scripts/install-local.sh` (macOS/Linux) |
+| Option | Where    | Command                                                                                |
+| ------ | -------- | -------------------------------------------------------------------------------------- |
+| 1      | Admin UI | Plugins → **Available** → Install (uses the seeded `humdek-public` registry)           |
+| 2      | Admin UI | Plugins → **Install plugin** → drag the `.shplugin` from the latest GitHub Release     |
+| 3      | Admin UI | Plugins → **Install plugin** → paste `plugin.json`                                     |
+| 4      | Terminal | `node scripts/install-local.mjs` — single cross-platform installer (PowerShell / Git Bash / WSL / macOS / Linux) |
 
-Option 4 also wires the local Composer + npm links so the host frontend resolves the plugin without restarting the dev server.
+> Option 4 is a single Node script. Same command on every OS — no
+> `.ps1` / `.sh` split. Runs `node scripts/build-shplugin.mjs` to
+> build the signed `.shplugin`, uploads it to the local host's
+> `/cms-api/v1/admin/plugins/install` endpoint, and drains
+> `messenger:consume plugin_ops` inline.
+
+Option 4 also wires the local Composer / npm path repo (`--symlink`)
+so the host frontend resolves the plugin without restarting the dev
+server. See [`docs/install.md`](docs/install.md#option-4--one-shot-install-from-the-terminal)
+for `--symlink` details.
 
 ## Build the `.shplugin`
 
@@ -68,26 +77,70 @@ a SelfHelp host needs to install the plugin: the manifest, the
 runtime ESM bundle, the optional stylesheet, the SHA256 sums, and an
 Ed25519 signature over the canonical payload.
 
-Build locally (uses your local Ed25519 dev key):
+Every script in `scripts/` is a single cross-platform Node script
+(`.mjs`). The same command works on PowerShell, Git Bash, WSL, macOS
+and Linux — there are no `.ps1` / `.sh` wrappers.
+
+Build locally:
 
 ```bash
+# 1. Generate a dev keypair once (sibling registry checkout required).
+git clone https://github.com/humdek-unibe-ch/sh2-plugin-registry ../sh2-plugin-registry
+node ../sh2-plugin-registry/scripts/sign.mjs keygen
+#   → copy "privateKey" into .env (see step 2)
+#   → copy "publicKey"  into the host's SELFHELP_PLUGIN_TRUSTED_KEYS
+
+# 2. Drop the keypair (and any of the other defaults) into a local
+#    .env file — gitignored. Auto-loaded by every scripts/*.mjs.
+cp .env.example .env
+# Edit .env and set:
+#   SELFHELP_PLUGIN_DEV_SIGNING_KEY=<base64-private-key>
+
+# 3. Build the archive.
 node scripts/build-shplugin.mjs
 # → dist/sh2-shp-survey-js-<version>.shplugin
 ```
 
+`SELFHELP_PLUGIN_*_SIGNING_KEY` can also be set as a normal shell env
+variable; real `process.env` values always win over `.env`. CI just
+injects them as Actions secrets — see [`docs/secrets-setup.md`](docs/secrets-setup.md).
+
 The script:
 
-1. Runs `npm --prefix frontend run build:runtime` (Vite library mode).
-2. Stages `plugin.json` + `artifacts/{plugin.esm.js,plugin.css,SHA256SUMS}`.
-3. Builds the canonical signed payload via the shared `sign.mjs`.
-4. Signs with `SELFHELP_PLUGIN_SIGNING_KEY` (or
+1. Auto-loads `<plugin-root>/.env` via Node 22's `process.loadEnvFile`.
+2. Auto-installs `frontend/node_modules` if `vite` is missing.
+3. Runs `vite build` for the frontend runtime.
+4. Stages `plugin.json` + `artifacts/{plugin.esm.js,SHA256SUMS}` plus
+   `artifacts/plugin.css` **only if** the Vite build emitted one.
+   CSS is optional; the canonical signed payload (and the host
+   validator) mirror that.
+5. Builds the canonical signed payload via the shared `sign.mjs`.
+6. Signs with `SELFHELP_PLUGIN_SIGNING_KEY` (or
    `SELFHELP_PLUGIN_DEV_SIGNING_KEY` → keyId `dev`, dev-only).
-5. ZIPs into `dist/<id>-<version>.shplugin`.
-6. Self-validates by re-reading the SHA256SUMS.
+7. Writes SHA256SUMS with archive-root-relative paths
+   (`<hash>  artifacts/<file>`) — the host's `PluginArchiveValidator`
+   refuses anything else.
+8. Writes a deterministic, forward-slash ZIP via a built-in
+   pure-Node writer (no `zip` / `Compress-Archive` dependency).
+9. Self-validates by re-reading the SHA256SUMS.
 
 Use the dev-signed archive for `Admin → Plugins → Install plugin →
-Upload .shplugin` on a local host. Production hosts refuse `keyId="dev"`
-on `official`/`reviewed` trust levels — see
+Upload .shplugin` on a local host. The host accepts `keyId="dev"` on
+this plugin's `official` trust level **only when `APP_ENV=dev`** AND
+the matching public key is registered in
+`SELFHELP_PLUGIN_TRUSTED_KEYS`:
+
+```bash
+# In sh-selfhelp_backend/.env.local — public half of the keypair you
+# used as SELFHELP_PLUGIN_DEV_SIGNING_KEY at build time:
+SELFHELP_PLUGIN_TRUSTED_KEYS=dev=<base64-public-key>
+```
+
+Production hosts (`APP_ENV=prod`) refuse `keyId="dev"` outright for
+`official`/`reviewed` trust levels regardless of trusted-keys —
+use a real CI keypair via `SELFHELP_PLUGIN_SIGNING_KEY` +
+`SELFHELP_PLUGIN_SIGNING_KEY_ID`. See
+[`docs/secrets-setup.md`](docs/secrets-setup.md) and
 [`docs/publish.md`](docs/publish.md).
 
 ## Publish a new version (automated)
@@ -135,6 +188,10 @@ Actions):
 | `SELFHELP_PLUGIN_SIGNING_KEY`     | Ed25519 base64 secret key. Used to sign the canonical payload.                                  |
 | `SELFHELP_PLUGIN_SIGNING_KEY_ID`  | Publisher key id. Must match an entry in the host's `SELFHELP_PLUGIN_TRUSTED_KEYS`.             |
 | `REGISTRY_PUSH_TOKEN`             | PAT with `contents:write` on `humdek-unibe-ch/sh2-plugin-registry`. Missing → dry-run mode.     |
+
+Step-by-step walkthrough including key generation, GitHub UI
+clicks, and where to paste the public key on the host:
+**[`docs/secrets-setup.md`](docs/secrets-setup.md)**.
 
 Without `REGISTRY_PUSH_TOKEN` the workflow still builds the
 `.shplugin` and attaches it to the GitHub Release; only the

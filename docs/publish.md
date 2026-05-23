@@ -48,15 +48,58 @@ sh2-plugin-registry/
 `manifests/`. The host downloads both and runs the same install
 pipeline as a manual paste.
 
+## Archive modes — connected vs standalone (Phase 2a)
+
+Every `.shplugin` we publish ships in one of two modes. The default
+is `connected` (Phase-1 behaviour). Use `--mode standalone` when you
+need the host to install the plugin's backend Composer package from
+the archive itself instead of Packagist.
+
+| Mode | What the archive contains | What the host does on install | When to use |
+| ---- | ------------------------- | ----------------------------- | ----------- |
+| `connected` (default) | Manifest + signature + frontend ESM + checksums. **No** backend PHP source. | `composer require humdek/<id>:<ver>` against Packagist / the configured Composer repo. | Public plugins, registry installs, fastest publish loop. |
+| `standalone` | Connected layout **plus** `backend/package/` (the plugin's Symfony bundle Composer package). | Promotes `backend/package/` into `installed/`, registers a Composer **path** repository pointing at it (with `options.symlink=false`), then `composer require humdek/<id>:<ver>` from the path repo. Third-party PHP deps (symfony/*, doctrine/*, …) are still pulled from Packagist. | Air-gapped / restricted-network hosts, deterministic vendored distributions, snapshot deployments. |
+
+Trigger by passing `--mode <connected|standalone>` to
+`scripts/build-shplugin.mjs` (and to
+`scripts/publish-to-registry.mjs`, which forwards the flag). The CLI
+flag wins over `plugin.json#archive.mode`.
+
+### Publisher contract for standalone archives
+
+`scripts/build-shplugin.mjs --mode standalone` enforces three rules
+before staging the backend slot. The host's
+`PluginArchiveValidator` enforces the same rules at install time, so
+publishing a non-conforming archive fails twice — once locally, once
+on every host.
+
+1. `backend/composer.json#name` MUST equal
+   `plugin.json#backend.composer.package`.
+2. `backend/composer.json#version` MUST equal `plugin.json#version`.
+   You set this field explicitly in `backend/composer.json` rather
+   than letting Composer derive it from a Git tag, because the
+   archive may be built outside the Git working tree.
+3. `backend/composer.json#scripts` must be empty (or unset).
+   Composer scripts can run arbitrary shell on `composer require` —
+   the host validator rejects them unless the operator sets
+   `SELFHELP_PLUGIN_ALLOW_COMPOSER_SCRIPTS=1` (advanced, not
+   recommended).
+
+`backend/vendor/` is **never** included by the build script — Phase
+2a does not vendor third-party deps. Operators on fully air-gapped
+hosts must arrange for Packagist mirroring separately. Phase 2b will
+ship full `backend/vendor/` bundling.
+
 ## The fast path — automatic publish
 
 Every plugin we own ships two pieces:
 
-1. `scripts/publish-to-registry.{ps1,sh}` — one-shot scripts that
-   validate, build, copy manifests into the registry checkout,
-   commit, and (with `--push`) push.
+1. `scripts/publish-to-registry.mjs` — single cross-platform Node
+   script that builds the signed `.shplugin`, copies the manifest +
+   runtime artifacts into the registry checkout, splices the signed
+   entry into `registry.json`, commits, and (with `--push`) pushes.
 2. `.github/workflows/publish-to-registry.yml` — CI workflow that
-   runs the bash script automatically when a `v*` tag is pushed.
+   runs the same Node script automatically when a `v*` tag is pushed.
 
 ### Local one-shot (developer machine)
 
@@ -68,50 +111,56 @@ plugins/
 └── sh2-plugin-registry/      ← https://github.com/humdek-unibe-ch/sh2-plugin-registry
 ```
 
-Then run from the plugin root:
-
-```powershell
-.\scripts\publish-to-registry.ps1 -Push     # Windows / PowerShell
-```
+Drop your signing key + paths into `<plugin>/.env` (gitignored, see
+[`.env.example`](../.env.example)) so you don't have to export them in
+every shell — every script in `scripts/` auto-loads `.env` via Node 22's
+`process.loadEnvFile`. Then run from the plugin root:
 
 ```bash
-./scripts/publish-to-registry.sh --push     # Linux / macOS / WSL
+node scripts/publish-to-registry.mjs --push
 ```
+
+The same command works on PowerShell, Git Bash, WSL, macOS and Linux.
 
 What the script does:
 
 1. Reads `plugin.json` for `id`, `version`, `name`, `description`,
    `homepage`, and `security.trustLevel`.
-2. Validates the manifest against the vendored
-   `docs/plugins/plugin-manifest.schema.json` (best-effort — passes
-   silently if `ajv-cli` is not installed).
-3. Builds the frontend + mobile npm packages.
+2. Calls `node scripts/build-shplugin.mjs` to build + sign the
+   `.shplugin`. The same canonical signed payload is then reused for
+   the registry entry, so the archive and the entry are signed
+   exactly once with one keypair.
+3. Calls the registry repo's `scripts/build-registry-entry.mjs` to
+   emit the signed `pluginEntry` JSON object.
 4. Copies `plugin.json` to
    `<registry>/manifests/<plugin-id>-<version>.json`.
-5. Inserts / updates the plugin entry in `<registry>/registry.json`,
+5. Copies `dist/shplugin/<id>-<ver>/artifacts/*` to
+   `<registry>/artifacts/<id>-<ver>/`.
+6. Inserts / updates the plugin entry in `<registry>/registry.json`,
    sorted by id, with refreshed `publishedAt`.
-6. Commits in the registry repo with message
-   `publish: <id>@<version> (<channel>/<trust>)`.
-7. With `--push`, pushes to `origin`. The registry repo's
+7. Commits in the registry repo with message
+   `publish: <id>@<version> (<channel>)`.
+8. With `--push`, pushes to `origin`. The registry repo's
    `build-registry.yml` workflow then republishes the static site to
    GitHub Pages.
 
 Available flags:
 
-| Flag (PowerShell)        | Flag (bash)         | Description                                              |
-| ------------------------ | ------------------- | -------------------------------------------------------- |
-| `-RegistryPath <path>`   | `--registry <path>` | Override the registry repo location.                     |
-| `-Channel <name>`        | `--channel <name>`  | `stable` (default), `beta`, `alpha`, or `nightly`.       |
-| `-TrustLevel <name>`     | `--trust <name>`    | `official`, `reviewed`, or `untrusted`.                  |
-| `-DryRun`                | `--dry-run`         | Show the diff without writing.                           |
-| `-Push`                  | `--push`            | Push the registry commit.                                |
-| `-PublishNpm`            | `--publish-npm`     | Also run `npm publish` on the frontend + mobile packages.|
-| `-SkipBuild`             | `--skip-build`      | Skip the local rebuild step.                             |
+| Flag                | Description                                                                |
+| ------------------- | -------------------------------------------------------------------------- |
+| `--registry <path>` | Override the registry repo location (or set `SELFHELP_REGISTRY_PATH`).     |
+| `--channel <name>`  | `stable` (default), `beta`, `alpha`, or `nightly`.                         |
+| `--mode <name>`     | Archive mode: `connected` (default) or `standalone`. Forwarded to `build-shplugin.mjs`. See the table above. |
+| `--dry-run`         | Print planned changes without writing or committing.                       |
+| `--push`            | `git push` the registry commit to origin.                                  |
+| `--release`         | Also run `gh release create v<version> dist/<id>-<ver>.shplugin --notes-file CHANGELOG.md`. |
+| `--skip-build`      | Skip the local frontend rebuild inside `build-shplugin.mjs`.               |
+| `-h`, `--help`      | Print usage.                                                               |
 
 ### CI publish (recommended)
 
 The plugin includes `.github/workflows/publish-to-registry.yml` which
-runs the same bash script automatically.
+runs `node scripts/publish-to-registry.mjs` automatically.
 
 Trigger:
 
@@ -159,25 +208,27 @@ compatibility range.
 
 ## Publishing the npm packages (optional)
 
-When the publish script is run with `--publish-npm` (PowerShell:
-`-PublishNpm`) it also runs `npm publish --access public` on the
-frontend and mobile packages.
+The `.shplugin` carries the runtime ESM bundle directly (see
+[`shplugin-archive.md`](../../sh-selfhelp_backend/docs/plugins/shplugin-archive.md)),
+so a registry-only release does not need an npm publish. If you want
+the frontend / mobile packages on the public npm registry too, run
+`npm publish --access public` from `frontend/` and `mobile/` after the
+registry push:
+
+```bash
+(cd frontend && npm publish --access public)
+(cd mobile   && npm publish --access public)
+```
 
 That gives consumers:
 
 - `@humdek/sh2-shp-survey-js@<version>` on the public npm registry
 - `@humdek/sh2-shp-survey-js-mobile@<version>` on the public npm registry
 
-The host frontend / mobile resolve plugin code via these npm
-packages, so they must be published before the install will
-finalise on production hosts.
-
 > **Where to keep credentials?** Run `npm login` once on the
-> developer machine, then the publish script picks up the existing
-> session. For CI, store an npm automation token as the workflow
-> secret `NPM_TOKEN` and add an `npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN`
-> step before the publish workflow if you decide to enable
-> `--publish-npm` from CI.
+> developer machine, then `npm publish` picks up the existing session.
+> For CI, store an npm automation token as the workflow secret
+> `NPM_TOKEN` and add a dedicated `npm publish` step.
 
 ## Publishing the backend Composer package (optional)
 
@@ -237,7 +288,8 @@ Commit to git:
 - `frontend/src/**`, `frontend/package.json`, `frontend/tsconfig.json`.
 - `backend/src/**`, `backend/composer.json`.
 - `mobile/src/**`, `mobile/package.json`.
-- `scripts/install-local.{ps1,sh}` and `scripts/publish-to-registry.{ps1,sh}`.
+- `scripts/build-shplugin.mjs`, `scripts/install-local.mjs`, `scripts/publish-to-registry.mjs`.
+- `.env.example` (template; never commit `.env`).
 - `.github/workflows/*.yml`.
 
 Do **not** commit:

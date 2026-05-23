@@ -228,16 +228,32 @@ served at <https://humdek-unibe-ch.github.io/sh2-plugin-registry/>.
 
 ### Required scripts
 
-Every plugin MUST ship the following files:
+Every plugin MUST ship the following files under `scripts/`:
 
-- `scripts/publish-to-registry.ps1` — PowerShell publish script.
-- `scripts/publish-to-registry.sh`  — Bash publish script.
-- `.github/workflows/publish-to-registry.yml` — CI workflow that runs
-  the bash script on `v*` tag pushes and on manual dispatch.
+- `scripts/build-shplugin.mjs` — single cross-platform Node script
+  that builds + signs the `.shplugin`.
+- `scripts/install-local.mjs` — single cross-platform Node script
+  that installs the plugin on a local host (`.shplugin` upload by
+  default, `--symlink` fast-path optional).
+- `scripts/publish-to-registry.mjs` — single cross-platform Node
+  script that builds, signs, copies into the sibling
+  `sh2-plugin-registry`, splices `registry.json`, commits, and
+  optionally pushes / creates a GitHub Release.
+- `.github/workflows/publish-to-registry.yml` — CI workflow that
+  runs `node scripts/publish-to-registry.mjs` on `v*` tag pushes
+  and on manual dispatch.
 
-Both scripts must be **functionally identical** so a maintainer on
-either platform observes the same behaviour. See this plugin's
-implementation for the canonical pattern.
+Do **not** ship `.ps1` / `.sh` wrappers. Every supported OS
+(PowerShell, Git Bash, WSL, macOS, Linux) runs the same `.mjs`
+files. The host's `docs/plugins/` documentation enforces this
+convention.
+
+Every plugin MUST also ship a `.env.example` documenting the
+`SELFHELP_PLUGIN_*_SIGNING_KEY` / `SELFHELP_PLUGIN_*_SIGNING_KEY_ID` /
+`SELFHELP_ADMIN_TOKEN` / `SELFHELP_API_BASE` / `SELFHELP_BACKEND_PATH`
+/ `SELFHELP_REGISTRY_PATH` env variables the scripts consume. The
+scripts auto-load `<plugin-root>/.env` via Node 22's
+`process.loadEnvFile`. NEVER commit `.env`.
 
 ### What the publish script does
 
@@ -273,8 +289,8 @@ plugins/
 └── sh2-plugin-registry/     ← official registry repo
 ```
 
-A different location may be passed via `-RegistryPath` (PowerShell)
-or `--registry` (bash).
+A different location may be passed via `--registry <abs-path>` or
+`SELFHELP_REGISTRY_PATH` in `.env`.
 
 ### CI publishing
 
@@ -291,11 +307,13 @@ push step and prints a warning.
 
 ### Do not bypass the script
 
-When adding a new plugin to the registry, run the publish script.
-Do NOT hand-edit `registry.json` or hand-copy manifests, because
-the script enforces:
+When adding a new plugin to the registry, run
+`node scripts/publish-to-registry.mjs`. Do NOT hand-edit
+`registry.json` or hand-copy manifests, because the script enforces:
 
 - Schema validation.
 - Consistent sorting.
 - Atomic registry commits with a uniform message format.
 - Updated `publishedAt`.
+- Single canonical signed payload reused for both the `.shplugin`
+  and the registry entry.

@@ -14,9 +14,10 @@
 #      plugin.css,SHA256SUMS} + signature.json (Ed25519). The same
 #      canonical signed payload is reused for the registry entry.
 #   4. If REGISTRY_PUSH_TOKEN is set, checkout the registry repo and
-#      run `scripts/publish-to-registry.sh --skip-build --push` to
-#      copy the manifest + artifacts and splice the signed pluginEntry
-#      into registry.json.
+#      run `node scripts/publish-to-registry.mjs --skip-build --push`
+#      to copy the manifest + artifacts and splice the signed
+#      pluginEntry into registry.json. (The publisher is a single
+#      cross-platform Node script — no .ps1/.sh wrappers.)
 #   5. Always: upload the .shplugin as a release asset.
 #
 # Required secrets:
@@ -154,8 +155,7 @@ jobs:
                   SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
                   SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
               run: |
-                  chmod +x scripts/publish-to-registry.sh
-                  bash scripts/publish-to-registry.sh \
+                  node scripts/publish-to-registry.mjs \
                       --registry "$GITHUB_WORKSPACE/sh2-plugin-registry" \
                       --channel  "$CHANNEL" \
                       --skip-build \
