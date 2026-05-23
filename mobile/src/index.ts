@@ -19,7 +19,13 @@ import type { IMobilePluginRegistration } from '@selfhelp/shared/plugin-sdk';
 import { SurveyJsReadOnlyStyle } from './styles/SurveyJsReadOnlyStyle';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
-export const PLUGIN_VERSION = '1.0.0';
+/**
+ * Must match `plugin.json#version` and the mobile `package.json#version`.
+ * `PluginRuntime.registerOne()` (web) and the mobile sync script both
+ * compare these constants against the manifest version; a mismatch
+ * silently breaks the plugin.
+ */
+export const PLUGIN_VERSION = '0.1.0';
 
 export const registerMobile = (): IMobilePluginRegistration =>
     defineMobilePlugin({

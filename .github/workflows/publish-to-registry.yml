@@ -32,7 +32,7 @@ on:
                 required: true
                 default: "stable"
                 type: choice
-                options: ["stable", "beta", "rc", "dev"]
+                options: ["stable", "beta", "alpha", "nightly"]
 
 permissions:
     contents: read

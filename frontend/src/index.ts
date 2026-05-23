@@ -28,7 +28,15 @@ import { SurveySettingsPage } from './admin/SurveySettingsPage';
 import { setPluginApi } from './runtime/pluginApi';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
-export const PLUGIN_VERSION = '1.0.0';
+/**
+ * Must match `plugin.json#version` and `package.json#version`. The host
+ * `PluginRuntime.registerOne()` refuses to apply a registration whose
+ * `version` differs from the manifest entry the host loaded, so a
+ * mismatch silently breaks the plugin. Keep these three values in sync
+ * for every release; the publish script (`scripts/publish-to-registry.*`)
+ * already enforces the same alignment server-side.
+ */
+export const PLUGIN_VERSION = '0.1.0';
 
 /**
  * Called by `PluginRuntime.registerOne()`. The runtime captures the

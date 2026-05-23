@@ -101,7 +101,7 @@ Available flags:
 | Flag (PowerShell)        | Flag (bash)         | Description                                              |
 | ------------------------ | ------------------- | -------------------------------------------------------- |
 | `-RegistryPath <path>`   | `--registry <path>` | Override the registry repo location.                     |
-| `-Channel <name>`        | `--channel <name>`  | `stable` (default), `beta`, `rc`, or `dev`.              |
+| `-Channel <name>`        | `--channel <name>`  | `stable` (default), `beta`, `alpha`, or `nightly`.       |
 | `-TrustLevel <name>`     | `--trust <name>`    | `official`, `reviewed`, or `untrusted`.                  |
 | `-DryRun`                | `--dry-run`         | Show the diff without writing.                           |
 | `-Push`                  | `--push`            | Push the registry commit.                                |
@@ -117,7 +117,7 @@ Trigger:
 
 - `push: tags: ["v*"]` — automatic on release tags.
 - `workflow_dispatch` — manual run from the **Actions** tab with a
-  `channel` input (`stable` / `beta` / `rc` / `dev`).
+  `channel` input (`stable` / `beta` / `alpha` / `nightly`).
 
 Setup once:
 

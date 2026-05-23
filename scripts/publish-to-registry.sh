@@ -5,7 +5,7 @@
 # Publish the current plugin version to the sibling sh2-plugin-registry repo.
 #
 # Usage:
-#   ./scripts/publish-to-registry.sh [--registry PATH] [--channel stable|beta|rc|dev]
+#   ./scripts/publish-to-registry.sh [--registry PATH] [--channel stable|beta|alpha|nightly]
 #                                    [--trust official|reviewed|untrusted]
 #                                    [--dry-run] [--push] [--publish-npm] [--skip-build]
 #

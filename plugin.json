@@ -179,21 +179,24 @@
         }
     ],
     "apiRoutes": [
-        {"name": "surveyjs_admin_list", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys", "methods": ["GET", "POST"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_get", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}", "methods": ["GET", "PUT", "DELETE"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_versions_create", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/versions", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_dashboard", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/dashboard", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
-        {"name": "surveyjs_admin_responses", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/responses", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
-        {"name": "surveyjs_admin_response_pdf", "path": "/cms-api/v1/admin/plugins/surveyjs/surveys/{id}/responses/{rid}/pdf", "methods": ["GET"], "permission": "surveyjs.surveys.export-pdf"},
-        {"name": "surveyjs_admin_license_key", "path": "/cms-api/v1/admin/plugins/surveyjs/license-key", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_health", "path": "/cms-api/v1/admin/plugins/surveyjs/health", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_public_published", "path": "/cms-api/v1/plugins/surveyjs/published/{key}", "methods": ["GET"]},
-        {"name": "surveyjs_public_submit", "path": "/cms-api/v1/plugins/surveyjs/published/{key}/submit", "methods": ["POST"]}
+        {"name": "surveyjs_admin_list", "path": "/admin/plugins/sh2-shp-survey-js/surveys", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_create", "path": "/admin/plugins/sh2-shp-survey-js/surveys", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_get", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_update", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["PUT"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_delete", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["DELETE"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_versions_create", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_dashboard", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
+        {"name": "surveyjs_admin_responses", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
+        {"name": "surveyjs_admin_response_pdf", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}/pdf", "methods": ["GET"], "permission": "surveyjs.surveys.export-pdf"},
+        {"name": "surveyjs_admin_license_key", "path": "/admin/plugins/sh2-shp-survey-js/license-key", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_admin_health", "path": "/admin/plugins/sh2-shp-survey-js/health", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
+        {"name": "surveyjs_public_published", "path": "/plugins/sh2-shp-survey-js/published/{key}", "methods": ["GET"]},
+        {"name": "surveyjs_public_submit", "path": "/plugins/sh2-shp-survey-js/published/{key}/submit", "methods": ["POST"]}
     ],
     "scheduledJobs": [],
     "assets": [],
     "health": {
-        "endpoint": "/cms-api/v1/admin/plugins/surveyjs/health",
+        "endpoint": "/admin/plugins/sh2-shp-survey-js/health",
         "serviceId": "humdek.surveyjs.health_check"
     },
     "labels": {
