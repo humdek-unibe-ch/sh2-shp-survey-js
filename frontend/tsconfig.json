@@ -12,8 +12,9 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
-        "declaration": true,
-        "noUncheckedIndexedAccess": true
+        "declaration": false,
+        "noUncheckedIndexedAccess": true,
+        "types": ["vite/client"]
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*", "vite.config.ts"]
 }

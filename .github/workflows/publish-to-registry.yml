@@ -1,24 +1,35 @@
 # SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 # SPDX-License-Identifier: MPL-2.0
 #
-# Auto-publishes this plugin to the sh2-plugin-registry repo when a
-# semver tag (`v*`) is pushed, or when triggered manually. The job:
+# Auto-publishes this plugin to the sh2-plugin-registry repo and a
+# GitHub Release when a semver tag (`v*`) is pushed, or when
+# triggered manually. Pipeline:
 #
-#   1. Builds the plugin's frontend + mobile npm packages and runs the
-#      existing `validate-plugin` CI checks.
-#   2. Checks out the registry repo (humdek-unibe-ch/sh2-plugin-registry)
-#      via a deploy key / PAT stored as the `REGISTRY_PUSH_TOKEN`
-#      secret on this repo.
-#   3. Runs `scripts/publish-to-registry.sh --push` so the registry's
-#      `registry.json` is updated and a manifest file lands under
-#      `manifests/<plugin-id>-<version>.json`.
-#   4. The registry repo's own `build-registry.yml` workflow takes over
-#      on the new commit and re-publishes to GitHub Pages.
+#   1. Validate plugin.json against the canonical schema (vendored
+#      copy under docs/plugins/).
+#   2. Build the frontend runtime via Vite (`dist/plugin.esm.js`
+#      and `dist/plugin.css`).
+#   3. Build the .shplugin archive with `scripts/build-shplugin.mjs`.
+#      The archive contains plugin.json + artifacts/{plugin.esm.js,
+#      plugin.css,SHA256SUMS} + signature.json (Ed25519). The same
+#      canonical signed payload is reused for the registry entry.
+#   4. If REGISTRY_PUSH_TOKEN is set, checkout the registry repo and
+#      run `scripts/publish-to-registry.sh --skip-build --push` to
+#      copy the manifest + artifacts and splice the signed pluginEntry
+#      into registry.json.
+#   5. Always: upload the .shplugin as a release asset.
 #
-# To enable this workflow, add a `REGISTRY_PUSH_TOKEN` secret (a PAT
-# with `contents:write` on humdek-unibe-ch/sh2-plugin-registry).
-# Without that secret the job will still build + validate, but skip
-# the push step.
+# Required secrets:
+#   SELFHELP_PLUGIN_SIGNING_KEY      Ed25519 64-byte secret key (base64).
+#   SELFHELP_PLUGIN_SIGNING_KEY_ID   Publisher key id matching the
+#                                    SELFHELP_PLUGIN_TRUSTED_KEYS entry
+#                                    seeded on every SelfHelp host.
+#   REGISTRY_PUSH_TOKEN              PAT with `contents:write` on
+#                                    humdek-unibe-ch/sh2-plugin-registry.
+#                                    Without it the workflow still
+#                                    builds the .shplugin and publishes
+#                                    the GH Release but skips the
+#                                    registry update.
 
 name: publish-to-registry
 
@@ -35,11 +46,11 @@ on:
                 options: ["stable", "beta", "alpha", "nightly"]
 
 permissions:
-    contents: read
+    contents: write
 
 jobs:
     publish:
-        name: Publish to plugin registry
+        name: Build, sign, publish .shplugin
         runs-on: ubuntu-latest
         steps:
             - name: Checkout plugin
@@ -47,68 +58,130 @@ jobs:
               with:
                   path: plugin
 
-            - name: Checkout sh2-plugin-registry
-              if: ${{ env.REGISTRY_PUSH_TOKEN != '' }}
+            - name: Checkout sh2-plugin-registry (for shared sign.mjs)
               uses: actions/checkout@v4
               with:
                   repository: humdek-unibe-ch/sh2-plugin-registry
-                  token: ${{ secrets.REGISTRY_PUSH_TOKEN }}
-                  path: registry
-                  fetch-depth: 0
+                  token: ${{ secrets.REGISTRY_PUSH_TOKEN || github.token }}
+                  path: sh2-plugin-registry
+                  fetch-depth: 1
 
             - uses: actions/setup-node@v4
               with:
                   node-version: "22"
 
-            - uses: shivammathur/setup-php@v2
-              with:
-                  php-version: "8.4"
-
             - name: Install ajv-cli
               run: npm install -g ajv-cli ajv-formats
+
+            - name: Install registry tooling
+              working-directory: sh2-plugin-registry
+              run: npm install --no-audit --no-fund
 
             - name: Configure git identity
               run: |
                   git config --global user.email "selfhelp-bot@unibe.ch"
                   git config --global user.name  "SelfHelp Plugin Bot"
 
-            - name: Validate manifest
+            - name: Validate manifest against canonical schema
               working-directory: plugin
-              run: ajv validate -c ajv-formats -s docs/plugins/plugin-manifest.schema.json -d plugin.json --strict=false
+              run: ajv validate -c ajv-formats -s ../sh2-plugin-registry/plugin-manifest.schema.json -d plugin.json --strict=false
 
-            - name: Build frontend
+            - name: Build frontend runtime
               working-directory: plugin/frontend
               run: |
-                  npm install --legacy-peer-deps
-                  npm run build
+                  npm install --legacy-peer-deps --no-audit --no-fund
+                  npm run build:runtime
 
-            - name: Build mobile
-              working-directory: plugin/mobile
+            - name: Build .shplugin (signed)
+              working-directory: plugin
+              env:
+                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
+                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
+              run: node scripts/build-shplugin.mjs --skip-build
+
+            - name: Extract plugin id + version
+              id: pkg
+              working-directory: plugin
               run: |
-                  npm install --legacy-peer-deps
-                  npm run build
+                  ID=$(jq -r '.id' plugin.json)
+                  VER=$(jq -r '.version' plugin.json)
+                  echo "id=$ID"   >> "$GITHUB_OUTPUT"
+                  echo "ver=$VER" >> "$GITHUB_OUTPUT"
+                  echo "archive=plugin/dist/${ID}-${VER}.shplugin" >> "$GITHUB_OUTPUT"
+
+            - name: Extract per-version changelog notes
+              id: notes
+              working-directory: plugin
+              run: |
+                  VER="${{ steps.pkg.outputs.ver }}"
+                  NOTES_FILE="$GITHUB_WORKSPACE/release-notes.md"
+                  if [ ! -f CHANGELOG.md ]; then
+                      echo "_No CHANGELOG.md present._" > "$NOTES_FILE"
+                  else
+                      # Extract the section between ## [<version>] and the next ## heading.
+                      # Falls back to the full file if no matching section is found.
+                      awk -v ver="$VER" '
+                          BEGIN { found = 0 }
+                          /^## / {
+                              if (found == 1) { exit }
+                              if (index($0, "[" ver "]") > 0 || index($0, " " ver " ") > 0 || index($0, " " ver "$") > 0) {
+                                  found = 1
+                                  print
+                                  next
+                              }
+                          }
+                          found == 1 { print }
+                      ' CHANGELOG.md > "$NOTES_FILE"
+                      if [ ! -s "$NOTES_FILE" ]; then
+                          echo "_No matching section for ${VER} in CHANGELOG.md — full changelog attached below._" > "$NOTES_FILE"
+                          echo "" >> "$NOTES_FILE"
+                          cat CHANGELOG.md >> "$NOTES_FILE"
+                      fi
+                  fi
+                  echo "" >> "$NOTES_FILE"
+                  echo "---" >> "$NOTES_FILE"
+                  echo "" >> "$NOTES_FILE"
+                  echo "### Installation" >> "$NOTES_FILE"
+                  echo "" >> "$NOTES_FILE"
+                  echo "Drag-and-drop the attached \`.shplugin\` archive into **Admin → Plugins → Install plugin → Upload .shplugin** on your SelfHelp host, or install one-click from **Admin → Plugins → Available** if the official registry is enabled." >> "$NOTES_FILE"
+                  echo "notes-file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
             - name: Publish to registry
-              if: ${{ env.REGISTRY_PUSH_TOKEN != '' }}
+              if: ${{ secrets.REGISTRY_PUSH_TOKEN != '' }}
               working-directory: plugin
               env:
                   CHANNEL: ${{ inputs.channel || 'stable' }}
+                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
+                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
               run: |
                   chmod +x scripts/publish-to-registry.sh
                   bash scripts/publish-to-registry.sh \
-                      --registry "$GITHUB_WORKSPACE/registry" \
+                      --registry "$GITHUB_WORKSPACE/sh2-plugin-registry" \
                       --channel  "$CHANNEL" \
                       --skip-build \
                       --push
 
+            - name: Upload .shplugin as workflow artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}.shplugin
+                  path: ${{ steps.pkg.outputs.archive }}
+
+            - name: Create GitHub Release
+              if: startsWith(github.ref, 'refs/tags/v')
+              uses: softprops/action-gh-release@v2
+              with:
+                  name: ${{ steps.pkg.outputs.id }} ${{ steps.pkg.outputs.ver }}
+                  files: ${{ steps.pkg.outputs.archive }}
+                  body_path: ${{ steps.notes.outputs.notes-file }}
+                  fail_on_unmatched_files: true
+                  token: ${{ github.token }}
+
             - name: Summary
-              if: ${{ env.REGISTRY_PUSH_TOKEN == '' }}
+              if: ${{ secrets.REGISTRY_PUSH_TOKEN == '' }}
               run: |
                   echo "::warning::REGISTRY_PUSH_TOKEN secret is not set."
-                  echo "Build succeeded but the registry was not updated."
-                  echo "Add a Personal Access Token with write access to"
-                  echo "humdek-unibe-ch/sh2-plugin-registry as REGISTRY_PUSH_TOKEN"
-                  echo "to enable auto-publishing."
-
-        env:
-            REGISTRY_PUSH_TOKEN: ${{ secrets.REGISTRY_PUSH_TOKEN }}
+                  echo ".shplugin was built and (if tagged) uploaded as a release asset,"
+                  echo "but the registry was NOT updated. Add a PAT with contents:write on"
+                  echo "humdek-unibe-ch/sh2-plugin-registry as REGISTRY_PUSH_TOKEN to enable"
+                  echo "auto-publishing."

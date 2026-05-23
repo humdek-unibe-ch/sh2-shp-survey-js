@@ -3,24 +3,18 @@
     "version": "0.1.0",
     "description": "SurveyJS v2 frontend integration for the SelfHelp CMS plugin ecosystem.",
     "license": "MPL-2.0",
-    "main": "dist/index.js",
-    "module": "dist/index.mjs",
-    "types": "dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.mjs",
-            "require": "./dist/index.js"
-        }
-    },
+    "private": true,
+    "type": "module",
     "files": [
         "dist",
         "src",
         "README.md"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react --external react-dom --external @mantine/core --external @selfhelp/shared",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external react --external react-dom --external @mantine/core --external @selfhelp/shared",
+        "build": "vite build",
+        "build:runtime": "vite build",
+        "dev": "vite",
+        "dev:runtime": "vite",
         "typecheck": "tsc --noEmit"
     },
     "peerDependencies": {
@@ -37,13 +31,16 @@
         "@selfhelp/shared": "^1.0.4",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^5.0.0",
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "survey-core": "^2",
         "survey-creator-react": "^2",
         "survey-react-ui": "^2",
-        "tsup": "^8.3.5",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vite": "^7.0.0"
     },
-    "sideEffects": false
+    "sideEffects": [
+        "**/*.css"
+    ]
 }

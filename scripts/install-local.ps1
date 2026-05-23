@@ -6,178 +6,169 @@
     One-shot local installer for the sh2-shp-survey-js plugin.
 
 .DESCRIPTION
-    Wires the plugin into a local SelfHelp checkout in one shot:
+    Single canonical install flow with two modes:
 
-      1. Adds a Composer 'path' repository to the host backend that
-         points at the plugin's `backend/` directory and runs
-         `composer require humdek/sh2-shp-survey-js`.
-      2. Calls the host backend CLI installer
-         (`php bin/console selfhelp:plugin:install`) with the absolute
-         path to this plugin's `plugin.json`. In development mode the
-         host immediately finalizes the install and enables the bundle.
-      3. Runs `npm link` on the plugin's frontend/mobile packages so
-         the host frontend/mobile checkouts resolve them without an
-         npm registry round-trip.
+      Default (.shplugin mode)
+        1. Build the plugin's .shplugin archive (scripts/build-shplugin.ps1).
+        2. Upload the .shplugin to the local host via
+           POST /cms-api/v1/admin/plugins/install (multipart/form-data,
+           source=archive). The host dispatches the InstallPluginMessage
+           on the plugin_ops Messenger transport.
+        3. Drain the Messenger queue inline by running
+           `php bin/console messenger:consume plugin_ops --limit=1
+           --time-limit=120`.
 
-    After the script completes, the host frontend / mobile dev servers
-    pick up the new package via HMR — no manual restart needed.
+      -Symlink fast-path (dev only)
+        Skips the archive build and calls the host CLI directly:
+        `php bin/console selfhelp:plugin:install <plugin.json>` with the
+        absolute manifest path. The Composer path repo is wired so
+        the bundle autoloads from the plugin checkout (no rebuild on
+        every code edit).
+
+    The frontend runtime is loaded from the dev URL declared in
+    plugin.json#frontend.runtime.devEntrypointUrl, so the host needs no
+    npm-link rebuild for normal UI edits — start the plugin's Vite
+    dev server (`npm --prefix frontend run dev:runtime`) once and edit
+    away.
 
 .PARAMETER BackendPath
     Absolute path to the sh-selfhelp_backend checkout. Defaults to
-    `../../sh-selfhelp_backend` relative to the script file.
+    ../../sh-selfhelp_backend.
 
-.PARAMETER FrontendPath
-    Absolute path to the sh-selfhelp_frontend checkout. Defaults to
-    `../../sh-selfhelp_frontend` relative to the script file. Pass
-    `-FrontendPath ''` to skip the frontend link step.
+.PARAMETER ApiBase
+    Base URL of the local host (e.g. http://localhost:8000). Default:
+    http://localhost:8000.
 
-.PARAMETER MobilePath
-    Absolute path to the sh-selfhelp_mobile checkout. Defaults to
-    `../../sh-selfhelp_mobile` relative to the script file. Pass
-    `-MobilePath ''` to skip the mobile link step.
+.PARAMETER Token
+    Admin JWT bearer token for the host. If empty, the script reads
+    $env:SELFHELP_ADMIN_TOKEN.
 
-.PARAMETER SkipComposer
-    Skip the Composer path-repo + require step if Composer is not
-    available on this machine.
+.PARAMETER Symlink
+    Skip the .shplugin build + upload. Wire a Composer path repo to the
+    plugin checkout and invoke the host CLI installer directly.
 
-.PARAMETER SkipNpmLink
-    Skip the `npm link` step. Useful when the plugin's frontend/mobile
-    npm packages are already linked.
+.PARAMETER SkipBuild
+    Skip the `npm --prefix frontend run build:runtime` step inside the
+    .shplugin builder. Only use when you have already built the runtime
+    bundle since your last code change.
+
+.PARAMETER SkipConsume
+    Skip the messenger:consume step. Use only if you already have a
+    long-running worker draining `plugin_ops` in another shell.
 
 .EXAMPLE
     .\install-local.ps1
-
-    Installs the plugin with default paths (workspace siblings).
-
-.EXAMPLE
-    .\install-local.ps1 -BackendPath 'D:\projects\sh-selfhelp_backend' -FrontendPath 'D:\projects\sh-selfhelp_frontend' -MobilePath ''
-
-    Installs into custom paths and skips the mobile linking step.
+    .\install-local.ps1 -Symlink
+    .\install-local.ps1 -ApiBase 'http://localhost:8000' -Token (Get-Content .admin-token)
 #>
 
 [CmdletBinding()]
 param(
-    [string]$BackendPath  = '',
-    [string]$FrontendPath = '',
-    [string]$MobilePath   = '',
-    [switch]$SkipComposer,
-    [switch]$SkipNpmLink
+    [string]$BackendPath = '',
+    [string]$ApiBase     = 'http://localhost:8000',
+    [string]$Token       = '',
+    [switch]$Symlink,
+    [switch]$SkipBuild,
+    [switch]$SkipConsume
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Write-Step([string]$msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
-function Write-Ok  ([string]$msg) { Write-Host "    OK  $msg" -ForegroundColor Green }
-function Write-Warn([string]$msg) { Write-Host "    !!  $msg" -ForegroundColor Yellow }
+function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
+function Ok($msg)   { Write-Host "    OK  $msg" -ForegroundColor Green }
+function Warn($msg) { Write-Host "    !!  $msg" -ForegroundColor Yellow }
 
-$pluginRoot     = Resolve-Path "$PSScriptRoot\.."
-$pluginManifest = Join-Path $pluginRoot 'plugin.json'
+$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$PluginRoot  = Resolve-Path "$ScriptDir\.."
+$PluginJson  = Join-Path $PluginRoot 'plugin.json'
+if (-not (Test-Path $PluginJson)) { throw "plugin.json not found at $PluginJson" }
 
-if (-not (Test-Path $pluginManifest)) {
-    throw "plugin.json not found at $pluginManifest. Run this script from the plugin checkout."
-}
-
-if (-not $BackendPath)  { $BackendPath  = Resolve-Path "$pluginRoot\..\..\sh-selfhelp_backend"  -ErrorAction SilentlyContinue }
-if (-not $FrontendPath) { $FrontendPath = Resolve-Path "$pluginRoot\..\..\sh-selfhelp_frontend" -ErrorAction SilentlyContinue }
-if (-not $MobilePath)   { $MobilePath   = Resolve-Path "$pluginRoot\..\..\sh-selfhelp_mobile"   -ErrorAction SilentlyContinue }
-
-Write-Step "Plugin root:     $pluginRoot"
-Write-Step "Backend path:    $BackendPath"
-Write-Step "Frontend path:   $FrontendPath"
-Write-Step "Mobile path:     $MobilePath"
-
+if (-not $BackendPath) { $BackendPath = (Resolve-Path "$PluginRoot\..\..\sh-selfhelp_backend" -ErrorAction SilentlyContinue) }
 if (-not $BackendPath -or -not (Test-Path $BackendPath)) {
-    throw "Backend path '$BackendPath' not found. Pass -BackendPath to override."
+    throw "Backend path '$BackendPath' not found. Pass -BackendPath."
 }
 
-# ---------------------------------------------------------------
-# Step 1: composer path repo + require
-# ---------------------------------------------------------------
-if (-not $SkipComposer) {
-    Write-Step "Linking backend bundle via Composer path repo"
+$Manifest = Get-Content $PluginJson -Raw | ConvertFrom-Json
+$PluginId = $Manifest.id
+$Version  = $Manifest.version
+
+Step "Plugin:        $PluginId@$Version"
+Step "Backend path:  $BackendPath"
+Step "Mode:          $(if ($Symlink) { 'symlink (dev)' } else { '.shplugin upload' })"
+
+if ($Symlink) {
+    Step "Wiring composer path repo (humdek/$PluginId @dev)"
     Push-Location $BackendPath
     try {
-        $repoName = "selfhelp/sh2-shp-survey-js"
-        $relativePath = Resolve-Path (Join-Path $pluginRoot 'backend')
-        composer config "repositories.$repoName" path $relativePath.Path | Out-Null
-        composer require humdek/sh2-shp-survey-js:@dev
-        Write-Ok "Composer path repo registered and package required."
-    } finally {
-        Pop-Location
-    }
-} else {
-    Write-Warn "Skipped Composer step (-SkipComposer)."
+        $RepoName    = "selfhelp/$PluginId"
+        $BackendDir  = Resolve-Path (Join-Path $PluginRoot 'backend')
+        composer config "repositories.$RepoName" path $BackendDir.Path | Out-Null
+        composer require "humdek/$PluginId":"@dev" --no-interaction
+        Ok "Composer path repo registered + bundle required."
+
+        Step "Invoking host CLI installer"
+        php bin/console selfhelp:plugin:install "$PluginJson"
+        Ok "selfhelp:plugin:install dispatched."
+
+        if (-not $SkipConsume) {
+            Step "Draining plugin_ops Messenger queue"
+            php bin/console messenger:consume plugin_ops --limit=1 --time-limit=120
+            Ok "Plugin installed + finalised."
+        } else {
+            Warn "Skipped messenger:consume (-SkipConsume). Run it manually to finalise the install."
+        }
+    } finally { Pop-Location }
+    Write-Host ""
+    Write-Host "DONE (symlink mode). Start the frontend runtime dev server:" -ForegroundColor Green
+    Write-Host "  npm --prefix $PluginRoot\frontend run dev:runtime"
+    return
 }
 
-# ---------------------------------------------------------------
-# Step 2: backend install (development mode auto-finalizes + enables)
-# ---------------------------------------------------------------
-Write-Step "Calling backend installer"
-Push-Location $BackendPath
+if ([string]::IsNullOrWhiteSpace($Token) -and -not [string]::IsNullOrWhiteSpace($env:SELFHELP_ADMIN_TOKEN)) {
+    $Token = $env:SELFHELP_ADMIN_TOKEN
+}
+if ([string]::IsNullOrWhiteSpace($Token)) {
+    throw "Admin JWT required. Pass -Token or set `$env:SELFHELP_ADMIN_TOKEN."
+}
+
+Step "Building .shplugin archive"
+$BuildArgs = @((Join-Path $ScriptDir 'build-shplugin.mjs'))
+if ($SkipBuild) { $BuildArgs += '--skip-build' }
+node @BuildArgs
+if ($LASTEXITCODE -ne 0) { throw "build-shplugin.mjs failed (exit $LASTEXITCODE)." }
+$Archive = Join-Path $PluginRoot "dist\$PluginId-$Version.shplugin"
+if (-not (Test-Path $Archive)) { throw "Expected archive missing: $Archive" }
+Ok "Built $Archive"
+
+Step "Uploading .shplugin to $ApiBase/cms-api/v1/admin/plugins/install"
+$Form = @{
+    source  = 'archive'
+    archive = Get-Item $Archive
+}
+$Headers = @{ Authorization = "Bearer $Token" }
 try {
-    php bin/console selfhelp:plugin:install "$pluginManifest"
-    Write-Ok "Backend install command finished."
-} finally {
-    Pop-Location
+    $Resp = Invoke-RestMethod -Method Post `
+        -Uri "$ApiBase/cms-api/v1/admin/plugins/install" `
+        -Headers $Headers `
+        -Form $Form `
+        -ErrorAction Stop
+} catch {
+    throw "Install upload failed: $($_.Exception.Message)"
 }
+$OpId = $Resp.data.id
+Ok "Operation #$OpId queued."
 
-# ---------------------------------------------------------------
-# Step 3: npm link for frontend (HMR-friendly local install)
-# ---------------------------------------------------------------
-if (-not $SkipNpmLink -and $FrontendPath) {
-    Write-Step "Linking frontend npm package"
-    $pluginFrontend = Join-Path $pluginRoot 'frontend'
-    Push-Location $pluginFrontend
+if ($SkipConsume) {
+    Warn "Skipped messenger:consume (-SkipConsume). Drain the worker manually to finalise."
+} else {
+    Step "Draining plugin_ops Messenger queue"
+    Push-Location $BackendPath
     try {
-        npm install --legacy-peer-deps
-        npm run build
-        npm link
-        Write-Ok "Plugin frontend package built + linked globally."
-    } finally {
-        Pop-Location
-    }
-
-    Push-Location $FrontendPath
-    try {
-        npm link "@humdek/sh2-shp-survey-js"
-        Write-Ok "Host frontend now resolves @humdek/sh2-shp-survey-js from $pluginFrontend."
-    } finally {
-        Pop-Location
-    }
-}
-
-# ---------------------------------------------------------------
-# Step 4: npm link for mobile (optional)
-# ---------------------------------------------------------------
-if (-not $SkipNpmLink -and $MobilePath -and (Test-Path $MobilePath)) {
-    Write-Step "Linking mobile npm package"
-    $pluginMobile = Join-Path $pluginRoot 'mobile'
-    Push-Location $pluginMobile
-    try {
-        npm install --legacy-peer-deps
-        npm link
-        Write-Ok "Plugin mobile package linked globally."
-    } finally {
-        Pop-Location
-    }
-
-    Push-Location $MobilePath
-    try {
-        npm link "@humdek/sh2-shp-survey-js-mobile"
-        Write-Ok "Host mobile now resolves @humdek/sh2-shp-survey-js-mobile from $pluginMobile."
-    } finally {
-        Pop-Location
-    }
-} elseif (-not $MobilePath) {
-    Write-Warn "Mobile path empty — skipped mobile link step."
-} elseif (-not (Test-Path $MobilePath)) {
-    Write-Warn "Mobile path '$MobilePath' not found — skipped mobile link step."
+        php bin/console messenger:consume plugin_ops --limit=1 --time-limit=120
+        Ok "Plugin install operation finalised."
+    } finally { Pop-Location }
 }
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
-Write-Host "The plugin is installed and enabled. If your dev servers are running"
-Write-Host "they will pick the changes up via HMR automatically:" -ForegroundColor Gray
-Write-Host "  - Symfony: kernel reloads on next request."
-Write-Host "  - Next.js: a hard refresh of the admin page is enough."
-Write-Host "  - Expo:    re-press 'r' in the metro terminal if it does not auto-reload."
+Write-Host "Verify: $ApiBase/admin/plugins"

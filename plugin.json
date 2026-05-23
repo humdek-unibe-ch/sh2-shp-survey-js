@@ -28,13 +28,20 @@
         }
     ],
     "backend": {
-        "package": "humdek/sh2-shp-survey-js",
         "bundleClass": "Humdek\\SurveyJsBundle\\HumdekSurveyJsBundle",
-        "migrationsNamespace": "Humdek\\SurveyJsBundle\\Migrations"
+        "migrationsNamespace": "Humdek\\SurveyJsBundle\\Migrations",
+        "composer": {
+            "package": "humdek/sh2-shp-survey-js",
+            "version": "0.1.0"
+        }
     },
     "frontend": {
-        "package": "@humdek/sh2-shp-survey-js",
-        "version": "0.1.0"
+        "runtime": {
+            "entrypoint": "dist/plugin.esm.js",
+            "stylesheet": "dist/plugin.css",
+            "format": "esm",
+            "devEntrypointUrl": "http://localhost:5174/sh2-shp-survey-js/plugin.esm.js"
+        }
     },
     "mobile": {
         "package": "@humdek/sh2-shp-survey-js-mobile",
@@ -72,7 +79,10 @@
                 "type": "image",
                 "reason": "Fallback basemap tiles for the GPX preview."
             }
-        ]
+        ],
+        "signing": {
+            "required": false
+        }
     },
     "permissions": [
         {"key": "surveyjs.surveys.manage", "description": "Create, edit, publish, delete surveys.", "defaultRoles": ["admin"]},

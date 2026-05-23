@@ -55,12 +55,92 @@ See [`docs/install.md`](docs/install.md) for the full guide. The TL;DR is:
 | Option | Where         | Command                                        |
 | ------ | ------------- | ---------------------------------------------- |
 | 1      | Admin UI      | Plugins → **Sources** → add registry → **Available** → Install |
-| 2      | Admin UI      | Plugins → **Install plugin** → paste `plugin.json` |
-| 3      | Terminal      | `./scripts/install-local.ps1` (Windows) or `./scripts/install-local.sh` (macOS/Linux) |
+| 2      | Admin UI      | Plugins → **Install plugin** → drag the `.shplugin` from the latest GitHub Release |
+| 3      | Admin UI      | Plugins → **Install plugin** → paste `plugin.json` |
+| 4      | Terminal      | `./scripts/install-local.ps1` (Windows) or `./scripts/install-local.sh` (macOS/Linux) |
 
-Option 3 also wires the local Composer + npm links so the host frontend resolves the plugin without restarting the dev server.
+Option 4 also wires the local Composer + npm links so the host frontend resolves the plugin without restarting the dev server.
 
-To publish the plugin so other instances can install it via Option 1, follow [`docs/publish.md`](docs/publish.md).
+## Build the `.shplugin`
+
+The `.shplugin` is a signed, checksummed ZIP that contains everything
+a SelfHelp host needs to install the plugin: the manifest, the
+runtime ESM bundle, the optional stylesheet, the SHA256 sums, and an
+Ed25519 signature over the canonical payload.
+
+Build locally (uses your local Ed25519 dev key):
+
+```bash
+node scripts/build-shplugin.mjs
+# → dist/sh2-shp-survey-js-<version>.shplugin
+```
+
+The script:
+
+1. Runs `npm --prefix frontend run build:runtime` (Vite library mode).
+2. Stages `plugin.json` + `artifacts/{plugin.esm.js,plugin.css,SHA256SUMS}`.
+3. Builds the canonical signed payload via the shared `sign.mjs`.
+4. Signs with `SELFHELP_PLUGIN_SIGNING_KEY` (or
+   `SELFHELP_PLUGIN_DEV_SIGNING_KEY` → keyId `dev`, dev-only).
+5. ZIPs into `dist/<id>-<version>.shplugin`.
+6. Self-validates by re-reading the SHA256SUMS.
+
+Use the dev-signed archive for `Admin → Plugins → Install plugin →
+Upload .shplugin` on a local host. Production hosts refuse `keyId="dev"`
+on `official`/`reviewed` trust levels — see
+[`docs/publish.md`](docs/publish.md).
+
+## Publish a new version (automated)
+
+The full publish pipeline is automated through GitHub Actions. To
+release a new version:
+
+```bash
+# 1. Bump version in plugin.json + add a CHANGELOG entry under
+#    "## [<version>] — YYYY-MM-DD".
+# 2. Commit and tag.
+git add plugin.json CHANGELOG.md
+git commit -m "chore: release v<version>"
+git tag v<version>
+git push origin main --tags
+```
+
+On every `v*` tag push the
+[`.github/workflows/publish-to-registry.yml`](.github/workflows/publish-to-registry.yml)
+workflow:
+
+1. Validates `plugin.json` against the canonical host schema.
+2. Builds the frontend runtime + the signed `.shplugin`.
+3. Copies the manifest to
+   `humdek-unibe-ch/sh2-plugin-registry/manifests/<id>-<version>.json`,
+   uploads the runtime artefacts to
+   `humdek-unibe-ch/sh2-plugin-registry/artifacts/<id>-<version>/`,
+   updates the canonical `registry.json` (sorted, latest per
+   `(id, channel)`), and commits the change.
+4. Creates a GitHub Release on this repo with:
+   - the per-version section of `CHANGELOG.md` as the body,
+   - the `.shplugin` attached as an asset (so admins can drag-and-drop
+     install it without an internet round-trip to the registry).
+5. The registry repo's own
+   [`build-registry.yml`](https://github.com/humdek-unibe-ch/sh2-plugin-registry/blob/main/.github/workflows/build-registry.yml)
+   workflow re-validates + republishes the static site so every
+   SelfHelp host with the `humdek-public` source enabled picks the
+   new version up on the next refresh of the **Available** tab.
+
+Required GitHub Actions secrets (Settings → Secrets and variables →
+Actions):
+
+| Secret                            | Used for                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `SELFHELP_PLUGIN_SIGNING_KEY`     | Ed25519 base64 secret key. Used to sign the canonical payload.                                  |
+| `SELFHELP_PLUGIN_SIGNING_KEY_ID`  | Publisher key id. Must match an entry in the host's `SELFHELP_PLUGIN_TRUSTED_KEYS`.             |
+| `REGISTRY_PUSH_TOKEN`             | PAT with `contents:write` on `humdek-unibe-ch/sh2-plugin-registry`. Missing → dry-run mode.     |
+
+Without `REGISTRY_PUSH_TOKEN` the workflow still builds the
+`.shplugin` and attaches it to the GitHub Release; only the
+registry-side push is skipped (the workflow logs a warning summary).
+
+Full publish reference: [`docs/publish.md`](docs/publish.md).
 
 ## Configuration
 

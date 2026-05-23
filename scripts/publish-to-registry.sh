@@ -2,49 +2,60 @@
 # SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 # SPDX-License-Identifier: MPL-2.0
 #
-# Publish the current plugin version to the sibling sh2-plugin-registry repo.
+# Publish this plugin version to the sibling sh2-plugin-registry repo.
+#
+# Pipeline:
+#   1. build-shplugin.{sh,mjs}        — produces dist/<id>-<ver>.shplugin +
+#                                       canonical signed payload + signature.
+#   2. selfhelp-plugin-build-registry-entry — emits the signed pluginEntry JSON
+#                                       (consumes the same signed payload, so
+#                                       the registry entry and the archive are
+#                                       signed exactly once).
+#   3. Copies plugin.json to <registry>/manifests/<id>-<ver>.json.
+#   4. Copies dist/shplugin/<id>-<ver>/artifacts/* to
+#      <registry>/artifacts/<id>-<ver>/.
+#   5. Splices the registry entry into <registry>/registry.json (replacing
+#      any existing entry with the same id) and re-sorts by id.
+#   6. git add + commit (push optional).
+#   7. Optional: gh release create v<ver> dist/<id>-<ver>.shplugin
+#      --notes-file CHANGELOG.md
 #
 # Usage:
 #   ./scripts/publish-to-registry.sh [--registry PATH] [--channel stable|beta|alpha|nightly]
-#                                    [--trust official|reviewed|untrusted]
-#                                    [--dry-run] [--push] [--publish-npm] [--skip-build]
+#                                    [--dry-run] [--push] [--release] [--skip-build]
 #
-# See ./publish-to-registry.ps1 for the PowerShell equivalent and full
-# documentation. Logic is intentionally kept identical between the two
-# scripts so plugin maintainers on either platform observe the same
-# behaviour.
+# Required env (one of):
+#   SELFHELP_PLUGIN_SIGNING_KEY        (+ SELFHELP_PLUGIN_SIGNING_KEY_ID)
+#   SELFHELP_PLUGIN_DEV_SIGNING_KEY    (local dev only — keyId=dev; CI rejects it on
+#                                       the `official` channel).
 
 set -euo pipefail
 
 REGISTRY_PATH=""
 CHANNEL="stable"
-TRUST_LEVEL=""
 DRY_RUN="0"
 PUSH="0"
-PUBLISH_NPM="0"
+RELEASE="0"
 SKIP_BUILD="0"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --registry)     REGISTRY_PATH="$2"; shift 2 ;;
-        --channel)      CHANNEL="$2"; shift 2 ;;
-        --trust)        TRUST_LEVEL="$2"; shift 2 ;;
-        --dry-run)      DRY_RUN="1"; shift ;;
-        --push)         PUSH="1"; shift ;;
-        --publish-npm)  PUBLISH_NPM="1"; shift ;;
-        --skip-build)   SKIP_BUILD="1"; shift ;;
+        --registry)   REGISTRY_PATH="$2"; shift 2 ;;
+        --channel)    CHANNEL="$2"; shift 2 ;;
+        --dry-run)    DRY_RUN="1"; shift ;;
+        --push)       PUSH="1"; shift ;;
+        --release)    RELEASE="1"; shift ;;
+        --skip-build) SKIP_BUILD="1"; shift ;;
         -h|--help)
-            sed -n '7,18p' "$0"
+            sed -n '7,32p' "$0"
             exit 0 ;;
-        *)
-            echo "Unknown argument: $1" >&2
-            exit 1 ;;
+        *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
-step()    { printf '\033[36m==> %s\033[0m\n' "$1"; }
-ok()      { printf '    \033[32mOK\033[0m  %s\n' "$1"; }
-warn()    { printf '    \033[33m!!\033[0m  %s\n' "$1"; }
+step() { printf '\033[36m==> %s\033[0m\n' "$1"; }
+ok()   { printf '    \033[32mOK\033[0m  %s\n' "$1"; }
+warn() { printf '    \033[33m!!\033[0m  %s\n' "$1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -57,109 +68,102 @@ if [[ -z "$REGISTRY_PATH" ]]; then
 fi
 [[ -d "$REGISTRY_PATH" ]] || { echo "Registry path '$REGISTRY_PATH' not found. Pass --registry."; exit 1; }
 
-if ! command -v jq >/dev/null 2>&1; then
-    echo "This script requires 'jq' on PATH (https://jqlang.github.io/jq/)."
-    exit 1
-fi
+command -v node >/dev/null 2>&1 || { echo "node is required."; exit 1; }
+command -v jq   >/dev/null 2>&1 || { echo "jq is required (https://jqlang.github.io/jq/)."; exit 1; }
 
-PLUGIN_ID="$(jq -r '.id' "$PLUGIN_JSON")"
-VERSION="$(jq -r '.version' "$PLUGIN_JSON")"
-NAME="$(jq -r '.name' "$PLUGIN_JSON")"
-DESCRIPTION="$(jq -r '.description // ""' "$PLUGIN_JSON")"
-HOMEPAGE="$(jq -r '.homepage // ""' "$PLUGIN_JSON")"
-if [[ -z "$TRUST_LEVEL" ]]; then
-    TRUST_LEVEL="$(jq -r '.security.trustLevel // "untrusted"' "$PLUGIN_JSON")"
-fi
+PLUGIN_ID="$(jq -r '.id'      "$PLUGIN_JSON")"
+VERSION="$(jq -r   '.version' "$PLUGIN_JSON")"
+ARCHIVE="$PLUGIN_ROOT/dist/${PLUGIN_ID}-${VERSION}.shplugin"
+STAGE="$PLUGIN_ROOT/dist/shplugin/${PLUGIN_ID}-${VERSION}"
 
 step "Plugin id:       $PLUGIN_ID"
 step "Plugin version:  $VERSION"
 step "Registry path:   $REGISTRY_PATH"
-step "Trust level:     $TRUST_LEVEL"
 step "Channel:         $CHANNEL"
 
-SCHEMA="$PLUGIN_ROOT/docs/plugins/plugin-manifest.schema.json"
-if [[ -f "$SCHEMA" ]]; then
-    if command -v ajv >/dev/null 2>&1; then
-        step "Validating manifest against vendored schema"
-        ajv validate -c ajv-formats -s "$SCHEMA" -d "$PLUGIN_JSON" --strict=false
-        ok "Manifest passes schema."
-    else
-        warn "ajv-cli not on PATH. Skipping schema validation."
-    fi
-else
-    warn "No vendored schema at $SCHEMA. Skipping validation."
+BUILD_ARGS=()
+[[ "$SKIP_BUILD" == "1" ]] && BUILD_ARGS+=("--skip-build")
+step "Building .shplugin archive"
+node "$SCRIPT_DIR/build-shplugin.mjs" "${BUILD_ARGS[@]}"
+[[ -f "$ARCHIVE" ]] || { echo "Expected archive missing: $ARCHIVE"; exit 1; }
+ok "Built $ARCHIVE"
+
+ESM_HASH="$(sha256sum "$STAGE/artifacts/plugin.esm.js" | awk '{print $1}')"
+CSS_HASH=""
+if [[ -f "$STAGE/artifacts/plugin.css" ]]; then
+    CSS_HASH="$(sha256sum "$STAGE/artifacts/plugin.css" | awk '{print $1}')"
 fi
 
-if [[ "$SKIP_BUILD" != "1" ]]; then
-    step "Building plugin frontend"
-    ( cd "$PLUGIN_ROOT/frontend" && npm install --legacy-peer-deps >/dev/null && npm run build )
-    ok "Frontend build done."
+ENTRYPOINT_URL="artifacts/${PLUGIN_ID}-${VERSION}/plugin.esm.js"
+STYLESHEET_URL=""
+[[ -n "$CSS_HASH" ]] && STYLESHEET_URL="artifacts/${PLUGIN_ID}-${VERSION}/plugin.css"
 
-    step "Building plugin mobile"
-    ( cd "$PLUGIN_ROOT/mobile" && npm install --legacy-peer-deps >/dev/null && npm run build )
-    ok "Mobile build done."
+step "Generating signed registry entry"
+ENTRY_ARGS=(
+    "$REGISTRY_PATH/scripts/build-registry-entry.mjs"
+    --manifest "$PLUGIN_JSON"
+    --esm "$STAGE/artifacts/plugin.esm.js"
+    --entrypoint-url "$ENTRYPOINT_URL"
+    --channel "$CHANNEL"
+)
+if [[ -n "$CSS_HASH" ]]; then
+    ENTRY_ARGS+=(--css "$STAGE/artifacts/plugin.css" --stylesheet-url "$STYLESHEET_URL")
 fi
+ENTRY_JSON="$(node "${ENTRY_ARGS[@]}")"
+ok "Registry entry signed."
 
-if [[ "$PUBLISH_NPM" == "1" ]]; then
-    step "Publishing frontend npm package"
-    ( cd "$PLUGIN_ROOT/frontend" && npm publish --access public )
-    step "Publishing mobile npm package"
-    ( cd "$PLUGIN_ROOT/mobile" && npm publish --access public )
-    ok "npm packages published."
-fi
-
-MANIFESTS_DIR="$REGISTRY_PATH/manifests"
-mkdir -p "$MANIFESTS_DIR"
-DEST="$MANIFESTS_DIR/${PLUGIN_ID}-${VERSION}.json"
+DEST_MANIFEST="$REGISTRY_PATH/manifests/${PLUGIN_ID}-${VERSION}.json"
+DEST_ARTIFACTS="$REGISTRY_PATH/artifacts/${PLUGIN_ID}-${VERSION}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
-    warn "[dry-run] would copy $PLUGIN_JSON -> $DEST"
-else
-    cp "$PLUGIN_JSON" "$DEST"
-    ok "Copied manifest to $DEST"
+    warn "[dry-run] would copy plugin.json -> $DEST_MANIFEST"
+    warn "[dry-run] would copy artifacts/* -> $DEST_ARTIFACTS"
+    warn "[dry-run] would splice signed entry into $REGISTRY_PATH/registry.json"
+    echo "$ENTRY_JSON"
+    exit 0
 fi
 
+mkdir -p "$(dirname "$DEST_MANIFEST")" "$DEST_ARTIFACTS"
+cp "$PLUGIN_JSON" "$DEST_MANIFEST"
+cp "$STAGE/artifacts/plugin.esm.js" "$DEST_ARTIFACTS/plugin.esm.js"
+[[ -n "$CSS_HASH" ]] && cp "$STAGE/artifacts/plugin.css" "$DEST_ARTIFACTS/plugin.css"
+ok "Copied manifest + artifacts."
+
 REGISTRY_JSON="$REGISTRY_PATH/registry.json"
-[[ -f "$REGISTRY_JSON" ]] || { echo "registry.json not found at $REGISTRY_JSON. Bootstrap the registry repo first."; exit 1; }
-
-ENTRY=$(jq -n \
-    --arg id          "$PLUGIN_ID" \
-    --arg name        "$NAME" \
-    --arg description "$DESCRIPTION" \
-    --arg version     "$VERSION" \
-    --arg channel     "$CHANNEL" \
-    --arg trust       "$TRUST_LEVEL" \
-    --arg homepage    "$HOMEPAGE" \
-    --arg manifestUrl "manifests/${PLUGIN_ID}-${VERSION}.json" \
-    '{ id: $id, name: $name, description: $description, version: $version, channel: $channel, trustLevel: $trust, homepage: $homepage, manifestUrl: $manifestUrl }')
-
-NEW_JSON=$(jq --argjson entry "$ENTRY" --arg id "$PLUGIN_ID" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+NEW_JSON="$(jq --argjson entry "$ENTRY_JSON" --arg id "$PLUGIN_ID" --arg ts "$TS" '
     .publishedAt = $ts
     | .plugins   = ((.plugins // []) | map(select(.id != $id))) + [$entry]
     | .plugins   = (.plugins | sort_by(.id))
-' "$REGISTRY_JSON")
+' "$REGISTRY_JSON")"
+printf '%s\n' "$NEW_JSON" > "$REGISTRY_JSON"
+ok "Updated $REGISTRY_JSON"
 
-if [[ "$DRY_RUN" == "1" ]]; then
-    warn "[dry-run] would update $REGISTRY_JSON. Diff preview:"
-    echo "$NEW_JSON"
-else
-    echo "$NEW_JSON" > "$REGISTRY_JSON"
-    ok "Updated $REGISTRY_JSON"
+(
+    cd "$REGISTRY_PATH"
+    git add registry.json "manifests/${PLUGIN_ID}-${VERSION}.json" "artifacts/${PLUGIN_ID}-${VERSION}/"
+    git commit -m "publish: ${PLUGIN_ID}@${VERSION} (${CHANNEL})"
+    ok "Committed in $REGISTRY_PATH."
+    if [[ "$PUSH" == "1" ]]; then
+        git push
+        ok "Pushed registry to origin."
+    fi
+)
 
-    ( cd "$REGISTRY_PATH"
-      git add registry.json "manifests/${PLUGIN_ID}-${VERSION}.json"
-      git commit -m "publish: ${PLUGIN_ID}@${VERSION} ($CHANNEL/$TRUST_LEVEL)"
-      ok "Committed in $REGISTRY_PATH."
-
-      if [[ "$PUSH" == "1" ]]; then
-          git push
-          ok "Pushed to origin."
-      fi
-    )
+if [[ "$RELEASE" == "1" ]]; then
+    command -v gh >/dev/null 2>&1 || { echo "--release requires the gh CLI."; exit 1; }
+    NOTES=()
+    [[ -f "$PLUGIN_ROOT/CHANGELOG.md" ]] && NOTES+=("--notes-file" "$PLUGIN_ROOT/CHANGELOG.md")
+    step "Creating GitHub Release v${VERSION}"
+    (cd "$PLUGIN_ROOT" && gh release create "v${VERSION}" "$ARCHIVE" "${NOTES[@]}")
+    ok "Release published; .shplugin attached as asset."
 fi
 
 echo ""
 echo -e "\033[32mDONE.\033[0m"
+echo "Archive:        $ARCHIVE"
 echo "Registry entry: $REGISTRY_JSON"
-echo "Manifest file:  $DEST"
+echo "Manifest copy:  $DEST_MANIFEST"
+echo "Artifacts dir:  $DEST_ARTIFACTS"
 [[ "$PUSH" == "1" ]] || echo "Hint: re-run with --push to push the registry commit to origin."
+[[ "$RELEASE" == "1" ]] || echo "Hint: re-run with --release to also publish the .shplugin as a GH Release asset."

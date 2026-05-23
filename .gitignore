@@ -44,4 +44,20 @@ mobile/coverage/
 mobile/*.tsbuildinfo
 node_modules/
 
+# .shplugin build output (root-level dist/ — never committed,
+# uploaded to GitHub Releases by publish-to-registry workflow)
+/dist/
+*.shplugin
+
+# Local Ed25519 signing keys — NEVER commit private keys
+.signing-keys/
+*.ed25519
+*.priv
+*.pem
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
 AGENTS.local.md

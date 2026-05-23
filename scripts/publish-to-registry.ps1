@@ -3,241 +3,188 @@
 
 <#
 .SYNOPSIS
-    Publish the current plugin version to the sibling sh2-plugin-registry repo.
+    Publish this plugin version to the sibling sh2-plugin-registry repo.
 
 .DESCRIPTION
-    Steps:
-      1. Reads `plugin.json` for `id` + `version`.
-      2. Validates the manifest against the host plugin-manifest schema (uses
-         the vendored copy under docs/plugins/).
-      3. Builds the frontend + mobile npm packages so the dist outputs are
-         current (and the registry workflow has a chance to run on green).
-      4. Copies `plugin.json` to `<registry>/manifests/<id>-<version>.json`.
-      5. Inserts/updates the plugin entry in `<registry>/registry.json`
-         (sorted alphabetically by id).
-      6. Stages + commits the changes in the registry repo.
-      7. Optionally pushes (`-Push`) or only opens the diff (`-DryRun`).
-      8. Optionally publishes the npm packages with `-PublishNpm` (requires
-         an authenticated `npm` session).
+    Mirrors publish-to-registry.sh.
+
+    Pipeline:
+      1. build-shplugin.ps1 / .mjs       — builds dist/<id>-<ver>.shplugin
+                                           + canonical signed payload + signature.
+      2. build-registry-entry.mjs        — emits the signed pluginEntry JSON
+                                           (reuses the canonical signing logic).
+      3. Copies plugin.json to <registry>/manifests/<id>-<ver>.json.
+      4. Copies dist/shplugin/<id>-<ver>/artifacts/* to
+         <registry>/artifacts/<id>-<ver>/.
+      5. Splices the registry entry into <registry>/registry.json (deduping
+         by id) and re-sorts.
+      6. git add + commit (push optional).
+      7. -Release  → gh release create v<ver> dist/<id>-<ver>.shplugin
+                                       --notes-file CHANGELOG.md
+
+    Required env (one of):
+      $env:SELFHELP_PLUGIN_SIGNING_KEY       (+ $env:SELFHELP_PLUGIN_SIGNING_KEY_ID)
+      $env:SELFHELP_PLUGIN_DEV_SIGNING_KEY   (local dev, keyId=dev)
 
 .PARAMETER RegistryPath
-    Absolute path to the sh2-plugin-registry checkout. Defaults to the sibling
-    folder `../sh2-plugin-registry` relative to this plugin's root.
-
-.PARAMETER DryRun
-    Print the changes that would be made but do not write to the registry.
-
-.PARAMETER Push
-    After committing in the registry repo, push to `origin` (requires git
-    credentials configured).
-
-.PARAMETER PublishNpm
-    Also run `npm publish` on the plugin's frontend and mobile packages.
-
-.PARAMETER TrustLevel
-    Trust level recorded in registry.json. Defaults to the value of
-    `security.trustLevel` from plugin.json.
+    Absolute path to the sh2-plugin-registry checkout. Defaults to a
+    sibling at `../sh2-plugin-registry`.
 
 .PARAMETER Channel
-    Channel recorded in registry.json. Defaults to `stable`.
+    Release channel (`stable`, `beta`, `alpha`, `nightly`). Default `stable`.
+
+.PARAMETER DryRun
+    Print actions without writing to the registry or committing.
+
+.PARAMETER Push
+    `git push` the registry commit after committing.
+
+.PARAMETER Release
+    Also run `gh release create v<version> <archive>` to attach the
+    .shplugin as a GitHub Release asset for offline installs.
+
+.PARAMETER SkipBuild
+    Skip `npm --prefix frontend run build:runtime` (use only after a
+    fresh build).
 
 .EXAMPLE
-    .\publish-to-registry.ps1 -DryRun
-    # Show what would change without modifying the registry.
-
-.EXAMPLE
-    .\publish-to-registry.ps1 -Push -PublishNpm
-    # Full release: build + publish to npm + update registry + push.
+    .\scripts\publish-to-registry.ps1 -Push -Release
 #>
 
-[CmdletBinding()]
 param(
-    [string]$RegistryPath = '',
-    [string]$TrustLevel   = '',
-    [string]$Channel      = 'stable',
+    [string]$RegistryPath,
+    [ValidateSet("stable","beta","alpha","nightly")]
+    [string]$Channel = "stable",
     [switch]$DryRun,
     [switch]$Push,
-    [switch]$PublishNpm,
+    [switch]$Release,
     [switch]$SkipBuild
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 
-function Write-Step([string]$msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
-function Write-Ok  ([string]$msg) { Write-Host "    OK  $msg" -ForegroundColor Green }
-function Write-Warn([string]$msg) { Write-Host "    !!  $msg" -ForegroundColor Yellow }
+function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
+function Ok($msg)   { Write-Host "    OK  $msg" -ForegroundColor Green }
+function Warn($msg) { Write-Host "    !!  $msg" -ForegroundColor Yellow }
 
-$pluginRoot     = Resolve-Path "$PSScriptRoot\.."
-$pluginManifest = Join-Path $pluginRoot 'plugin.json'
+$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$PluginRoot = Resolve-Path "$ScriptDir\.."
+$PluginJson = Join-Path $PluginRoot "plugin.json"
 
-if (-not (Test-Path $pluginManifest)) {
-    throw "plugin.json not found at $pluginManifest. Run this script from the plugin checkout."
+if (-not (Test-Path $PluginJson)) { throw "plugin.json not found at $PluginJson" }
+
+if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
+    $RegistryPath = (Resolve-Path "$PluginRoot\..\sh2-plugin-registry" -ErrorAction Stop).Path
+}
+if (-not (Test-Path $RegistryPath)) { throw "Registry path '$RegistryPath' not found. Pass -RegistryPath." }
+
+$Manifest = Get-Content $PluginJson -Raw | ConvertFrom-Json
+$PluginId = $Manifest.id
+$Version  = $Manifest.version
+$Archive  = Join-Path $PluginRoot "dist\$PluginId-$Version.shplugin"
+$Stage    = Join-Path $PluginRoot "dist\shplugin\$PluginId-$Version"
+
+Step "Plugin id:       $PluginId"
+Step "Plugin version:  $Version"
+Step "Registry path:   $RegistryPath"
+Step "Channel:         $Channel"
+
+# 1) build .shplugin
+Step "Building .shplugin archive"
+$BuildArgs = @((Join-Path $ScriptDir "build-shplugin.mjs"))
+if ($SkipBuild) { $BuildArgs += "--skip-build" }
+node @BuildArgs
+if ($LASTEXITCODE -ne 0) { throw "build-shplugin.mjs failed (exit $LASTEXITCODE)." }
+if (-not (Test-Path $Archive)) { throw "Expected archive missing: $Archive" }
+Ok "Built $Archive"
+
+# 2) hashing for entry build
+$EsmHash = (Get-FileHash -Algorithm SHA256 (Join-Path $Stage "artifacts\plugin.esm.js")).Hash.ToLower()
+$CssPath = Join-Path $Stage "artifacts\plugin.css"
+$HasCss  = Test-Path $CssPath
+$CssHash = $null
+if ($HasCss) { $CssHash = (Get-FileHash -Algorithm SHA256 $CssPath).Hash.ToLower() }
+
+$EntrypointUrl = "artifacts/$PluginId-$Version/plugin.esm.js"
+$StylesheetUrl = if ($HasCss) { "artifacts/$PluginId-$Version/plugin.css" } else { $null }
+
+Step "Generating signed registry entry"
+$EntryArgs = @(
+    (Join-Path $RegistryPath "scripts\build-registry-entry.mjs")
+    "--manifest", $PluginJson
+    "--esm",      (Join-Path $Stage "artifacts\plugin.esm.js")
+    "--entrypoint-url", $EntrypointUrl
+    "--channel", $Channel
+)
+if ($HasCss) {
+    $EntryArgs += @("--css", $CssPath, "--stylesheet-url", $StylesheetUrl)
+}
+$EntryJson = (& node @EntryArgs) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw "build-registry-entry.mjs failed (exit $LASTEXITCODE)." }
+Ok "Registry entry signed."
+
+# 3) destinations
+$DestManifest  = Join-Path $RegistryPath "manifests\$PluginId-$Version.json"
+$DestArtifacts = Join-Path $RegistryPath "artifacts\$PluginId-$Version"
+$RegistryJson  = Join-Path $RegistryPath "registry.json"
+
+if ($DryRun) {
+    Warn "[dry-run] would copy plugin.json -> $DestManifest"
+    Warn "[dry-run] would copy artifacts/* -> $DestArtifacts"
+    Warn "[dry-run] would splice signed entry into $RegistryJson"
+    Write-Output $EntryJson
+    return
 }
 
-if (-not $RegistryPath) {
-    $RegistryPath = Resolve-Path "$pluginRoot\..\sh2-plugin-registry" -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path (Split-Path $DestManifest) | Out-Null
+New-Item -ItemType Directory -Force -Path $DestArtifacts | Out-Null
+Copy-Item -Force $PluginJson $DestManifest
+Copy-Item -Force (Join-Path $Stage "artifacts\plugin.esm.js") (Join-Path $DestArtifacts "plugin.esm.js")
+if ($HasCss) {
+    Copy-Item -Force $CssPath (Join-Path $DestArtifacts "plugin.css")
 }
-if (-not $RegistryPath -or -not (Test-Path $RegistryPath)) {
-    throw "Registry path '$RegistryPath' not found. Pass -RegistryPath to override."
-}
+Ok "Copied manifest + artifacts."
 
-$manifest = Get-Content $pluginManifest -Raw | ConvertFrom-Json
-$pluginId = $manifest.id
-$version  = $manifest.version
-if (-not $pluginId -or -not $version) {
-    throw "plugin.json must have non-empty 'id' and 'version'."
-}
-if (-not $TrustLevel) { $TrustLevel = $manifest.security.trustLevel }
-if (-not $TrustLevel) { $TrustLevel = 'untrusted' }
+# 4) splice entry into registry.json
+$Registry = Get-Content $RegistryJson -Raw | ConvertFrom-Json
+$Entry    = $EntryJson | ConvertFrom-Json
+$ExistingIds = @($Registry.plugins | Where-Object { $_.id -ne $PluginId })
+$Updated = @($ExistingIds + $Entry) | Sort-Object id
+$Registry.publishedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$Registry.plugins     = $Updated
+($Registry | ConvertTo-Json -Depth 100) | Set-Content -NoNewline -Encoding UTF8 $RegistryJson
+Ok "Updated $RegistryJson"
 
-Write-Step "Plugin id:       $pluginId"
-Write-Step "Plugin version:  $version"
-Write-Step "Registry path:   $RegistryPath"
-Write-Step "Trust level:     $TrustLevel"
-Write-Step "Channel:         $Channel"
-
-# ---------------------------------------------------------------
-# Step 1: validate the manifest schema (best-effort)
-# ---------------------------------------------------------------
-$schemaPath = Join-Path $pluginRoot 'docs\plugins\plugin-manifest.schema.json'
-if (Test-Path $schemaPath) {
-    Write-Step "Validating manifest against vendored schema"
-    $ajv = (Get-Command ajv -ErrorAction SilentlyContinue)
-    if (-not $ajv) {
-        Write-Warn "ajv-cli not on PATH. Skipping schema validation."
-    } else {
-        & ajv validate -c ajv-formats -s $schemaPath -d $pluginManifest --strict=false
-        Write-Ok "Manifest passes schema."
+Push-Location $RegistryPath
+try {
+    git add registry.json "manifests/$PluginId-$Version.json" "artifacts/$PluginId-$Version/"
+    git commit -m "publish: $PluginId@$Version ($Channel)"
+    Ok "Committed in $RegistryPath."
+    if ($Push) {
+        git push
+        Ok "Pushed registry to origin."
     }
-} else {
-    Write-Warn "No vendored schema at $schemaPath. Skipping validation."
-}
+} finally { Pop-Location }
 
-# ---------------------------------------------------------------
-# Step 2: build frontend + mobile (skip with -SkipBuild)
-# ---------------------------------------------------------------
-if (-not $SkipBuild) {
-    Write-Step "Building plugin frontend"
-    Push-Location (Join-Path $pluginRoot 'frontend')
+if ($Release) {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "-Release requires the gh CLI." }
+    Push-Location $PluginRoot
     try {
-        npm install --legacy-peer-deps | Out-Null
-        npm run build
-        Write-Ok "Frontend build done."
-    } finally { Pop-Location }
-
-    Write-Step "Building plugin mobile"
-    Push-Location (Join-Path $pluginRoot 'mobile')
-    try {
-        npm install --legacy-peer-deps | Out-Null
-        npm run build
-        Write-Ok "Mobile build done."
-    } finally { Pop-Location }
-}
-
-# ---------------------------------------------------------------
-# Step 3 (optional): npm publish
-# ---------------------------------------------------------------
-if ($PublishNpm) {
-    Write-Step "Publishing frontend npm package"
-    Push-Location (Join-Path $pluginRoot 'frontend')
-    try { npm publish --access public } finally { Pop-Location }
-    Write-Step "Publishing mobile npm package"
-    Push-Location (Join-Path $pluginRoot 'mobile')
-    try { npm publish --access public } finally { Pop-Location }
-    Write-Ok "npm packages published."
-}
-
-# ---------------------------------------------------------------
-# Step 4: copy plugin.json to <registry>/manifests/
-# ---------------------------------------------------------------
-$manifestsDir = Join-Path $RegistryPath 'manifests'
-if (-not (Test-Path $manifestsDir)) { New-Item -ItemType Directory -Path $manifestsDir | Out-Null }
-$dest = Join-Path $manifestsDir "$pluginId-$version.json"
-
-if ($DryRun) {
-    Write-Warn "[dry-run] would copy $pluginManifest -> $dest"
-} else {
-    Copy-Item -Path $pluginManifest -Destination $dest -Force
-    Write-Ok "Copied manifest to $dest"
-}
-
-# ---------------------------------------------------------------
-# Step 5: update registry.json
-# ---------------------------------------------------------------
-$registryJsonPath = Join-Path $RegistryPath 'registry.json'
-if (-not (Test-Path $registryJsonPath)) {
-    throw "registry.json not found at $registryJsonPath. Bootstrap the registry repo first."
-}
-$registry = Get-Content $registryJsonPath -Raw | ConvertFrom-Json
-if (-not $registry.plugins) {
-    $registry | Add-Member -NotePropertyName plugins -NotePropertyValue @() -Force
-}
-
-$entry = [ordered]@{
-    id          = $pluginId
-    name        = $manifest.name
-    description = $manifest.description
-    version     = $version
-    channel     = $Channel
-    trustLevel  = $TrustLevel
-    homepage    = $manifest.homepage
-    manifestUrl = "manifests/$pluginId-$version.json"
-}
-
-$pluginsArr = @($registry.plugins | Where-Object { $_.id -ne $pluginId })
-$pluginsArr += [pscustomobject]$entry
-$sorted = @($pluginsArr | Sort-Object id)
-
-# Re-build the registry object as a hashtable so ConvertTo-Json keeps
-# `plugins` as an array even when it has a single entry. (PowerShell
-# unwraps single-element arrays out of pscustomobject properties,
-# which would render `"plugins": { ... }` on first publish.)
-$rebuilt = [ordered]@{
-    schemaVersion = $registry.schemaVersion
-    publishedAt   = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')
-    publisher     = $registry.publisher
-    plugins       = $sorted
-}
-
-$json = ConvertTo-Json -InputObject $rebuilt -Depth 25
-# Ensure single-entry plugins is rendered as an array (PS5 quirk).
-if ($sorted.Count -eq 1 -and $json -notmatch '"plugins":\s*\[') {
-    $json = $json -replace '"plugins":\s*\{', '"plugins": [{'
-    $json = ($json -split "`n" | ForEach-Object { $_ }) -join "`n"
-    $json = $json -replace '(\s*\}\s*\}\s*)$', "}]`n}"
-}
-if ($DryRun) {
-    Write-Warn "[dry-run] would update $registryJsonPath. Diff preview:"
-    Write-Host $json -ForegroundColor DarkGray
-} else {
-    Set-Content -Path $registryJsonPath -Value $json -Encoding UTF8
-    Write-Ok "Updated $registryJsonPath"
-}
-
-# ---------------------------------------------------------------
-# Step 6: git commit (+ optional push)
-# ---------------------------------------------------------------
-if (-not $DryRun) {
-    Push-Location $RegistryPath
-    try {
-        & git add registry.json "manifests/$pluginId-$version.json" | Out-Null
-        $msg = "publish: ${pluginId}@$version ($Channel/$TrustLevel)"
-        & git commit -m $msg | Out-Null
-        Write-Ok ("Committed in {0}: {1}" -f $RegistryPath, $msg)
-
-        if ($Push) {
-            & git push
-            Write-Ok "Pushed to origin."
+        $NotesArgs = @()
+        if (Test-Path "$PluginRoot\CHANGELOG.md") {
+            $NotesArgs = @("--notes-file", "$PluginRoot\CHANGELOG.md")
         }
-    } catch {
-        Write-Warn $_.Exception.Message
+        Step "Creating GitHub Release v$Version"
+        gh release create "v$Version" $Archive @NotesArgs
+        Ok "Release published; .shplugin attached as asset."
     } finally { Pop-Location }
 }
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
-Write-Host "Registry entry: $RegistryPath\registry.json"
-Write-Host "Manifest file:  $dest"
-if (-not $Push) {
-    Write-Host "Hint: re-run with -Push to push the registry commit to origin." -ForegroundColor DarkGray
-}
+Write-Host "Archive:        $Archive"
+Write-Host "Registry entry: $RegistryJson"
+Write-Host "Manifest copy:  $DestManifest"
+Write-Host "Artifacts dir:  $DestArtifacts"
+if (-not $Push)    { Write-Host "Hint: re-run with -Push to push the registry commit." }
+if (-not $Release) { Write-Host "Hint: re-run with -Release to also publish the .shplugin as a GH Release asset." }
