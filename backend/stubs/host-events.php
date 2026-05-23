@@ -83,4 +83,52 @@ namespace App\Plugin\Event {
             }
         }
     }
+
+    if (!\class_exists(ApiRouteRegistryEvent::class, false)) {
+        /**
+         * Mirrors `App\Plugin\Event\ApiRouteRegistryEvent::addRoute()`.
+         */
+        final class ApiRouteRegistryEvent extends \Symfony\Contracts\EventDispatcher\Event
+        {
+            public function getCmsVersion(): string
+            {
+                return '';
+            }
+
+            /**
+             * @param array<int,string> $methods
+             * @param array<string,string> $requirements
+             * @param array<int,string> $permissions
+             */
+            public function addRoute(
+                string $pluginId,
+                string $name,
+                string $path,
+                string $controller,
+                array $methods,
+                array $requirements = [],
+                array $permissions = [],
+                string $version = 'v1',
+            ): void {
+                // stub
+            }
+
+            /**
+             * @return array<int, array{
+             *   pluginId: string,
+             *   name: string,
+             *   path: string,
+             *   controller: string,
+             *   methods: array<int,string>,
+             *   requirements: array<string,string>,
+             *   permissions: array<int,string>,
+             *   version: string,
+             * }>
+             */
+            public function getRoutes(): array
+            {
+                return [];
+            }
+        }
+    }
 }

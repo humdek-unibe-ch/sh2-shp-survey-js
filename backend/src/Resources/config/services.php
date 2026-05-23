@@ -18,6 +18,8 @@ use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
+use Humdek\SurveyJsBundle\Service\DataTableWriterInterface;
+use Humdek\SurveyJsBundle\Service\NullDataTableWriter;
 use Humdek\SurveyJsBundle\Service\NullPluginRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\PluginRealtimePublisherInterface;
 use Humdek\SurveyJsBundle\Service\SurveyAnswerNormalizer;
@@ -41,7 +43,7 @@ return static function (ContainerConfigurator $configurator): void {
 
     $services->load('Humdek\\SurveyJsBundle\\', '../../*')
         ->exclude([
-            '../../{Entity,Migrations,Tests}',
+            '../../{Entity,Migrations,Resources,Tests}',
             '../../HumdekSurveyJsBundle.php',
             '../../Service/DataTableWriterInterface.php',
             '../../Service/DataTableWriteResult.php',
@@ -68,6 +70,15 @@ return static function (ContainerConfigurator $configurator): void {
     // bundle is loaded in isolation (tests / fresh installs without
     // Mercure) we fall back to the no-op.
     $services->set(PluginRealtimePublisherInterface::class, NullPluginRealtimePublisher::class);
+
+    // Default null data-table writer. The host aliases this to its
+    // concrete writer in `config/services.yaml` once SurveyJS form
+    // submissions are wired into core `data_tables`. Without the
+    // alias the container would refuse to compile `SurveyResponseService`
+    // because the host bundle excludes the bare interface from
+    // autoload (see exclude block above), so the no-op is the only
+    // sane default the plugin can ship in isolation.
+    $services->set(DataTableWriterInterface::class, NullDataTableWriter::class);
 
     $services->set(SurveyJsRealtimePublisher::class)
         ->arg('$host', service(PluginRealtimePublisherInterface::class));

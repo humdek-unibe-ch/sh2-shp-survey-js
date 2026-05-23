@@ -33,11 +33,11 @@ final class HumdekSurveyJsBundle extends AbstractBundle
 
     public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
-        $configurator->import($this->getPath() . '/Resources/config/services.php');
+        $configurator->import(__DIR__ . '/Resources/config/services.php');
     }
 
     public function getPath(): string
     {
-        return \dirname(__DIR__);
+        return __DIR__;
     }
 }
