@@ -26,7 +26,7 @@ export interface IAdminSurveyDetail extends IAdminSurveySummary {
     definition: Record<string, unknown> | null;
 }
 
-const BASE = '/cms-api/v1/admin/plugins/surveyjs';
+const BASE = '/cms-api/v1/admin/plugins/sh2-shp-survey-js';
 
 async function asJson<T>(res: Response): Promise<T> {
     if (!res.ok) {

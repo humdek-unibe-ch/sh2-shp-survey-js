@@ -140,10 +140,13 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 severity: 'warning',
                 run: async () => {
                     try {
-                        const res = await fetch('/cms-api/v1/admin/plugins/surveyjs/license-key', {
-                            credentials: 'include',
-                            headers: { Accept: 'application/json' },
-                        });
+                        const res = await fetch(
+                            `/cms-api/v1/admin/plugins/${PLUGIN_ID}/license-key`,
+                            {
+                                credentials: 'include',
+                                headers: { Accept: 'application/json' },
+                            },
+                        );
                         if (!res.ok) {
                             return { status: 'warn', detail: 'License endpoint not reachable.' };
                         }

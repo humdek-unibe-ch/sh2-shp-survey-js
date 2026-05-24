@@ -25,7 +25,7 @@ export interface ISubmitResult {
     submittedAt: string;
 }
 
-const BASE = '/cms-api/v1/plugins/surveyjs';
+const BASE = '/cms-api/v1/plugins/sh2-shp-survey-js';
 
 export async function fetchPublishedSurvey(key: string): Promise<IPublishedSurvey> {
     const res = await fetch(`${BASE}/published/${encodeURIComponent(key)}`, {

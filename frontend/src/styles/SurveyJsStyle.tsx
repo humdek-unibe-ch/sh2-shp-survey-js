@@ -6,9 +6,10 @@ SPDX-License-Identifier: MPL-2.0
  * `surveyjs` runtime style.
  *
  * Reads the survey `keySlug` from the section field map, fetches the
- * published definition from `/cms-api/v1/plugins/surveyjs/published/{key}`,
- * and renders it through `survey-react-ui`. On submit it posts the
- * answers to the matching `/submit` endpoint.
+ * published definition from
+ * `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}`, and renders
+ * it through `survey-react-ui`. On submit it posts the answers to the
+ * matching `/submit` endpoint.
  *
  * The Mantine theme bridge in `theme/mantineBridge.ts` produces the
  * SurveyJS theme JSON applied to the runtime Model.

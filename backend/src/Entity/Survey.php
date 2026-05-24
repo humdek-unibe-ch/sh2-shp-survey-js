@@ -34,7 +34,7 @@ class Survey
     #[ORM\Column(type: 'string', length: 255)]
     private string $name;
 
-    /** Public slug used in the public submit URL: /cms-api/v1/plugins/surveyjs/published/{key} */
+    /** Public slug used in the public submit URL: /cms-api/v1/plugins/sh2-shp-survey-js/published/{key} */
     #[ORM\Column(name: 'key_slug', type: 'string', length: 191, unique: true)]
     private string $keySlug;
 

@@ -47,9 +47,10 @@ export function SurveyJsReadOnlyStyle({ section }: ISurveyJsReadOnlyStyleProps):
     useEffect(() => {
         if (!keySlug) return;
         let cancelled = false;
-        fetch(`/cms-api/v1/plugins/surveyjs/published/${encodeURIComponent(keySlug)}`, {
-            headers: { Accept: 'application/json' },
-        })
+        fetch(
+            `/cms-api/v1/plugins/sh2-shp-survey-js/published/${encodeURIComponent(keySlug)}`,
+            { headers: { Accept: 'application/json' } },
+        )
             .then(async (res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const body = (await res.json()) as { data: IPublishedSurvey };

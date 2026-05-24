@@ -91,7 +91,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 Folded into `0.1.0` above. Initial development scope:
 
 - Backend Symfony bundle with `Survey`, `SurveyVersion`, `SurveyRun`, `SurveyAnswerLink` entities.
-- Public + admin API routes under `/cms-api/v1/admin/plugins/surveyjs/*` and `/cms-api/v1/plugins/surveyjs/*`.
+- Public + admin API routes under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/*` and `/cms-api/v1/plugins/sh2-shp-survey-js/*`.
 - Frontend npm package contributing the `surveyjs` runtime style + `gpxMap` standalone style.
 - Mantine theme bridge for both the SurveyJS Creator and the runtime renderer.
 - Tiptap-based rich-text question + Creator property editors via the host `IRichTextEditorAdapter`.
