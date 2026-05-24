@@ -227,9 +227,9 @@ What changes compared to the default connected archive:
   - `archive: standalone` (vs `archive: connected`),
   - `backend included` (tooltip lists the bundled package + version).
 - Third-party PHP deps (symfony/*, doctrine/*, …) are still
-  resolved by Composer at install time. Phase 2a does **not** bundle
-  `vendor/`. For fully air-gapped hosts you still need a Packagist
-  mirror or a pre-populated `vendor/` directory.
+  resolved by Composer at install time. Standalone mode does **not**
+  bundle `vendor/`. For fully air-gapped hosts you still need a
+  Packagist mirror or a pre-populated `vendor/` directory.
 
 Upload the standalone `.shplugin` through the same admin UI path as
 any other archive (**Plugins → Install plugin → Upload .shplugin**),
@@ -245,9 +245,9 @@ curl --fail-with-body \
 
 > **Why standalone keeps internet required for third-party deps:**
 > bundling `vendor/` would 5–10× the archive size and pin the host
-> to the publisher's exact Symfony/Doctrine versions. Phase 2b will
-> introduce an opt-in `--mode standalone --bundle-vendor` for hosts
-> that genuinely cannot reach Packagist at all.
+> to the publisher's exact Symfony/Doctrine versions. Operators on
+> air-gapped hosts must arrange for a Packagist mirror or a
+> pre-populated `vendor/` directory instead.
 
 ---
 
@@ -293,7 +293,7 @@ When the install completes, the host writes the following:
 - **Lookups**: `surveyJsTheme` (default / modern / high-contrast).
 - **Styles**: `surveyjs`, `gpxMap` (available in the page builder).
 - **Admin pages**: `Surveys`, `Survey Designer`, `Responses`, `Dashboard`, `Settings`.
-- **API routes**: 10 routes under `/cms-api/v1/admin/plugins/surveyjs/*` and `/cms-api/v1/plugins/surveyjs/*`.
+- **API routes**: 13 routes under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/*` and `/cms-api/v1/plugins/sh2-shp-survey-js/*`.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.
 - **Symfony bundle**: `Humdek\SurveyJsBundle\HumdekSurveyJsBundle` (added to `config/selfhelp_plugin_bundles.php`).
 - **Lock file**: a new entry in `selfhelp.plugins.lock.json` so the install is reproducible.

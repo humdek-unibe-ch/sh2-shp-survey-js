@@ -8,10 +8,10 @@ SPDX-License-Identifier: MPL-2.0
  * archive that the host can install via the unified
  * `POST /admin/plugins/install` endpoint.
  *
- * Two archive modes (Phase 2a):
+ * Two archive modes:
  *
  *   `--mode connected`
- *     Layout: plugin.json + signature.json + artifacts/* (Phase 1).
+ *     Layout: plugin.json + signature.json + artifacts/*.
  *     Backend Composer package resolved by the host from Packagist /
  *     VCS (`backend.composer.{package,version,repository?}`).
  *
@@ -26,7 +26,7 @@ SPDX-License-Identifier: MPL-2.0
  * Mode resolution order:
  *   1. `--mode <connected|standalone>` CLI flag wins when provided.
  *   2. Otherwise read `plugin.json#archive.mode`.
- *   3. Fall back to `connected` (legacy Phase-1 plugins).
+ *   3. Fall back to `connected` when no mode is declared anywhere.
  *
  * This plugin's `plugin.json#archive.mode` is `"standalone"`, so a bare
  * `node scripts/build-shplugin.mjs` produces a standalone archive that
@@ -322,14 +322,14 @@ async function main() {
 }
 
 // ---------------------------------------------------------------------
-// Phase 2a helpers
+// Archive-mode helpers
 // ---------------------------------------------------------------------
 
 /**
  * Resolves the archive mode from CLI args and the manifest.
  *   1. `--mode <connected|standalone>` wins when provided.
  *   2. Otherwise, fall back to `plugin.json#archive.mode`.
- *   3. Default to `connected` so existing Phase-1 plugins keep building unchanged.
+ *   3. Default to `connected` when no mode is declared anywhere.
  */
 function resolveArchiveMode(cliArgs, manifest) {
     if (typeof cliArgs.mode === 'string' && cliArgs.mode !== '') {

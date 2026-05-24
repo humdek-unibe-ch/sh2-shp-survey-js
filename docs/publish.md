@@ -48,12 +48,12 @@ sh2-plugin-registry/
 `manifests/`. The host downloads both and runs the same install
 pipeline as a manual paste.
 
-## Archive modes — connected vs standalone (Phase 2a)
+## Archive modes — connected vs standalone
 
 Every `.shplugin` we publish ships in one of two modes. The default
-is `connected` (Phase-1 behaviour). Use `--mode standalone` when you
-need the host to install the plugin's backend Composer package from
-the archive itself instead of Packagist.
+is `connected`. Use `--mode standalone` when you need the host to
+install the plugin's backend Composer package from the archive
+itself instead of Packagist.
 
 | Mode | What the archive contains | What the host does on install | When to use |
 | ---- | ------------------------- | ----------------------------- | ----------- |
@@ -85,10 +85,9 @@ on every host.
    `SELFHELP_PLUGIN_ALLOW_COMPOSER_SCRIPTS=1` (advanced, not
    recommended).
 
-`backend/vendor/` is **never** included by the build script — Phase
-2a does not vendor third-party deps. Operators on fully air-gapped
-hosts must arrange for Packagist mirroring separately. Phase 2b will
-ship full `backend/vendor/` bundling.
+`backend/vendor/` is **never** included by the build script — the
+archive format does not vendor third-party deps. Operators on fully
+air-gapped hosts must arrange for Packagist mirroring separately.
 
 ## The fast path — automatic publish
 
