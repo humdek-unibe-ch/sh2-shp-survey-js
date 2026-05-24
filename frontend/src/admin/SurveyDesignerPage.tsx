@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Loader, Paper, Stack, Text, Title } from '@mantine/core';
 
 import { fetchLicenseKey, getSurvey, publishVersion, type IAdminSurveyDetail } from '../api/surveys-admin';
-import { buildSurveyJsTheme } from '../theme/mantineBridge';
+import { buildCreatorTheme, buildSurveyJsTheme } from '../theme/mantineBridge';
 import { getPluginApi } from '../runtime/pluginApi';
 import { isRichTextEditorEnabled, registerTiptapPropertyEditors } from '../creator/richTextEditorAdapter';
 
@@ -83,9 +83,19 @@ export function SurveyDesignerPage({ surveyId }: ISurveyDesignerPageProps = {}):
                 options.licenseKey = license.licenseKey;
             }
             const instance = new bridge.SurveyCreator(options);
+            const themeCode = survey?.themeCode ?? 'default';
             (instance as {
                 applyTheme: (theme: Record<string, unknown>) => void;
-            }).applyTheme(buildSurveyJsTheme(survey?.themeCode ?? 'default'));
+            }).applyTheme(buildSurveyJsTheme(themeCode));
+            // Match the Creator chrome to the Mantine palette. Fail
+            // open if the API isn't present (older Creator builds), so
+            // the Designer still renders with SurveyJS defaults.
+            const applyCreatorTheme = (instance as {
+                applyCreatorTheme?: (theme: Record<string, unknown>) => void;
+            }).applyCreatorTheme;
+            if (typeof applyCreatorTheme === 'function') {
+                applyCreatorTheme.call(instance, buildCreatorTheme(themeCode));
+            }
 
             if (survey?.definition) {
                 (instance as { JSON: Record<string, unknown> }).JSON = survey.definition;
