@@ -91,10 +91,10 @@
     ],
     "dataAccess": {
         "ownedTables": [
-            "surveys",
-            "survey_versions",
+            "survey_answer_links",
             "survey_runs",
-            "survey_answer_links"
+            "survey_versions",
+            "surveys"
         ],
         "ownedDataTablePrefix": "sh2_surveyjs_",
         "read": [
