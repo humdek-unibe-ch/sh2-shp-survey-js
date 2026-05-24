@@ -20,8 +20,6 @@ use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\DataTableWriterInterface;
 use Humdek\SurveyJsBundle\Service\NullDataTableWriter;
-use Humdek\SurveyJsBundle\Service\NullPluginRealtimePublisher;
-use Humdek\SurveyJsBundle\Service\PluginRealtimePublisherInterface;
 use Humdek\SurveyJsBundle\Service\SurveyAnswerNormalizer;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
 use Humdek\SurveyJsBundle\Service\SurveyJsGdprService;
@@ -32,8 +30,6 @@ use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
-
-use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 return static function (ContainerConfigurator $configurator): void {
     $services = $configurator->services()
@@ -47,7 +43,6 @@ return static function (ContainerConfigurator $configurator): void {
             '../../HumdekSurveyJsBundle.php',
             '../../Service/DataTableWriterInterface.php',
             '../../Service/DataTableWriteResult.php',
-            '../../Service/PluginRealtimePublisherInterface.php',
         ]);
 
     $services->set(SurveyRepository::class)->autowire();
@@ -63,14 +58,6 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsGdprService::class)->autowire();
     $services->set(SurveyPdfService::class)->autowire();
 
-    // Default null publisher. The host's `PluginRealtimePublisher`
-    // (`App\Plugin\Realtime\PluginRealtimePublisherInterface`) is
-    // aliased into our local interface in the application's
-    // services.yaml when the plugin runs inside the CMS. When the
-    // bundle is loaded in isolation (tests / fresh installs without
-    // Mercure) we fall back to the no-op.
-    $services->set(PluginRealtimePublisherInterface::class, NullPluginRealtimePublisher::class);
-
     // Default null data-table writer. The host aliases this to its
     // concrete writer in `config/services.yaml` once SurveyJS form
     // submissions are wired into core `data_tables`. Without the
@@ -80,8 +67,12 @@ return static function (ContainerConfigurator $configurator): void {
     // sane default the plugin can ship in isolation.
     $services->set(DataTableWriterInterface::class, NullDataTableWriter::class);
 
-    $services->set(SurveyJsRealtimePublisher::class)
-        ->arg('$host', service(PluginRealtimePublisherInterface::class));
+    // SurveyJsRealtimePublisher is autowired against the host
+    // `App\Plugin\Realtime\PluginRealtimePublisherInterface` which the
+    // CMS aliases to its concrete `PluginRealtimePublisher` in
+    // `config/services.yaml`. No plugin-local fallback exists; the
+    // bundle requires the host realtime layer to be present.
+    $services->set(SurveyJsRealtimePublisher::class)->autowire();
 
     $services->set(SurveyJsHealthCheck::class)
         ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%');

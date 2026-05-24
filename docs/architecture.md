@@ -42,7 +42,7 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `Service\SurveyDashboardService`         | Cheap aggregates for the dashboard.                                  |
 | `Service\SurveyJsGdprService`            | Export + delete-for-user implementations.                            |
 | `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
-| `Service\SurveyJsRealtimePublisher`      | Wraps the host's `PluginRealtimePublisherInterface`.                 |
+| `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
 | `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpxMap` styles to the admin catalog.       |
 | `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
 | `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
@@ -51,12 +51,10 @@ The migration `Version20260522063620.php` creates the four plugin tables, seeds 
 
 ### Decoupling from the host
 
-The bundle depends on **interfaces**, not concrete host services:
+The bundle depends on host contracts, not concrete host services:
 
-- `Service\PluginRealtimePublisherInterface` (declares the same `publish(pluginId, topicKey, payload, options)` signature as `App\Plugin\Realtime\PluginRealtimePublisherInterface`).
-- `Service\DataTableWriterInterface` (the host wires its existing form-submission writer here).
-
-A `NullPluginRealtimePublisher` ships as the default DI binding so the bundle boots in isolation (tests, fresh installs without Mercure). The host's `services.yaml` aliases the interface to its real publisher when the plugin runs inside the CMS.
+- `App\Plugin\Realtime\PluginRealtimePublisherInterface` — imported directly from the host. The CMS aliases this to its concrete `App\Plugin\Realtime\PluginRealtimePublisher` in `config/services.yaml`. The bundle ships **no** plugin-local null fallback; the host realtime layer must be present for the bundle to boot.
+- `Service\DataTableWriterInterface` (the host wires its existing form-submission writer here; a `NullDataTableWriter` ships as the default so the bundle boots in isolation while the host writer is still being wired in).
 
 ## Frontend package
 
@@ -89,8 +87,8 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
 ## Data flow on submission
 
 1. The host frontend renders the `surveyjs` style for a public page.
-2. The style fetches `/cms-api/v1/plugins/surveyjs/published/{key}` and renders the SurveyJS model.
-3. On submit, the style POSTs to `/cms-api/v1/plugins/surveyjs/published/{key}/submit`.
+2. The style fetches `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}` and renders the SurveyJS model.
+3. On submit, the style POSTs to `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}/submit`.
 4. `SurveysPublicController::submit()` calls `SurveyResponseService::submit()` which:
    - normalizes + sanitizes the answers (`SurveyAnswerNormalizer` + `SurveyJsHtmlSanitizer`),
    - opens a transaction,
@@ -118,8 +116,8 @@ sh2-shp-survey-js/
 │   ├── src/Repository/{Survey…, SurveyVersion…, SurveyRun…, SurveyAnswerLink…}Repository.php
 │   ├── src/Service/{SurveyService, SurveyResponseService, SurveyDashboardService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
-│   │                SurveyJsGdprService, SurveyJsHealthCheck, PluginRealtimePublisherInterface,
-│   │                NullPluginRealtimePublisher, DataTableWriterInterface, DataTableWriteResult}.php
+│   │                SurveyJsGdprService, SurveyJsHealthCheck,
+│   │                DataTableWriterInterface, NullDataTableWriter, DataTableWriteResult}.php
 │   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
 │   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic}Subscriber.php
 │   ├── src/Resources/config/services.php

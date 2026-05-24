@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
+use App\Plugin\Realtime\PluginRealtimePublisherInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
@@ -15,8 +16,8 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 /**
  * Thin wrapper around the host `PluginRealtimePublisher`.
  *
- * The contract is injected as an interface by the host installer so
- * the plugin never has to import core Mercure code. Topic keys here
+ * Depends directly on the host contract
+ * `App\Plugin\Realtime\PluginRealtimePublisherInterface`. Topic keys
  * mirror those declared in `plugin.json` under `realtimeTopics`.
  */
 final class SurveyJsRealtimePublisher
