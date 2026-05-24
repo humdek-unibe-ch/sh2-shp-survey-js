@@ -92,3 +92,88 @@ export async function fetchLicenseKey(): Promise<{ licenseKey: string | null; co
     });
     return asJson<{ licenseKey: string | null; configured: boolean }>(res);
 }
+
+export async function updateSurvey(
+    id: number,
+    body: { name?: string; themeCode?: string | null; archived?: boolean },
+): Promise<IAdminSurveySummary> {
+    const res = await fetch(`${BASE}/surveys/${id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+    return asJson<IAdminSurveySummary>(res);
+}
+
+export async function deleteSurvey(id: number): Promise<{ deleted: boolean }> {
+    const res = await fetch(`${BASE}/surveys/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson<{ deleted: boolean }>(res);
+}
+
+/**
+ * Duplicate a survey by creating a fresh `surveys` row with a unique
+ * `key_slug` and copying the source's current definition into it as the
+ * first published revision. Composed client-side because the host
+ * admin API does not (yet) expose a `/duplicate` endpoint; collapsing
+ * it here keeps the call site free of orchestration noise.
+ */
+export async function duplicateSurvey(source: IAdminSurveyDetail): Promise<IAdminSurveySummary> {
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 12);
+    const newKey = `${source.keySlug}-copy-${stamp}`;
+    const newName = `${source.name} (copy)`;
+    const definition = source.definition ?? { pages: [] };
+    const created = await createSurvey({ name: newName, keySlug: newKey, definition });
+    if (Object.keys(definition).length > 0) {
+        await publishVersion(created.id, definition);
+    }
+    return created;
+}
+
+export async function fetchResponses(
+    surveyId: number,
+    params: { page?: number; limit?: number } = {},
+): Promise<{
+    items: Array<{
+        id: number;
+        surveyId: number;
+        revision: number;
+        userId: number | null;
+        startedAt: string;
+        completedAt: string | null;
+        status: string;
+    }>;
+    page: number;
+    limit: number;
+    total: number;
+}> {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.limit) search.set('limit', String(params.limit));
+    const qs = search.toString() ? `?${search.toString()}` : '';
+    const res = await fetch(`${BASE}/surveys/${surveyId}/responses${qs}`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson(res);
+}
+
+export async function fetchDashboard(surveyId: number): Promise<{
+    surveyId: number;
+    completedResponses: number;
+    currentVersionRevision: number | null;
+    recent: Array<{ id: number; startedAt: string; status: string }>;
+}> {
+    const res = await fetch(`${BASE}/surveys/${surveyId}/dashboard`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson(res);
+}

@@ -146,13 +146,13 @@
     "styles": [
         {
             "name": "surveyjs",
-            "description": "Embeds a published SurveyJS survey at runtime.",
+            "description": "Embeds a published SurveyJS survey at runtime. Grouped under the 'Plugin: SurveyJS' style_groups row created by the plugin's migration.",
             "canHaveChildren": false,
             "capability": "frontendStyles"
         },
         {
             "name": "gpxMap",
-            "description": "Standalone Leaflet-based map renderer for a GPX answer field.",
+            "description": "Standalone Leaflet-based map renderer for a GPX answer field. Grouped under the 'Plugin: SurveyJS' style_groups row created by the plugin's migration.",
             "canHaveChildren": false,
             "capability": "frontendStyles"
         }
@@ -163,29 +163,6 @@
             "label": "Surveys",
             "permission": "surveyjs.surveys.manage",
             "icon": "tabler-clipboard-list"
-        },
-        {
-            "slug": "surveys/designer",
-            "label": "Survey Designer",
-            "permission": "surveyjs.surveys.manage"
-        },
-        {
-            "slug": "surveys/responses",
-            "label": "Responses",
-            "permission": "surveyjs.surveys.view-responses",
-            "icon": "tabler-database"
-        },
-        {
-            "slug": "surveys/dashboard",
-            "label": "Dashboard",
-            "permission": "surveyjs.surveys.view-responses",
-            "icon": "tabler-chart-bar"
-        },
-        {
-            "slug": "surveys/settings",
-            "label": "Settings",
-            "permission": "surveyjs.surveys.manage",
-            "icon": "tabler-settings"
         }
     ],
     "apiRoutes": [

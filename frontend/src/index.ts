@@ -37,10 +37,6 @@ import type { IPluginApi, IPluginRegistration } from '@selfhelp/shared/plugin-sd
 import { SurveyJsStyle } from './styles/SurveyJsStyle';
 import { GpxMapStyle } from './styles/GpxMapStyle';
 import { SurveyAdminPage } from './admin/SurveyAdminPage';
-import { SurveyDesignerPage } from './admin/SurveyDesignerPage';
-import { SurveyResponsesPage } from './admin/SurveyResponsesPage';
-import { SurveyDashboardPage } from './admin/SurveyDashboardPage';
-import { SurveySettingsPage } from './admin/SurveySettingsPage';
 import { setPluginApi } from './runtime/pluginApi';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
@@ -88,35 +84,17 @@ export const register = (api: IPluginApi): IPluginRegistration => {
             },
         ],
         adminPages: [
+            // The host plugin route is single-segment (`/admin/plugins-host
+            // /<plugin-id>/<slug>`), so the plugin uses one consolidated
+            // page that swaps between the list / Designer / Responses /
+            // Dashboard / Settings views internally via `?view=` and
+            // `?id=` query params. When the host upgrades to a catch-all
+            // route, we can split these back into separate registrations.
             {
                 slug: 'surveys',
                 title: 'Surveys',
                 permission: 'surveyjs.surveys.manage',
                 component: SurveyAdminPage as never,
-            },
-            {
-                slug: 'surveys/designer',
-                title: 'Survey Designer',
-                permission: 'surveyjs.surveys.manage',
-                component: SurveyDesignerPage as never,
-            },
-            {
-                slug: 'surveys/responses',
-                title: 'Responses',
-                permission: 'surveyjs.surveys.view-responses',
-                component: SurveyResponsesPage as never,
-            },
-            {
-                slug: 'surveys/dashboard',
-                title: 'Dashboard',
-                permission: 'surveyjs.surveys.view-responses',
-                component: SurveyDashboardPage as never,
-            },
-            {
-                slug: 'surveys/settings',
-                title: 'Settings',
-                permission: 'surveyjs.surveys.manage',
-                component: SurveySettingsPage as never,
             },
         ],
         menuItems: [
