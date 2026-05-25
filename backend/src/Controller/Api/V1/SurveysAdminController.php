@@ -15,7 +15,9 @@ use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
+use Humdek\SurveyJsBundle\Service\SurveyExportService;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyService;
@@ -36,12 +38,14 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 final class SurveysAdminController
 {
     public function __construct(
+        private readonly EntityManagerInterface $em,
         private readonly SurveyRepository $surveys,
         private readonly SurveyRunRepository $runs,
         private readonly SurveyVersionRepository $versions,
         private readonly SurveyAnswerLinkRepository $answerLinks,
         private readonly SurveyService $surveyService,
         private readonly SurveyDashboardService $dashboardService,
+        private readonly SurveyExportService $exportService,
         private readonly SurveyPdfService $pdfService,
         private readonly SurveyJsRealtimePublisher $realtime,
     ) {
@@ -222,6 +226,22 @@ final class SurveysAdminController
     }
 
     /**
+     * Flat row payload consumed by the SurveyAnalyticsTabulator-based
+     * admin table. The full SurveyJS definition is included so the
+     * client-side SurveyAnalytics package can render charts without a
+     * second round-trip.
+     */
+    public function dashboardResults(int $id, Request $request): JsonResponse
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $limit = min(20000, max(1, (int) $request->query->get('limit', 5000)));
+        return new JsonResponse(['data' => $this->dashboardService->buildResults($survey, $limit)]);
+    }
+
+    /**
      * List responses for a survey. Used by the admin Responses tab.
      *
      * Paginated; default page=1, limit=50. The full answer payload is
@@ -280,6 +300,56 @@ final class SurveysAdminController
         }
 
         return $this->pdfService->renderResponse($survey, $run);
+    }
+
+    /**
+     * Delete a single response (the matching `survey_run` and its
+     * answer links). Requires `surveyjs.surveys.delete-responses`.
+     * The host data_tables row stays untouched so the CMS Data
+     * Management browser keeps its audit trail; an operator can
+     * delete it from there separately.
+     */
+    public function deleteResponse(int $id, string $rid, Request $request): JsonResponse
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $run = $this->resolveRun($survey, $rid);
+        if ($run === null) {
+            return new JsonResponse(['error' => 'Response not found.'], 404);
+        }
+        $responseId = $run->getResponseId();
+        $this->em->wrapInTransaction(function () use ($run): void {
+            $this->em->remove($run);
+            $this->em->flush();
+        });
+        $userId = is_int($request->attributes->get('_auth_user_id')) ? (int) $request->attributes->get('_auth_user_id') : null;
+        $this->realtime->surveyResponseDeleted($survey, $responseId, $userId);
+        return new JsonResponse(['data' => ['deleted' => true]]);
+    }
+
+    /**
+     * Server-side CSV / XLSX / JSON export. Backed by
+     * {@see SurveyExportService} and streamed via Symfony
+     * `StreamedResponse` so wide surveys do not buffer in PHP memory.
+     *
+     * The XLSX path requires `phpoffice/phpspreadsheet`; when missing
+     * it returns a 501 with an actionable error message.
+     */
+    public function exportResponses(int $id, Request $request): Response
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $format = strtolower((string) $request->query->get('format', SurveyExportService::FORMAT_CSV));
+        return match ($format) {
+            SurveyExportService::FORMAT_CSV => $this->exportService->streamCsv($survey),
+            SurveyExportService::FORMAT_XLSX => $this->exportService->streamXlsx($survey),
+            SurveyExportService::FORMAT_JSON => $this->exportService->streamJson($survey),
+            default => new JsonResponse(['error' => 'Unknown format. Use csv, xlsx or json.'], 422),
+        };
     }
 
     public function responseDetail(int $id, string $rid): JsonResponse
