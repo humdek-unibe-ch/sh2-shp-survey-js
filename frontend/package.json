@@ -14,7 +14,7 @@
         "build": "vite build",
         "build:runtime": "vite build",
         "dev": "vite",
-        "dev:runtime": "vite",
+        "dev:runtime": "node ../scripts/dev-runtime.mjs",
         "typecheck": "tsc --noEmit"
     },
     "peerDependencies": {
