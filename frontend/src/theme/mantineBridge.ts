@@ -3,8 +3,9 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * Maps Mantine theme tokens (read from `@selfhelp/shared/theme`) to
- * the two CSS-variable surfaces SurveyJS v2 exposes:
+ * Maps the host's **live Mantine theme** (read via `useMantineTheme()`
+ * + `useMantineColorScheme()`) to the two CSS-variable surfaces
+ * SurveyJS v2 exposes:
  *
  *   - `--sjs-*` — consumed by `survey-core` to style the **runtime
  *     form** (the rendered survey users fill in). Emitted by
@@ -15,8 +16,15 @@ SPDX-License-Identifier: MPL-2.0
  *     drag handles). Emitted by {@link buildCreatorTheme}, applied
  *     via `creator.applyCreatorTheme(...)` on mount.
  *
- * Both builders are pure data so the Designer and the runtime share
- * the same Mantine palette without round-tripping through the host.
+ * The `default` survey theme code derives its palette from the live
+ * Mantine theme through {@link useMantineLivePalette} so that a host
+ * customizing `theme.primaryColor` or switching to dark mode is
+ * reflected in both the runtime form and the Designer chrome
+ * without rebuilding the plugin.
+ *
+ * The `modern` and `high-contrast` codes remain *editorial overrides*:
+ * the author explicitly picked a specific look on the survey, so the
+ * static palette wins over the host theme.
  *
  * Why `--ctr-*` is mandatory: the Creator only ships four built-in
  * themes (Light, Dark, Contrast, Survey Creator 2020). Without a
@@ -26,6 +34,9 @@ SPDX-License-Identifier: MPL-2.0
  * theming surface, so this stays compatible across SurveyJS minor
  * updates within the 2.5.x line.
  */
+
+import { useMemo } from 'react';
+import { useMantineColorScheme, useMantineTheme } from '@mantine/core';
 
 interface IThemePalette {
     background: string;
@@ -73,23 +84,80 @@ const HOST_PALETTE_MODERN: IThemePalette = {
     primarySoft: '#e5dbff',
 };
 
-const PALETTES: Record<string, IThemePalette> = {
+const STATIC_PALETTES: Record<string, IThemePalette> = {
     default: HOST_PALETTE_LIGHT,
     modern: HOST_PALETTE_MODERN,
     'high-contrast': HOST_PALETTE_HIGH_CONTRAST,
 };
 
-function resolvePalette(themeCode: string): IThemePalette {
-    return PALETTES[themeCode] ?? HOST_PALETTE_LIGHT;
+/**
+ * React hook that reads the live Mantine theme + active color scheme
+ * and projects them onto the SurveyJS palette shape. Must be called
+ * inside a component tree wrapped in `MantineProvider` (the host shell
+ * already does this for both runtime and admin trees).
+ *
+ * Returns `null` only as a defensive guard — Mantine throws if its
+ * provider is missing, so consumers can safely treat the value as
+ * non-null in normal operation.
+ */
+export function useMantineLivePalette(): IThemePalette {
+    const theme = useMantineTheme();
+    const { colorScheme } = useMantineColorScheme();
+
+    // Memoise so the reference is stable across renders that don't
+    // actually change the palette. The Designer init effect depends
+    // on this value; without memoisation it would re-run on every
+    // host re-render and rebuild the Creator instance.
+    return useMemo<IThemePalette>(() => {
+        const isDark = colorScheme === 'dark';
+        const primaryName = theme.primaryColor;
+        const primaryScale = theme.colors[primaryName] ?? theme.colors.blue;
+        const grayScale = theme.colors.gray;
+        const darkScale = theme.colors.dark;
+
+        return {
+            primary: primaryScale[6],
+            primaryText: theme.white,
+            primarySoft: isDark ? primaryScale[8] : primaryScale[1],
+            background: isDark ? darkScale[7] : theme.white,
+            surface: isDark ? darkScale[6] : theme.white,
+            surfaceMuted: isDark ? darkScale[5] : grayScale[0],
+            text: isDark ? darkScale[0] : grayScale[9],
+            border: isDark ? darkScale[4] : grayScale[3],
+        };
+    }, [colorScheme, theme]);
+}
+
+/**
+ * Resolve the palette for a given survey `themeCode`. The live
+ * Mantine palette (from {@link useMantineLivePalette}) is only used
+ * for the `default` code — `modern` and `high-contrast` are explicit
+ * editorial overrides chosen by the survey author.
+ */
+function resolvePalette(themeCode: string, livePalette: IThemePalette | null): IThemePalette {
+    if (themeCode === 'default' && livePalette) {
+        return livePalette;
+    }
+    return STATIC_PALETTES[themeCode] ?? livePalette ?? HOST_PALETTE_LIGHT;
 }
 
 /**
  * Build the SurveyJS runtime theme JSON. Applied to a `Model` via
  * `model.applyTheme(theme)`. Drives the form preview shown to the
  * end user as well as the preview tab inside the Creator.
+ *
+ * @param themeCode    The survey-level theme selector
+ *                     (`default` | `modern` | `high-contrast`).
+ * @param livePalette  The host's live Mantine palette derived from
+ *                     {@link useMantineLivePalette}. Pass `null`
+ *                     in non-React contexts (tests/build tools);
+ *                     the static fallback palette will be used.
  */
-export function buildSurveyJsTheme(themeCode: string): Record<string, unknown> {
-    const palette = resolvePalette(themeCode);
+export function buildSurveyJsTheme(
+    themeCode: string,
+    livePalette: IThemePalette | null = null,
+): Record<string, unknown> {
+    const palette = resolvePalette(themeCode, livePalette);
     return {
         cssVariables: {
             '--sjs-primary-backcolor': palette.primary,
@@ -125,58 +193,52 @@ export function buildSurveyJsTheme(themeCode: string): Record<string, unknown> {
  * (see `survey-creator-core/src/main.scss`). They follow the pattern
  * `--ctr-<surface>-<role>-<state>`.
  */
-export function buildCreatorTheme(themeCode: string): Record<string, unknown> {
-    const palette = resolvePalette(themeCode);
+export function buildCreatorTheme(
+    themeCode: string,
+    livePalette: IThemePalette | null = null,
+): Record<string, unknown> {
+    const palette = resolvePalette(themeCode, livePalette);
     return {
         themeName: `mantine-${themeCode}`,
         cssVariables: {
-            // Typography
             '--ctr-font-family':
                 'var(--mantine-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif)',
 
-            // Surfaces — top bar, designer canvas, side panels.
             '--ctr-surface-background-color': palette.surface,
             '--ctr-surface-background-color-muted': palette.surfaceMuted,
             '--ctr-surface-background-color-dim': palette.background,
             '--ctr-foreground': palette.text,
             '--ctr-foreground-disabled': palette.border,
 
-            // Borders and dividers
             '--ctr-border': palette.border,
             '--ctr-border-light': palette.border,
             '--ctr-corner-radius-medium': '8px',
             '--ctr-corner-radius-small': '6px',
 
-            // Primary action button — "Save", "Publish", confirm dialogs.
             '--ctr-button-action-background-color-default': palette.primary,
             '--ctr-button-action-background-color-hovered': palette.primary,
             '--ctr-button-action-background-color-pressed': palette.primary,
             '--ctr-button-action-text-color-default': palette.primaryText,
             '--ctr-button-action-text-color-hovered': palette.primaryText,
 
-            // Default/secondary buttons
             '--ctr-button-default-background-color-default': palette.surface,
             '--ctr-button-default-background-color-hovered': palette.surfaceMuted,
             '--ctr-button-default-text-color-default': palette.text,
             '--ctr-button-default-border-color-default': palette.border,
 
-            // Toolbox (left rail)
             '--ctr-toolbox-background-color': palette.surface,
             '--ctr-toolbox-tool-background-color-hovered': palette.surfaceMuted,
             '--ctr-toolbox-tool-background-color-selected': palette.primarySoft,
             '--ctr-toolbox-tool-text-color-default': palette.text,
             '--ctr-toolbox-tool-text-color-selected': palette.primary,
 
-            // Property grid (right rail)
             '--ctr-property-grid-background-color': palette.surface,
             '--ctr-property-grid-header-background-color': palette.surfaceMuted,
             '--ctr-property-grid-foreground': palette.text,
 
-            // Page / element selection accent
             '--ctr-element-selected-border-color': palette.primary,
             '--ctr-element-selected-background-color': palette.primarySoft,
 
-            // Tabs
             '--ctr-tab-background-color': palette.surface,
             '--ctr-tab-background-color-hovered': palette.surfaceMuted,
             '--ctr-tab-foreground': palette.text,

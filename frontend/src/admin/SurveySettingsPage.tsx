@@ -3,94 +3,114 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * Plugin-level settings page.
+ * Per-survey settings page.
  *
- * The actual feature-flag editor lives in the host's plugin detail UI;
- * this page surfaces a contextual summary so admins can jump straight
- * to the global setting from inside the SurveyJS host shell.
+ * Plugin-wide configuration (license key, permissions, developer
+ * runtime) is shown on the survey list page. This page intentionally
+ * contains only settings that change the selected survey.
  */
 
 import { useEffect, useState } from 'react';
-import { Alert, Anchor, Badge, Card, Code, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { Alert, Button, Card, Code, Group, Loader, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 
-import { fetchLicenseKey } from '../api/surveys-admin';
+import { getSurvey, updateSurvey, type IAdminSurveyDetail } from '../api/surveys-admin';
 
-export function SurveySettingsPage(): React.ReactElement {
-    const [license, setLicense] = useState<{ configured: boolean } | null>(null);
+interface ISurveySettingsPageProps {
+    surveyId: number;
+    onSurveyChanged?: (survey: IAdminSurveyDetail) => void;
+}
+
+export function SurveySettingsPage({ surveyId, onSurveyChanged }: ISurveySettingsPageProps): React.ReactElement {
+    const [survey, setSurvey] = useState<IAdminSurveyDetail | null>(null);
+    const [name, setName] = useState<string>('');
+    const [themeCode, setThemeCode] = useState<string>('default');
+    const [saving, setSaving] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        fetchLicenseKey()
-            .then((data) => setLicense({ configured: data.configured }))
-            .catch(() => setLicense({ configured: false }));
-    }, []);
+        let cancelled = false;
+        getSurvey(surveyId)
+            .then((data) => {
+                if (cancelled) return;
+                setSurvey(data);
+                setName(data.name);
+                setThemeCode(data.themeCode ?? 'default');
+            })
+            .catch((err: Error) => setError(err.message));
+        return () => {
+            cancelled = true;
+        };
+    }, [surveyId]);
+
+    const save = async (): Promise<void> => {
+        if (!survey) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const updated = await updateSurvey(survey.id, {
+                name: name.trim(),
+                themeCode: themeCode === 'default' ? null : themeCode,
+            });
+            const detail = await getSurvey(updated.id);
+            setSurvey(detail);
+            setName(detail.name);
+            setThemeCode(detail.themeCode ?? 'default');
+            onSurveyChanged?.(detail);
+        } catch (err) {
+            setError((err as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <Stack gap="md">
-            <Title order={4}>SurveyJS plugin settings</Title>
+            <Title order={4}>Survey settings</Title>
 
             <Card withBorder padding="lg">
-                <Stack gap="xs">
-                    <Group justify="space-between" align="center">
-                        <Title order={5}>License key</Title>
-                        {license === null ? (
+                <Stack gap="sm">
+                    <Title order={5}>Identity and public presentation</Title>
+                    {survey === null ? (
+                        <Group gap="xs">
                             <Loader size="xs" />
-                        ) : license.configured ? (
-                            <Badge color="green" variant="light">
-                                Configured
-                            </Badge>
-                        ) : (
-                            <Badge color="yellow" variant="light">
-                                Not configured
-                            </Badge>
-                        )}
-                    </Group>
-                    <Text size="sm" c="dimmed">
-                        Set <Code>SURVEYJS_LICENSE_KEY</Code> in the backend environment to remove the
-                        SurveyJS unlicensed watermark from the runtime form and the Designer.
-                    </Text>
-                    {license !== null && !license.configured && (
-                        <Alert color="yellow" title="Watermarked builds">
-                            Without a license, the Designer and runtime show a SurveyJS branding watermark.
-                            This is a SurveyJS upstream requirement, not a host policy.
-                        </Alert>
+                            <Text size="sm">Loading survey settings…</Text>
+                        </Group>
+                    ) : (
+                        <>
+                            <TextInput
+                                label="Name"
+                                value={name}
+                                onChange={(event) => setName(event.currentTarget.value)}
+                                disabled={saving}
+                            />
+                            <Text size="sm" c="dimmed">
+                                Survey ID: <Code>{survey.surveyId}</Code>. It does not change when the survey is
+                                renamed and is the value stored by the CMS survey selector.
+                            </Text>
+                            <Select
+                                label="Theme"
+                                description="Theme applied when this specific survey is embedded on a page."
+                                data={[
+                                    { value: 'default', label: 'Default (Mantine)' },
+                                    { value: 'modern', label: 'Modern' },
+                                    { value: 'high-contrast', label: 'High contrast' },
+                                ]}
+                                value={themeCode}
+                                onChange={(value) => setThemeCode(value ?? 'default')}
+                                disabled={saving}
+                            />
+                            {error && (
+                                <Alert color="red" title="Could not save settings">
+                                    {error}
+                                </Alert>
+                            )}
+                            <Group justify="flex-end">
+                                <Button onClick={() => void save()} loading={saving} disabled={name.trim() === ''}>
+                                    Save settings
+                                </Button>
+                            </Group>
+                        </>
                     )}
-                </Stack>
-            </Card>
-
-            <Card withBorder padding="lg">
-                <Stack gap="xs">
-                    <Title order={5}>Feature flags</Title>
-                    <Text size="sm" c="dimmed">
-                        Toggle the GPX, Video, Rich-text, PDF export, Dashboard, and Collaborative-editing
-                        flags from the host's{' '}
-                        <Anchor href="/admin/plugins" target="_self">
-                            Plugins → SurveyJS
-                        </Anchor>{' '}
-                        detail page. Flags propagate live to all users without a redeploy.
-                    </Text>
-                </Stack>
-            </Card>
-
-            <Card withBorder padding="lg">
-                <Stack gap="xs">
-                    <Title order={5}>Permissions</Title>
-                    <Text size="sm" c="dimmed">
-                        Anyone holding a role granted the following permissions can use the matching feature.
-                        Future iterations will expose per-survey ACL once the host adds the primitive.
-                    </Text>
-                    <Stack gap={4}>
-                        <Text size="sm">
-                            <Code>surveyjs.surveys.manage</Code> — create / edit / publish / delete surveys,
-                            access the Designer.
-                        </Text>
-                        <Text size="sm">
-                            <Code>surveyjs.surveys.view-responses</Code> — view the Responses table and
-                            Dashboard for any survey.
-                        </Text>
-                        <Text size="sm">
-                            <Code>surveyjs.surveys.export-pdf</Code> — export survey responses as PDF.
-                        </Text>
-                    </Stack>
                 </Stack>
             </Card>
         </Stack>

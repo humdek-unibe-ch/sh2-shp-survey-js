@@ -132,3 +132,41 @@ namespace App\Plugin\Event {
         }
     }
 }
+
+namespace App\Plugin\Realtime {
+    if (!\interface_exists(PluginRealtimePublisherInterface::class, false)) {
+        interface PluginRealtimePublisherInterface
+        {
+            /**
+             * @param array<string,mixed> $payload
+             * @param array<string,mixed> $options
+             */
+            public function publish(string $pluginId, string $topic, array $payload, array $options = []): void;
+        }
+    }
+}
+
+namespace App\Service\CMS {
+    if (!\class_exists(DataService::class, false)) {
+        /**
+         * Mirrors the host `App\Service\CMS\DataService::saveData()` surface
+         * consumed by the SurveyJS data-table writer.
+         */
+        final class DataService
+        {
+            /**
+             * @param array<string, mixed> $data
+             * @param array<string, mixed>|null $updateBasedOn
+             */
+            public function saveData(
+                string $tableName,
+                array $data,
+                string $transactionBy = 'by_user',
+                ?array $updateBasedOn = null,
+                bool $ownEntriesOnly = true,
+            ): int|false {
+                return false;
+            }
+        }
+    }
+}

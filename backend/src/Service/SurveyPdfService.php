@@ -37,8 +37,10 @@ final class SurveyPdfService
             [
                 'error' => 'PDF export is not yet implemented.',
                 'reason' => 'pdf-export feature flag default is off; renderer pending.',
-                'surveyId' => $survey->getId(),
-                'responseId' => $run->getId(),
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
+                'runId' => $run->getId(),
+                'responseId' => $run->getResponseId(),
             ],
             Response::HTTP_NOT_IMPLEMENTED,
         );

@@ -17,9 +17,8 @@ use Humdek\SurveyJsBundle\Entity\SurveyRun;
  * `PluginDataCleanupInterface`).
  *
  * The plugin only owns the metadata rows (`survey_runs`,
- * `survey_answer_links`). Actual answer values stored in `data_cells`
- * are exported / deleted by the core GDPR pipeline, which uses our
- * `survey_answer_links.id_data_cells` mappings to find them.
+ * `survey_answer_links`). The core `data_rows` copy is still linked
+ * through `survey_runs.id_data_rows` for CMS data-browser cleanup.
  */
 final class SurveyJsGdprService
 {
@@ -38,7 +37,9 @@ final class SurveyJsGdprService
         foreach ($runs as $run) {
             $out[] = [
                 'runId' => $run->getId(),
-                'surveyId' => $run->getSurvey()->getId(),
+                'responseId' => $run->getResponseId(),
+                'id' => $run->getSurvey()->getId(),
+                'surveyId' => $run->getSurvey()->getSurveyId(),
                 'surveyName' => $run->getSurvey()->getName(),
                 'revision' => $run->getVersion()->getRevision(),
                 'status' => $run->getStatus(),

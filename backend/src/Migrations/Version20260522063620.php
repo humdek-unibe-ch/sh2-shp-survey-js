@@ -35,12 +35,17 @@ use Doctrine\Migrations\AbstractMigration;
  *     to the host `admin` role via `rel_permissions_roles` so anyone
  *     in the role can manage surveys / view responses / export PDFs.
  *
+ * The plugin is still pre-release, so draft editing columns live in
+ * this initial migration instead of a follow-up migration. Fresh test
+ * installs remain easier to audit: one migration creates the complete
+ * SurveyJS schema and CMS surface.
+ *
  * All names follow host AGENTS.md DB rules: plural lowercase_snake_case
  * tables, `id_<plural_target_table>` foreign keys,
  * `pk_/fk_/idx_/uq_<table>_<column>` constraint names.
  *
  * `down()` is declared safe: it deletes only rows it owns (matched by
- * `id_plugins` or by the seeded names) and drops only the four
+ * `id_plugins` on shared CMS rows or by the seeded names) and drops only the four
  * plugin-owned tables. Existing core data is untouched.
  */
 final class Version20260522063620 extends AbstractMigration
@@ -69,20 +74,14 @@ final class Version20260522063620 extends AbstractMigration
      * (translatable, surfaced in the Mantine field editor with locale
      * awareness — used for the markdown labels shown to end users).
      *
-     * `config` is a JSON blob baked into `fields.config`. It is consumed
-     * by the host SelectField for `select` types to drive static
-     * options. Dynamic option lists (like "all surveys in this CMS")
-     * would need host-side enrichment in `SectionFieldService` — for
-     * now `survey-js` ships as a plain `text` input that admins paste
-     * a survey `key_slug` into. The seeded `select-survey-js` field
-     * type stays in `field_types` as a forward-compatible marker, so a
-     * future host iteration can flip the field over without altering
-     * the editor's UX expectation.
+     * `config` is a JSON blob baked into `fields.config`. Static select
+     * options live there; the dynamic SurveyJS selector is handled by
+     * the host field renderer through the `select-survey-js` field type.
      *
      * @var array<int, array{name: string, type: string, display: int, config: ?array}>
      */
     private const FIELDS = [
-        ['name' => 'survey-js',                'type' => 'text',     'display' => 0, 'config' => null],
+        ['name' => 'survey-js',                'type' => 'select-survey-js', 'display' => 0, 'config' => null],
         [
             'name'    => 'survey-js-theme',
             'type'    => 'select',
@@ -107,8 +106,8 @@ final class Version20260522063620 extends AbstractMigration
         ['name' => 'end_time',                 'type' => 'time',     'display' => 0, 'config' => null],
         ['name' => 'redirect_at_end',          'type' => 'text',     'display' => 0, 'config' => null],
         ['name' => 'auto_save_interval',       'type' => 'number',   'display' => 0, 'config' => null],
-        ['name' => 'label_survey_done',        'type' => 'markdown', 'display' => 1, 'config' => null],
-        ['name' => 'label_survey_not_active',  'type' => 'markdown', 'display' => 1, 'config' => null],
+        ['name' => 'label_survey_done',        'type' => 'markdown-inline', 'display' => 1, 'config' => null],
+        ['name' => 'label_survey_not_active',  'type' => 'markdown-inline', 'display' => 1, 'config' => null],
     ];
 
     /** @var array<int, array{name: string, description: string}> */
@@ -137,8 +136,8 @@ final class Version20260522063620 extends AbstractMigration
         // surveyjs
         [
             'style' => 'surveyjs', 'field' => 'survey-js', 'default' => '',
-            'help'  => 'Survey `key_slug`. Open the Surveys admin page, copy the survey key, and paste it here. (A native dropdown will replace this once host plugin field-type enrichment lands.)',
-            'hidden' => 0, 'title' => 'Survey Key',
+            'help'  => 'Select the SurveyJS survey to render on this section. The section stores the survey id and the runtime resolves the published survey key automatically.',
+            'hidden' => 0, 'title' => 'Survey',
         ],
         [
             'style' => 'surveyjs', 'field' => 'survey-js-theme', 'default' => 'default',
@@ -331,17 +330,20 @@ final class Version20260522063620 extends AbstractMigration
         $this->addSql(<<<'SQL'
             CREATE TABLE surveys (
                 id INT AUTO_INCREMENT NOT NULL,
-                id_plugins INT DEFAULT NULL,
+                survey_id VARCHAR(100) NOT NULL,
                 name VARCHAR(255) NOT NULL,
-                key_slug VARCHAR(191) NOT NULL,
                 theme_code VARCHAR(64) DEFAULT NULL,
                 archived TINYINT(1) NOT NULL DEFAULT 0,
                 created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                draft_definition JSON DEFAULT NULL,
+                draft_definition_sha256 VARCHAR(64) DEFAULT NULL,
+                draft_updated_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)',
+                draft_updated_by_user_id INT DEFAULT NULL,
                 id_current_survey_versions INT DEFAULT NULL,
-                UNIQUE INDEX uq_surveys_key_slug (key_slug),
-                INDEX idx_surveys_key_slug (key_slug),
-                INDEX idx_surveys_id_plugins (id_plugins),
+                UNIQUE INDEX uq_surveys_survey_id (survey_id),
+                INDEX idx_surveys_survey_id (survey_id),
+                INDEX idx_surveys_draft_updated_at (draft_updated_at),
                 CONSTRAINT pk_surveys PRIMARY KEY (id)
             ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
         SQL);
@@ -373,6 +375,7 @@ final class Version20260522063620 extends AbstractMigration
         $this->addSql(<<<'SQL'
             CREATE TABLE survey_runs (
                 id INT AUTO_INCREMENT NOT NULL,
+                response_id VARCHAR(100) NOT NULL,
                 id_surveys INT NOT NULL,
                 id_survey_versions INT NOT NULL,
                 id_users INT DEFAULT NULL,
@@ -381,6 +384,8 @@ final class Version20260522063620 extends AbstractMigration
                 started_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 completed_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)',
                 progress JSON DEFAULT NULL,
+                UNIQUE INDEX uq_survey_runs_response_id (response_id),
+                INDEX idx_survey_runs_response_id (response_id),
                 INDEX idx_survey_runs_surveys (id_surveys),
                 INDEX idx_survey_runs_survey_versions (id_survey_versions),
                 INDEX idx_survey_runs_data_rows (id_data_rows),
@@ -399,10 +404,9 @@ final class Version20260522063620 extends AbstractMigration
                 id_survey_runs INT NOT NULL,
                 question_name VARCHAR(191) NOT NULL,
                 question_type VARCHAR(64) NOT NULL,
-                id_data_cells INT DEFAULT NULL,
+                answer_value LONGTEXT NOT NULL,
                 sanitized_html TINYINT(1) NOT NULL DEFAULT 0,
                 INDEX idx_survey_answer_links_survey_runs (id_survey_runs),
-                INDEX idx_survey_answer_links_data_cells (id_data_cells),
                 UNIQUE INDEX uq_survey_answer_links_survey_runs_question_name (id_survey_runs, question_name),
                 CONSTRAINT pk_survey_answer_links PRIMARY KEY (id),
                 CONSTRAINT fk_survey_answer_links_survey_runs

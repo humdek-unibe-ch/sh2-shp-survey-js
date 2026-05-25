@@ -46,7 +46,6 @@ import {
     Menu,
     Modal,
     Paper,
-    Select,
     Stack,
     Table,
     Tabs,
@@ -75,6 +74,7 @@ import {
     createSurvey,
     deleteSurvey,
     duplicateSurvey,
+    fetchLicenseKey,
     getSurvey,
     listSurveys,
     updateSurvey,
@@ -97,6 +97,7 @@ const VIEWS_REQUIRING_SURVEY: ReadonlySet<TView> = new Set<TView>([
     'designer',
     'responses',
     'dashboard',
+    'settings',
 ]);
 
 function readUrlState(): IUrlState {
@@ -172,7 +173,7 @@ export function SurveyAdminPage(): React.ReactElement {
                         Manage SurveyJS surveys: design, publish, view responses, and configure the plugin.
                     </Text>
                 </Stack>
-                {safeView !== 'list' && safeView !== 'settings' && (
+                {safeView !== 'list' && (
                     <Button
                         variant="light"
                         leftSection={<IconChevronLeft size={16} />}
@@ -212,7 +213,7 @@ export function SurveyAdminPage(): React.ReactElement {
                     >
                         Dashboard
                     </Tabs.Tab>
-                    <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />}>
+                    <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />} disabled={surveyId === null}>
                         Settings
                     </Tabs.Tab>
                 </Tabs.List>
@@ -221,7 +222,9 @@ export function SurveyAdminPage(): React.ReactElement {
                     <SurveyListPanel onOpen={(id, target) => setView(target, id)} />
                 </Tabs.Panel>
                 <Tabs.Panel value="designer" pt="md">
-                    {surveyId !== null && <SurveyDesignerPage surveyId={surveyId} />}
+                    {surveyId !== null && (
+                        <SurveyDesignerPage surveyId={surveyId} />
+                    )}
                 </Tabs.Panel>
                 <Tabs.Panel value="responses" pt="md">
                     {surveyId !== null && <SurveyResponsesPage surveyId={surveyId} />}
@@ -230,7 +233,9 @@ export function SurveyAdminPage(): React.ReactElement {
                     {surveyId !== null && <SurveyDashboardPage surveyId={surveyId} />}
                 </Tabs.Panel>
                 <Tabs.Panel value="settings" pt="md">
-                    <SurveySettingsPage />
+                    {surveyId !== null && (
+                        <SurveySettingsPage surveyId={surveyId} />
+                    )}
                 </Tabs.Panel>
             </Tabs>
         </Stack>
@@ -355,8 +360,8 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                         <Table.Thead>
                             <Table.Tr>
                                 <Table.Th>Name</Table.Th>
-                                <Table.Th>Key</Table.Th>
                                 <Table.Th>Revision</Table.Th>
+                                <Table.Th>Responses</Table.Th>
                                 <Table.Th>Updated</Table.Th>
                                 <Table.Th>State</Table.Th>
                                 <Table.Th style={{ width: 60 }} />
@@ -369,9 +374,9 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                                         <Anchor onClick={() => onOpen(survey.id, 'designer')}>
                                             {survey.name}
                                         </Anchor>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Code>{survey.keySlug}</Code>
+                                        <Text size="xs" c="dimmed">
+                                            Survey ID: <Code>{survey.surveyId}</Code>
+                                        </Text>
                                     </Table.Td>
                                     <Table.Td>
                                         {survey.currentRevision === null ? (
@@ -380,6 +385,7 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                                             <Badge variant="light">v{survey.currentRevision}</Badge>
                                         )}
                                     </Table.Td>
+                                    <Table.Td>{survey.responseCount}</Table.Td>
                                     <Table.Td>
                                         <Text size="sm">{new Date(survey.updatedAt).toLocaleString()}</Text>
                                     </Table.Td>
@@ -460,6 +466,8 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                 }}
             />
 
+            <PluginOperationsPanel />
+
             <Modal
                 opened={pendingDelete !== null}
                 onClose={() => setPendingDelete(null)}
@@ -485,26 +493,77 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
     );
 }
 
+function PluginOperationsPanel(): React.ReactElement {
+    const [license, setLicense] = useState<{ configured: boolean } | null>(null);
+
+    useEffect(() => {
+        fetchLicenseKey()
+            .then((data) => setLicense({ configured: data.configured }))
+            .catch(() => setLicense({ configured: false }));
+    }, []);
+
+    return (
+        <Card withBorder padding="lg">
+            <Stack gap="sm">
+                <Group justify="space-between" align="center">
+                    <Stack gap={2}>
+                        <Title order={4}>Plugin configuration</Title>
+                        <Text size="sm" c="dimmed">
+                            These settings affect the SurveyJS plugin as a whole, not one survey.
+                        </Text>
+                    </Stack>
+                    {license === null ? (
+                        <Loader size="xs" />
+                    ) : license.configured ? (
+                        <Badge color="green" variant="light">License configured</Badge>
+                    ) : (
+                        <Badge color="yellow" variant="light">License not configured</Badge>
+                    )}
+                </Group>
+
+                {license !== null && !license.configured && (
+                    <Alert color="yellow" title="SurveyJS license">
+                        Set <Code>SURVEYJS_LICENSE_KEY</Code> in the backend environment to remove the
+                        SurveyJS watermark from the Designer and runtime forms.
+                    </Alert>
+                )}
+
+                <Paper withBorder p="md">
+                    <Stack gap={4}>
+                        <Text fw={600}>Developer live reload</Text>
+                        <Text size="sm" c="dimmed">
+                            One-time backend attach registers routes, tables, permissions, and the bundle. Keep
+                            the runtime server open while editing plugin UI code.
+                        </Text>
+                        <Code block>
+                            node scripts/install-local.mjs --symlink{'\n'}
+                            npm --prefix frontend run dev:runtime
+                        </Code>
+                        <Text size="xs" c="dimmed">
+                            Full docs: <Code>plugins/sh2-shp-survey-js/docs/install.md</Code> and{' '}
+                            <Code>sh-selfhelp_backend/docs/plugins/runtime-frontend-loading.md</Code>
+                        </Text>
+                    </Stack>
+                </Paper>
+            </Stack>
+        </Card>
+    );
+}
+
 interface INewSurveyModalProps {
     opened: boolean;
     onClose: () => void;
     onCreated: (createdId: number) => Promise<void>;
 }
 
-const KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
-
 function NewSurveyModal({ opened, onClose, onCreated }: INewSurveyModalProps): React.ReactElement {
     const [name, setName] = useState<string>('');
-    const [keySlug, setKeySlug] = useState<string>('');
-    const [theme, setTheme] = useState<string>('default');
     const [submitting, setSubmitting] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!opened) {
             setName('');
-            setKeySlug('');
-            setTheme('default');
             setError(null);
             setSubmitting(false);
         }
@@ -516,20 +575,12 @@ function NewSurveyModal({ opened, onClose, onCreated }: INewSurveyModalProps): R
             setError('Name is required.');
             return;
         }
-        if (!KEY_PATTERN.test(keySlug)) {
-            setError('Key must be lowercase letters, digits, and dashes only (and start with a letter or digit).');
-            return;
-        }
         setSubmitting(true);
         try {
             const created = await createSurvey({
                 name: name.trim(),
-                keySlug,
                 definition: { pages: [] },
             });
-            if (theme && theme !== 'default') {
-                await updateSurvey(created.id, { themeCode: theme });
-            }
             await onCreated(created.id);
         } catch (err) {
             setError((err as Error).message);
@@ -549,26 +600,10 @@ function NewSurveyModal({ opened, onClose, onCreated }: INewSurveyModalProps): R
                     onChange={(e) => setName(e.currentTarget.value)}
                     disabled={submitting}
                 />
-                <TextInput
-                    label="Key"
-                    description="Used in the survey embed URL. Lowercase, dashes, no spaces."
-                    placeholder="customer-feedback-q3"
-                    required
-                    value={keySlug}
-                    onChange={(e) => setKeySlug(e.currentTarget.value)}
-                    disabled={submitting}
-                />
-                <Select
-                    label="Theme"
-                    data={[
-                        { value: 'default', label: 'Default (Mantine)' },
-                        { value: 'modern', label: 'Modern' },
-                        { value: 'high-contrast', label: 'High contrast' },
-                    ]}
-                    value={theme}
-                    onChange={(v) => setTheme(v ?? 'default')}
-                    disabled={submitting}
-                />
+                <Text size="sm" c="dimmed">
+                    SelfHelp will generate a stable survey ID automatically. You can rename the survey and
+                    change its theme later from Settings.
+                </Text>
                 {error && (
                     <Alert color="red" title="Could not create survey">
                         {error}

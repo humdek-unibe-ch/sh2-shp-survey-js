@@ -51,10 +51,15 @@ final class SurveyJsApiRouteSubscriber implements EventSubscriberInterface
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_get', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}', $admin . '::get', ['GET'], ['id' => '\d+'], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_update', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}', $admin . '::update', ['PUT'], ['id' => '\d+'], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_delete', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}', $admin . '::delete', ['DELETE'], ['id' => '\d+'], $manage);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_draft_save', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/draft', $admin . '::saveDraft', ['PUT'], ['id' => '\d+'], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_versions_create', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/versions', $admin . '::publishVersion', ['POST'], ['id' => '\d+'], $manage);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_versions_list', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/versions', $admin . '::versions', ['GET'], ['id' => '\d+'], $manage);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_versions_restore', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/versions/{versionId}/restore', $admin . '::restoreVersion', ['POST'], ['id' => '\d+', 'versionId' => '\d+'], $manage);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_presence', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/presence', $admin . '::presence', ['POST'], ['id' => '\d+'], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_dashboard', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/dashboard', $admin . '::dashboard', ['GET'], ['id' => '\d+'], $viewResp);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses', $admin . '::responses', ['GET'], ['id' => '\d+'], $viewResp);
-        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_pdf', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}/pdf', $admin . '::responsePdf', ['GET'], ['id' => '\d+', 'rid' => '\d+'], $exportPdf);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_detail', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}', $admin . '::responseDetail', ['GET'], ['id' => '\d+', 'rid' => '[A-Za-z0-9_-]+'], $viewResp);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_pdf', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}/pdf', $admin . '::responsePdf', ['GET'], ['id' => '\d+', 'rid' => '[A-Za-z0-9_-]+'], $exportPdf);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_license_key', '/admin/plugins/' . self::PLUGIN_ID . '/license-key', $license . '::__invoke', ['GET'], [], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_health', '/admin/plugins/' . self::PLUGIN_ID . '/health', $health . '::__invoke', ['GET'], [], $manage);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_published', '/plugins/' . self::PLUGIN_ID . '/published/{key}', $public . '::published', ['GET'], ['key' => '[a-zA-Z0-9_-]+']);

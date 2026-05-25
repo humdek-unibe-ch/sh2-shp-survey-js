@@ -22,9 +22,9 @@ final class SurveyRepository extends ServiceEntityRepository
         parent::__construct($registry, Survey::class);
     }
 
-    public function findOneByKeySlug(string $keySlug): ?Survey
+    public function findOneBySurveyId(string $surveyId): ?Survey
     {
-        return $this->findOneBy(['keySlug' => $keySlug]);
+        return $this->findOneBy(['surveyId' => $surveyId]);
     }
 
     /** @return Survey[] */

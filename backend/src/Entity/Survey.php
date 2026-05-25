@@ -20,7 +20,7 @@ use Humdek\SurveyJsBundle\Repository\SurveyRepository;
  */
 #[ORM\Entity(repositoryClass: SurveyRepository::class)]
 #[ORM\Table(name: 'surveys')]
-#[ORM\Index(columns: ['key_slug'], name: 'idx_surveys_key_slug')]
+#[ORM\Index(columns: ['survey_id'], name: 'idx_surveys_survey_id')]
 class Survey
 {
     #[ORM\Id]
@@ -28,15 +28,11 @@ class Survey
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
-    #[ORM\Column(name: 'id_plugins', type: 'integer', nullable: true)]
-    private ?int $idPlugins = null;
+    #[ORM\Column(name: 'survey_id', type: 'string', length: 100, unique: true)]
+    private string $surveyId;
 
     #[ORM\Column(type: 'string', length: 255)]
     private string $name;
-
-    /** Public slug used in the public submit URL: /cms-api/v1/plugins/sh2-shp-survey-js/published/{key} */
-    #[ORM\Column(name: 'key_slug', type: 'string', length: 191, unique: true)]
-    private string $keySlug;
 
     #[ORM\Column(name: 'theme_code', type: 'string', length: 64, nullable: true)]
     private ?string $themeCode = null;
@@ -50,6 +46,19 @@ class Survey
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable')]
     private DateTimeImmutable $updatedAt;
 
+    /** @var array<string, mixed>|null */
+    #[ORM\Column(name: 'draft_definition', type: 'json', nullable: true)]
+    private ?array $draftDefinition = null;
+
+    #[ORM\Column(name: 'draft_definition_sha256', type: 'string', length: 64, nullable: true)]
+    private ?string $draftDefinitionSha256 = null;
+
+    #[ORM\Column(name: 'draft_updated_at', type: 'datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $draftUpdatedAt = null;
+
+    #[ORM\Column(name: 'draft_updated_by_user_id', type: 'integer', nullable: true)]
+    private ?int $draftUpdatedByUserId = null;
+
     #[ORM\ManyToOne(targetEntity: SurveyVersion::class)]
     #[ORM\JoinColumn(name: 'id_current_survey_versions', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?SurveyVersion $currentVersion = null;
@@ -62,12 +71,16 @@ class Survey
     #[ORM\OneToMany(mappedBy: 'survey', targetEntity: SurveyRun::class, cascade: ['remove'])]
     private Collection $runs;
 
-    public function __construct(string $name, string $keySlug)
+    /**
+     * @param array<string, mixed> $draftDefinition
+     */
+    public function __construct(string $name, string $surveyId, array $draftDefinition = [])
     {
         $this->name = $name;
-        $this->keySlug = $keySlug;
+        $this->surveyId = $surveyId;
         $this->createdAt = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $this->updatedAt = $this->createdAt;
+        $this->setDraftDefinition($draftDefinition, null);
         $this->versions = new ArrayCollection();
         $this->runs = new ArrayCollection();
     }
@@ -77,15 +90,9 @@ class Survey
         return $this->id;
     }
 
-    public function getIdPlugins(): ?int
+    public function getSurveyId(): string
     {
-        return $this->idPlugins;
-    }
-
-    public function setIdPlugins(?int $idPlugins): self
-    {
-        $this->idPlugins = $idPlugins;
-        return $this;
+        return $this->surveyId;
     }
 
     public function getName(): string
@@ -96,18 +103,6 @@ class Survey
     public function setName(string $name): self
     {
         $this->name = $name;
-        $this->touch();
-        return $this;
-    }
-
-    public function getKeySlug(): string
-    {
-        return $this->keySlug;
-    }
-
-    public function setKeySlug(string $keySlug): self
-    {
-        $this->keySlug = $keySlug;
         $this->touch();
         return $this;
     }
@@ -148,6 +143,40 @@ class Survey
         return $this;
     }
 
+    /** @return array<string, mixed>|null */
+    public function getDraftDefinition(): ?array
+    {
+        return $this->draftDefinition;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    public function setDraftDefinition(array $definition, ?int $userId): self
+    {
+        $this->draftDefinition = $definition;
+        $this->draftDefinitionSha256 = self::hashDefinition($definition);
+        $this->draftUpdatedAt = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $this->draftUpdatedByUserId = $userId;
+        $this->touch();
+        return $this;
+    }
+
+    public function getDraftDefinitionSha256(): ?string
+    {
+        return $this->draftDefinitionSha256;
+    }
+
+    public function getDraftUpdatedAt(): ?DateTimeImmutable
+    {
+        return $this->draftUpdatedAt;
+    }
+
+    public function getDraftUpdatedByUserId(): ?int
+    {
+        return $this->draftUpdatedByUserId;
+    }
+
     public function getCreatedAt(): DateTimeImmutable
     {
         return $this->createdAt;
@@ -173,5 +202,13 @@ class Survey
     private function touch(): void
     {
         $this->updatedAt = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    public static function hashDefinition(array $definition): string
+    {
+        return hash('sha256', json_encode($definition, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
     }
 }

@@ -37,6 +37,7 @@ import type { IPluginApi, IPluginRegistration } from '@selfhelp/shared/plugin-sd
 import { SurveyJsStyle } from './styles/SurveyJsStyle';
 import { GpxMapStyle } from './styles/GpxMapStyle';
 import { SurveyAdminPage } from './admin/SurveyAdminPage';
+import { SurveyJsSurveySelectField } from './field-renderers/SurveyJsSurveySelectField';
 import { setPluginApi } from './runtime/pluginApi';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
@@ -48,7 +49,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * for every release; the publish script (`scripts/publish-to-registry.mjs`)
  * already enforces the same alignment server-side.
  */
-export const PLUGIN_VERSION = '0.1.0';
+export const PLUGIN_VERSION = '0.2.2';
 
 /**
  * Called by `PluginRuntime.registerOne()`. The runtime captures the
@@ -64,7 +65,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
     return definePlugin({
         id: PLUGIN_ID,
         version: PLUGIN_VERSION,
-        pluginApiVersion: '1.0',
+        pluginApiVersion: '1.1',
         styles: [
             {
                 name: 'surveyjs',
@@ -81,6 +82,12 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 frontendOnly: true,
                 canHaveChildren: false,
                 component: GpxMapStyle as never,
+            },
+        ],
+        fieldRenderers: [
+            {
+                fieldType: 'select-survey-js',
+                component: SurveyJsSurveySelectField as never,
             },
         ],
         adminPages: [

@@ -25,8 +25,13 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
  */
 final class NullDataTableWriter implements DataTableWriterInterface
 {
-    public function writeRow(Survey $survey, SurveyVersion $version, array $cells, ?int $userId): DataTableWriteResult
-    {
-        return new DataTableWriteResult(0, []);
+    public function writeRow(
+        Survey $survey,
+        SurveyVersion $version,
+        array $cells,
+        ?int $userId,
+        string $responseId,
+    ): DataTableWriteResult {
+        return new DataTableWriteResult(0);
     }
 }

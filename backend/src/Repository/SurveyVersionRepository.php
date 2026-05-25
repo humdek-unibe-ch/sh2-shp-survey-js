@@ -34,4 +34,15 @@ final class SurveyVersionRepository extends ServiceEntityRepository
         $max = (int) ($row['maxRevision'] ?? 0);
         return $max + 1;
     }
+
+    /** @return SurveyVersion[] */
+    public function findForSurvey(Survey $survey): array
+    {
+        return $this->createQueryBuilder('v')
+            ->andWhere('v.survey = :survey')
+            ->setParameter('survey', $survey)
+            ->orderBy('v.revision', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }

@@ -34,21 +34,15 @@ final class SurveyService
     /**
      * @param array<string, mixed> $definition
      */
-    public function createSurvey(string $name, string $keySlug, array $definition, ?int $userId): Survey
+    public function createSurvey(string $name, array $definition, ?int $userId): Survey
     {
-        if ($this->surveys->findOneByKeySlug($keySlug) !== null) {
-            throw new \DomainException(sprintf('A survey with key "%s" already exists.', $keySlug));
-        }
+        $surveyId = $this->generateSurveyId();
+        $definition = $this->normaliseDefinition($definition);
 
-        return $this->em->wrapInTransaction(function () use ($name, $keySlug, $definition, $userId): Survey {
-            $survey = new Survey($name, $keySlug);
+        return $this->em->wrapInTransaction(function () use ($name, $surveyId, $definition, $userId): Survey {
+            $survey = new Survey($name, $surveyId, $definition);
+            $survey->setDraftDefinition($definition, $userId);
             $this->em->persist($survey);
-            $this->em->flush();
-
-            $version = new SurveyVersion($survey, 1, $definition, $userId);
-            $this->em->persist($version);
-            $survey->setCurrentVersion($version);
-
             $this->em->flush();
             return $survey;
         });
@@ -59,6 +53,31 @@ final class SurveyService
      */
     public function publishNewVersion(Survey $survey, array $definition, ?int $userId): SurveyVersion
     {
+        $this->saveDraft($survey, $definition, null, $userId, true);
+        return $this->publishDraft($survey, $userId);
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    public function saveDraft(Survey $survey, array $definition, ?string $expectedHash, ?int $userId, bool $force = false): Survey
+    {
+        $definition = $this->normaliseDefinition($definition);
+        $currentHash = $survey->getDraftDefinitionSha256();
+        if (!$force && $expectedHash !== null && $currentHash !== null && $expectedHash !== $currentHash) {
+            throw new \DomainException('Draft has changed since it was loaded.', 409);
+        }
+
+        $survey->setDraftDefinition($definition, $userId);
+        $this->em->flush();
+        $this->realtime->surveyDraftSaved($survey, $userId);
+        return $survey;
+    }
+
+    public function publishDraft(Survey $survey, ?int $userId): SurveyVersion
+    {
+        $definition = $this->normaliseDefinition($survey->getDraftDefinition() ?? $survey->getCurrentVersion()?->getDefinition() ?? []);
+
         return $this->em->wrapInTransaction(function () use ($survey, $definition, $userId): SurveyVersion {
             $revision = $this->versions->nextRevision($survey);
             $version = new SurveyVersion($survey, $revision, $definition, $userId);
@@ -69,6 +88,19 @@ final class SurveyService
             $this->realtime->surveyVersionPublished($survey, $version, $userId);
             return $version;
         });
+    }
+
+    public function restoreVersion(Survey $survey, SurveyVersion $version, ?int $userId): Survey
+    {
+        if ($version->getSurvey()->getId() !== $survey->getId()) {
+            throw new \DomainException('Version does not belong to this survey.');
+        }
+
+        $survey->setCurrentVersion($version);
+        $survey->setDraftDefinition($version->getDefinition(), $userId);
+        $this->em->flush();
+        $this->realtime->surveyVersionPublished($survey, $version, $userId);
+        return $survey;
     }
 
     public function archive(Survey $survey, bool $archived): Survey
@@ -84,5 +116,23 @@ final class SurveyService
             $this->em->remove($survey);
             $this->em->flush();
         });
+    }
+
+    private function generateSurveyId(): string
+    {
+        do {
+            $surveyId = 'SV_' . strtoupper(bin2hex(random_bytes(8)));
+        } while ($this->surveys->findOneBySurveyId($surveyId) !== null);
+
+        return $surveyId;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     * @return array<string, mixed>
+     */
+    private function normaliseDefinition(array $definition): array
+    {
+        return $definition === [] ? ['pages' => []] : $definition;
     }
 }

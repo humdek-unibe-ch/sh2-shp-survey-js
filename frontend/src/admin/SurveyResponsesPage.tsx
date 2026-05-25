@@ -33,11 +33,12 @@ import {
 } from '@mantine/core';
 import { IconRefresh, IconUserCheck } from '@tabler/icons-react';
 
-import { fetchResponses } from '../api/surveys-admin';
+import { fetchResponseDetail, fetchResponses } from '../api/surveys-admin';
 
 interface IResponseRow {
     id: number;
-    surveyId: number;
+    responseId: string;
+    surveyId: string;
     revision: number;
     userId: number | null;
     startedAt: string;
@@ -54,6 +55,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
     const [total, setTotal] = useState<number>(0);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<boolean>(false);
+    const [selected, setSelected] = useState<Awaited<ReturnType<typeof fetchResponseDetail>> | null>(null);
 
     const reload = useCallback(async (): Promise<void> => {
         if (!surveyId) return;
@@ -63,6 +65,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
             const data = await fetchResponses(surveyId, { page: 1, limit: 50 });
             setItems(data.items);
             setTotal(data.total);
+            setSelected(null);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -143,7 +146,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                     <Table verticalSpacing="sm" highlightOnHover>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th>Run #</Table.Th>
+                                <Table.Th>Response ID</Table.Th>
                                 <Table.Th>Status</Table.Th>
                                 <Table.Th>Revision</Table.Th>
                                 <Table.Th>User</Table.Th>
@@ -153,8 +156,18 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                         </Table.Thead>
                         <Table.Tbody>
                             {sortedItems.map((row) => (
-                                <Table.Tr key={row.id}>
-                                    <Table.Td>{row.id}</Table.Td>
+                                <Table.Tr
+                                    key={row.id}
+                                    onClick={() => {
+                                        void fetchResponseDetail(surveyId, row.responseId)
+                                            .then(setSelected)
+                                            .catch((err: Error) => setError(err.message));
+                                    }}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <Table.Td>
+                                        <Text size="sm" ff="monospace">{row.responseId}</Text>
+                                    </Table.Td>
                                     <Table.Td>
                                         <Badge
                                             variant="light"
@@ -180,6 +193,42 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                         </Table.Tbody>
                     </Table>
                 </Paper>
+            )}
+            {selected && (
+                <Card withBorder padding="lg">
+                    <Stack gap="sm">
+                        <Group justify="space-between">
+                            <Title order={5}>Response {selected.responseId}</Title>
+                            <Badge variant="light">{selected.answers.length} answers</Badge>
+                        </Group>
+                        {selected.answers.length === 0 ? (
+                            <Text c="dimmed" size="sm">
+                                No answer links were recorded for this run.
+                            </Text>
+                        ) : (
+                            <Table verticalSpacing="xs">
+                                <Table.Thead>
+                                    <Table.Tr>
+                                        <Table.Th>Question</Table.Th>
+                                        <Table.Th>Type</Table.Th>
+                                    <Table.Th>Value</Table.Th>
+                                    </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>
+                                    {selected.answers.map((answer) => (
+                                        <Table.Tr key={answer.questionName}>
+                                            <Table.Td>{answer.questionName}</Table.Td>
+                                            <Table.Td>{answer.questionType}</Table.Td>
+                                            <Table.Td>
+                                                <Text size="sm" lineClamp={3}>{answer.value || '—'}</Text>
+                                            </Table.Td>
+                                        </Table.Tr>
+                                    ))}
+                                </Table.Tbody>
+                            </Table>
+                        )}
+                    </Stack>
+                </Card>
             )}
         </Stack>
     );

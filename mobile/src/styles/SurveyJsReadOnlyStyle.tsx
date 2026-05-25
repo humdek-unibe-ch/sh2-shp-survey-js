@@ -29,8 +29,7 @@ interface ISurveyJsReadOnlyStyleProps {
 }
 
 interface IPublishedSurvey {
-    surveyId: number;
-    keySlug: string;
+    surveyId: string;
     name: string;
     themeCode: string | null;
     revision: number;
@@ -40,15 +39,15 @@ interface IPublishedSurvey {
 const FALLBACK_URL_KEY = 'web_fallback_url';
 
 export function SurveyJsReadOnlyStyle({ section }: ISurveyJsReadOnlyStyleProps): React.ReactElement | null {
-    const keySlug = extractKeySlug(section);
+    const surveyId = extractSurveyId(section);
     const [survey, setSurvey] = useState<IPublishedSurvey | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!keySlug) return;
+        if (!surveyId) return;
         let cancelled = false;
         fetch(
-            `/cms-api/v1/plugins/sh2-shp-survey-js/published/${encodeURIComponent(keySlug)}`,
+            `/cms-api/v1/plugins/sh2-shp-survey-js/published/${encodeURIComponent(surveyId)}`,
             { headers: { Accept: 'application/json' } },
         )
             .then(async (res) => {
@@ -58,13 +57,13 @@ export function SurveyJsReadOnlyStyle({ section }: ISurveyJsReadOnlyStyleProps):
             })
             .catch((err: Error) => setError(err.message));
         return () => { cancelled = true; };
-    }, [keySlug]);
+    }, [surveyId]);
 
-    if (!keySlug) {
+    if (!surveyId) {
         return (
             <View style={{ padding: 12, borderWidth: 1, borderColor: '#fab005', borderRadius: 6 }}>
                 <Text style={{ color: '#856404' }}>
-                    The SurveyJS section is missing a key_slug field.
+                    The SurveyJS section is missing a survey id field.
                 </Text>
             </View>
         );
@@ -164,19 +163,17 @@ function extractQuestions(definition: Record<string, unknown>): IQuestionShape[]
     return out;
 }
 
-function extractKeySlug(section: ISurveyJsReadOnlyStyleProps['section']): string | null {
+function extractSurveyId(section: ISurveyJsReadOnlyStyleProps['section']): string | null {
     const fields = section.fields ?? {};
-    for (const key of ['key_slug', 'keySlug', 'survey_key']) {
-        const value = fields[key];
-        if (typeof value === 'string' && value.trim() !== '') return value.trim();
-        if (
-            value &&
-            typeof value === 'object' &&
-            'content' in (value as Record<string, unknown>) &&
-            typeof (value as { content?: unknown }).content === 'string'
-        ) {
-            return ((value as { content: string }).content ?? '').trim() || null;
-        }
+    const value = fields['survey-js'];
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
+    if (
+        value &&
+        typeof value === 'object' &&
+        'content' in (value as Record<string, unknown>) &&
+        typeof (value as { content?: unknown }).content === 'string'
+    ) {
+        return ((value as { content: string }).content ?? '').trim() || null;
     }
     return null;
 }

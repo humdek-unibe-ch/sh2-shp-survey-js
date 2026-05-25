@@ -16,7 +16,7 @@ SurveyJS v2 plugin for the SelfHelp CMS. Provides:
 > - [Mobile guide](docs/mobile-guide.md) — what the mobile renderer does and does not support today.
 > - [Architecture](docs/architecture.md) — internals, services, schema, security.
 
-Submissions land in the existing `data_tables` / `data_rows` / `data_cells` tables, normalized by `SurveyAnswerNormalizer`. HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns four entities — `survey`, `survey_version`, `survey_run`, `survey_answer_link` — for surveys, version snapshots, response metadata, and per-question links into `data_cells`.
+Submissions land in the existing `data_tables` / `data_rows` / `data_cols` / `data_cells` tables, normalized by `SurveyAnswerNormalizer`. HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns four entities — `surveys`, `survey_versions`, `survey_runs`, `survey_answer_links` — for surveys, version snapshots, response metadata, and per-question links into form storage. Surveys and responses also get generated stable keys (`survey_id` / `response_id`) for external references.
 
 ## Repository layout
 

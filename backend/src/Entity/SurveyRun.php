@@ -27,6 +27,7 @@ use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 #[ORM\Index(columns: ['id_surveys'], name: 'idx_survey_runs_surveys')]
 #[ORM\Index(columns: ['id_survey_versions'], name: 'idx_survey_runs_survey_versions')]
 #[ORM\Index(columns: ['id_data_rows'], name: 'idx_survey_runs_data_rows')]
+#[ORM\Index(columns: ['response_id'], name: 'idx_survey_runs_response_id')]
 class SurveyRun
 {
     public const STATUS_IN_PROGRESS = 'in_progress';
@@ -37,6 +38,9 @@ class SurveyRun
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
+
+    #[ORM\Column(name: 'response_id', type: 'string', length: 100, unique: true)]
+    private string $responseId;
 
     #[ORM\ManyToOne(targetEntity: Survey::class, inversedBy: 'runs')]
     #[ORM\JoinColumn(name: 'id_surveys', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
@@ -75,10 +79,11 @@ class SurveyRun
     #[ORM\OneToMany(mappedBy: 'run', targetEntity: SurveyAnswerLink::class, cascade: ['persist', 'remove'])]
     private Collection $answerLinks;
 
-    public function __construct(Survey $survey, SurveyVersion $version, ?int $idUser)
+    public function __construct(Survey $survey, SurveyVersion $version, string $responseId, ?int $idUser)
     {
         $this->survey = $survey;
         $this->version = $version;
+        $this->responseId = $responseId;
         $this->idUser = $idUser;
         $this->status = self::STATUS_IN_PROGRESS;
         $this->startedAt = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
@@ -93,6 +98,11 @@ class SurveyRun
     public function getSurvey(): Survey
     {
         return $this->survey;
+    }
+
+    public function getResponseId(): string
+    {
+        return $this->responseId;
     }
 
     public function getVersion(): SurveyVersion

@@ -18,8 +18,8 @@ use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
+use Humdek\SurveyJsBundle\Service\CoreDataTableWriter;
 use Humdek\SurveyJsBundle\Service\DataTableWriterInterface;
-use Humdek\SurveyJsBundle\Service\NullDataTableWriter;
 use Humdek\SurveyJsBundle\Service\SurveyAnswerNormalizer;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
 use Humdek\SurveyJsBundle\Service\SurveyJsGdprService;
@@ -58,14 +58,10 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsGdprService::class)->autowire();
     $services->set(SurveyPdfService::class)->autowire();
 
-    // Default null data-table writer. The host aliases this to its
-    // concrete writer in `config/services.yaml` once SurveyJS form
-    // submissions are wired into core `data_tables`. Without the
-    // alias the container would refuse to compile `SurveyResponseService`
-    // because the host bundle excludes the bare interface from
-    // autoload (see exclude block above), so the no-op is the only
-    // sane default the plugin can ship in isolation.
-    $services->set(DataTableWriterInterface::class, NullDataTableWriter::class);
+    // SurveyJS answers should land in the host's legacy form-data
+    // tables immediately, matching the old plugin's data flow.
+    $services->set(CoreDataTableWriter::class)->autowire();
+    $services->set(DataTableWriterInterface::class, CoreDataTableWriter::class);
 
     // SurveyJsRealtimePublisher is autowired against the host
     // `App\Plugin\Realtime\PluginRealtimePublisherInterface` which the

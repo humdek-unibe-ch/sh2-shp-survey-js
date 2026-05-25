@@ -13,12 +13,8 @@ namespace Humdek\SurveyJsBundle\Service;
  */
 final class DataTableWriteResult
 {
-    /**
-     * @param array<string, int> $idDataCellByName
-     */
     public function __construct(
         public readonly int $idDataRow,
-        public readonly array $idDataCellByName,
     ) {
     }
 }

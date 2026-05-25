@@ -6,8 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [0.2.2] — Unreleased
+
+### Added
+
+- `response_id` is now written into every CMS form-data row created by
+  `CoreDataTableWriter` (cell is auto-created in `data_cols` on first
+  submission). Operators can now look at a row in CMS Data Management
+  and trace it straight back to a survey response in the dashboard
+  without having to join the plugin-owned `survey_runs` table.
+- Server-side enforcement of `once_per_user` / `once_per_schedule` in
+  `SurveyResponseService::submit`. The runtime forwards the section's
+  flags through a new `enforce: { oncePerUser, windowStart, windowEnd }`
+  payload field; the backend rejects duplicate completions with
+  HTTP 409 (`reason` discriminator: `already_submitted_once` /
+  `already_submitted_in_window`) and HTTP 401 when authentication is
+  required but missing (`reason: authentication_required`). The
+  client-side flags continue to work for UX; this is the bypass-proof
+  backstop.
+- `SurveyRunRepository::findLatestCompletedForUser(Survey, userId,
+  windowStart?, windowEnd?)` powers the new guard and is reusable from
+  any caller that needs to know whether a user already completed a
+  run.
+
+### Added
+
+- Local runtime dev server (`npm --prefix frontend run dev:runtime`) for
+  live-reloading SurveyJS plugin UI through the host runtime without
+  rebuilding/reinstalling the plugin after every frontend change.
+- Survey drafts are now stored separately from published versions, with
+  conflict-safe save/publish APIs, restore-version support, and
+  collaborative editing presence events.
+
+### Changed
+
+- Survey creation now asks only for a name. The backend generates the
+  stable survey ID automatically; admins can rename and retheme the
+  survey later from Settings.
+- SurveyJS admin is organized around a selected survey workspace so
+  Designer, Responses, Dashboard, and Settings always keep survey
+  context visible.
+
 ### Fixed
 
+- Survey submissions now keep answer values in the plugin response
+  metadata while still writing the same values into the CMS data table,
+  so the Responses/Dashboard views and the CMS data browser show the
+  submitted data.
 - `scripts/build-shplugin.mjs` now writes archive-root-relative paths
   in `artifacts/SHA256SUMS` (`<hash>  artifacts/<file>`). The host's
   `PluginArchiveValidator` rejects unprefixed paths as a

@@ -30,11 +30,13 @@ final class SurveyDashboardService
     public function buildSummary(Survey $survey): array
     {
         return [
-            'surveyId' => $survey->getId(),
+            'id' => $survey->getId(),
+            'surveyId' => $survey->getSurveyId(),
             'completedResponses' => $this->runs->countCompletedForSurvey($survey),
             'recent' => array_map(
                 static fn ($run) => [
                     'id' => $run->getId(),
+                    'responseId' => $run->getResponseId(),
                     'status' => $run->getStatus(),
                     'startedAt' => $run->getStartedAt()->format(DATE_ATOM),
                     'completedAt' => $run->getCompletedAt()?->format(DATE_ATOM),

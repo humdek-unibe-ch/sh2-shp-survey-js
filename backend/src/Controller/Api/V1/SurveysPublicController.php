@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
+use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,9 +19,8 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 /**
  * Public Surveys API used by the runtime `surveyjs` style.
  *
- * Both endpoints accept the survey's `keySlug` instead of the
- * numeric id so the public URL stays stable across DB rebuilds and
- * the SurveyJS style can embed the slug literally.
+ * Both endpoints accept the stable generated `survey_id` shown in the
+ * admin UI. The internal numeric id stays limited to admin routes.
  */
 #[AsController]
 final class SurveysPublicController
@@ -33,7 +33,7 @@ final class SurveysPublicController
 
     public function published(string $key): JsonResponse
     {
-        $survey = $this->surveys->findOneByKeySlug($key);
+        $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
@@ -42,8 +42,7 @@ final class SurveysPublicController
             return new JsonResponse(['error' => 'No published version.'], 404);
         }
         return new JsonResponse(['data' => [
-            'surveyId' => $survey->getId(),
-            'keySlug' => $survey->getKeySlug(),
+            'surveyId' => $survey->getSurveyId(),
             'name' => $survey->getName(),
             'themeCode' => $survey->getThemeCode(),
             'revision' => $version->getRevision(),
@@ -53,7 +52,7 @@ final class SurveysPublicController
 
     public function submit(string $key, Request $request): JsonResponse
     {
-        $survey = $this->surveys->findOneByKeySlug($key);
+        $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
@@ -62,11 +61,33 @@ final class SurveysPublicController
         if (!is_array($answers)) {
             return new JsonResponse(['error' => 'answers required.'], 422);
         }
-        $userId = $request->attributes->getInt('jwt_user_id') ?: null;
-        $run = $this->responseService->submit($survey, $answers, $userId);
+        $enforce = is_array($body['enforce'] ?? null) ? $body['enforce'] : [];
+        $payload = $request->attributes->get('_jwt_payload');
+        $userId = is_array($payload) && isset($payload['id_users']) ? (int) $payload['id_users'] : null;
+
+        try {
+            $run = $this->responseService->submit($survey, $answers, $userId, $enforce);
+        } catch (SurveySubmissionRejectedException $e) {
+            // 401 when the section requires authentication for once-per-user /
+            // schedule-window enforcement, 409 when the survey was already
+            // submitted in the relevant scope. The `reason` discriminator lets
+            // the runtime pick a stable translation key.
+            $status = $e->reason === SurveySubmissionRejectedException::REASON_AUTH_REQUIRED ? 401 : 409;
+            return new JsonResponse([
+                'error' => $e->getMessage(),
+                'reason' => $e->reason,
+            ], $status);
+        }
+
         return new JsonResponse(['data' => [
             'runId' => $run->getId(),
+            'responseId' => $run->getResponseId(),
             'submittedAt' => ($run->getCompletedAt() ?? $run->getStartedAt())->format(DATE_ATOM),
         ]], 201);
+    }
+
+    private function resolveSurvey(string $key): ?Survey
+    {
+        return $this->surveys->findOneBySurveyId($key);
     }
 }

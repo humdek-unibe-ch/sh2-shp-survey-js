@@ -25,7 +25,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * compare these constants against the manifest version; a mismatch
  * silently breaks the plugin.
  */
-export const PLUGIN_VERSION = '0.1.0';
+export const PLUGIN_VERSION = '0.2.2';
 
 export const registerMobile = (): IMobilePluginRegistration =>
     defineMobilePlugin({

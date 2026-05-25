@@ -31,7 +31,8 @@ import { IconChartBar, IconRefresh } from '@tabler/icons-react';
 import { fetchDashboard } from '../api/surveys-admin';
 
 interface IDashboardSummary {
-    surveyId: number;
+    id: number;
+    surveyId: string;
     completedResponses: number;
     currentVersionRevision: number | null;
     recent: Array<{ id: number; startedAt: string; status: string }>;

@@ -62,4 +62,48 @@ final class SurveyRunRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function findOneByResponseId(string $responseId): ?SurveyRun
+    {
+        return $this->findOneBy(['responseId' => $responseId]);
+    }
+
+    /**
+     * Returns the most recent completed run a given user submitted for
+     * the given survey, optionally restricted to a window. Used by
+     * {@see \Humdek\SurveyJsBundle\Service\SurveyResponseService::submit()}
+     * to enforce the `once_per_user` / `once_per_schedule` flags
+     * server-side (the runtime also honours them, but a client could
+     * skip them by hitting the public endpoint directly).
+     *
+     * The window is matched against `completed_at` so unfinished /
+     * invalid runs do not block a fresh submission. When both bounds
+     * are null the query is "ever completed".
+     */
+    public function findLatestCompletedForUser(
+        Survey $survey,
+        int $userId,
+        ?\DateTimeImmutable $windowStart = null,
+        ?\DateTimeImmutable $windowEnd = null,
+    ): ?SurveyRun {
+        $qb = $this->createQueryBuilder('r')
+            ->andWhere('r.survey = :survey')
+            ->andWhere('r.idUser = :userId')
+            ->andWhere('r.status = :status')
+            ->setParameter('survey', $survey)
+            ->setParameter('userId', $userId)
+            ->setParameter('status', SurveyRun::STATUS_COMPLETED)
+            ->orderBy('r.completedAt', 'DESC')
+            ->setMaxResults(1);
+
+        if ($windowStart !== null) {
+            $qb->andWhere('r.completedAt >= :windowStart')->setParameter('windowStart', $windowStart);
+        }
+        if ($windowEnd !== null) {
+            $qb->andWhere('r.completedAt <= :windowEnd')->setParameter('windowEnd', $windowEnd);
+        }
+
+        $result = $qb->getQuery()->getOneOrNullResult();
+        return $result instanceof SurveyRun ? $result : null;
+    }
 }

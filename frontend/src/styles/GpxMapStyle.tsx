@@ -17,17 +17,24 @@ SPDX-License-Identifier: MPL-2.0
 
 import { useEffect, useRef } from 'react';
 
+type TPluginStyleSection = {
+    id: number;
+    fields?: Record<string, unknown>;
+    style_name?: string;
+    [key: string]: unknown;
+};
+
 export interface IGpxMapStyleProps {
-    section: {
-        id: number;
-        fields?: Record<string, unknown>;
-        style_name?: string;
-    };
+    style?: TPluginStyleSection;
+    section?: TPluginStyleSection;
     values?: Record<string, unknown>;
+    styleProps?: Record<string, string>;
+    cssClass?: string;
 }
 
-export function GpxMapStyle({ section }: IGpxMapStyleProps): React.ReactElement {
-    const gpxUrl = extractGpxUrl(section);
+export function GpxMapStyle({ style, section, styleProps, cssClass }: IGpxMapStyleProps): React.ReactElement {
+    const runtimeSection = section ?? style;
+    const gpxUrl = extractGpxUrl(runtimeSection);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -82,11 +89,18 @@ export function GpxMapStyle({ section }: IGpxMapStyleProps): React.ReactElement 
         );
     }
 
-    return <div ref={containerRef} style={{ width: '100%', height: 400, borderRadius: 4 }} />;
+    return (
+        <div
+            ref={containerRef}
+            className={cssClass}
+            style={{ width: '100%', height: 400, borderRadius: 4 }}
+            {...styleProps}
+        />
+    );
 }
 
-function extractGpxUrl(section: IGpxMapStyleProps['section']): string | null {
-    const fields = section.fields ?? {};
+function extractGpxUrl(section?: TPluginStyleSection): string | null {
+    const fields = { ...(section ?? {}), ...(section?.fields ?? {}) };
     for (const key of ['gpx_url', 'gpxUrl']) {
         const value = fields[key];
         if (typeof value === 'string' && value.trim() !== '') return value.trim();

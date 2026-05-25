@@ -14,16 +14,29 @@ SPDX-License-Identifier: MPL-2.0
 
 export interface IAdminSurveySummary {
     id: number;
+    surveyId: string;
     name: string;
-    keySlug: string;
     themeCode: string | null;
     archived: boolean;
     updatedAt: string;
     currentRevision: number | null;
+    draftHash: string | null;
+    draftUpdatedAt: string | null;
+    draftUpdatedByUserId: number | null;
+    responseCount: number;
 }
 
 export interface IAdminSurveyDetail extends IAdminSurveySummary {
     definition: Record<string, unknown> | null;
+    publishedDefinition?: Record<string, unknown> | null;
+}
+
+export interface IAdminSurveyVersion {
+    id: number;
+    revision: number;
+    createdAt: string;
+    createdByUserId: number | null;
+    definitionSha256: string;
 }
 
 const BASE = '/api/admin/plugins/sh2-shp-survey-js';
@@ -40,10 +53,13 @@ function csrfHeaders(): Record<string, string> {
 }
 
 async function asJson<T>(res: Response): Promise<T> {
+    const body = (await res.json().catch(() => ({}))) as { data?: T; error?: string };
     if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error(body.error ?? `HTTP ${res.status}`);
     }
-    const body = (await res.json()) as { data: T };
+    if (body.data === undefined) {
+        throw new Error('Response missing data envelope.');
+    }
     return body.data;
 }
 
@@ -65,8 +81,7 @@ export async function getSurvey(id: number): Promise<IAdminSurveyDetail> {
 
 export async function createSurvey(body: {
     name: string;
-    keySlug: string;
-    definition: Record<string, unknown>;
+    definition?: Record<string, unknown>;
 }): Promise<IAdminSurveySummary> {
     const res = await fetch(`${BASE}/surveys`, {
         method: 'POST',
@@ -83,8 +98,8 @@ export async function createSurvey(body: {
 
 export async function publishVersion(
     id: number,
-    definition: Record<string, unknown>,
-): Promise<{ surveyId: number; revision: number; createdAt: string }> {
+    body: { definition?: Record<string, unknown>; expectedDraftHash?: string | null; force?: boolean } = {},
+): Promise<{ id: number; surveyId: string; revision: number; createdAt: string; draftHash: string | null }> {
     const res = await fetch(`${BASE}/surveys/${id}/versions`, {
         method: 'POST',
         credentials: 'include',
@@ -93,9 +108,63 @@ export async function publishVersion(
             'Content-Type': 'application/json',
             ...csrfHeaders(),
         },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify(body),
     });
-    return asJson<{ surveyId: number; revision: number; createdAt: string }>(res);
+    return asJson<{ id: number; surveyId: string; revision: number; createdAt: string; draftHash: string | null }>(res);
+}
+
+export async function saveDraft(
+    id: number,
+    body: { definition: Record<string, unknown>; expectedDraftHash?: string | null; force?: boolean },
+): Promise<IAdminSurveyDetail> {
+    const res = await fetch(`${BASE}/surveys/${id}/draft`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...csrfHeaders(),
+        },
+        body: JSON.stringify(body),
+    });
+    return asJson<IAdminSurveyDetail>(res);
+}
+
+export async function listVersions(id: number): Promise<IAdminSurveyVersion[]> {
+    const res = await fetch(`${BASE}/surveys/${id}/versions`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson<IAdminSurveyVersion[]>(res);
+}
+
+export async function restoreVersion(id: number, versionId: number): Promise<IAdminSurveyDetail> {
+    const res = await fetch(`${BASE}/surveys/${id}/versions/${versionId}/restore`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            Accept: 'application/json',
+            ...csrfHeaders(),
+        },
+    });
+    return asJson<IAdminSurveyDetail>(res);
+}
+
+export async function publishPresence(
+    id: number,
+    state: 'editing' | 'idle' | 'left',
+): Promise<{ published: boolean }> {
+    const res = await fetch(`${BASE}/surveys/${id}/presence`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...csrfHeaders(),
+        },
+        body: JSON.stringify({ state }),
+    });
+    return asJson<{ published: boolean }>(res);
 }
 
 export async function fetchLicenseKey(): Promise<{ licenseKey: string | null; configured: boolean }> {
@@ -133,20 +202,18 @@ export async function deleteSurvey(id: number): Promise<{ deleted: boolean }> {
 }
 
 /**
- * Duplicate a survey by creating a fresh `surveys` row with a unique
- * `key_slug` and copying the source's current definition into it as the
+ * Duplicate a survey by creating a fresh `surveys` row with a new
+ * generated survey id and copying the source's current definition into it as the
  * first published revision. Composed client-side because the host
  * admin API does not (yet) expose a `/duplicate` endpoint; collapsing
  * it here keeps the call site free of orchestration noise.
  */
 export async function duplicateSurvey(source: IAdminSurveyDetail): Promise<IAdminSurveySummary> {
-    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 12);
-    const newKey = `${source.keySlug}-copy-${stamp}`;
     const newName = `${source.name} (copy)`;
     const definition = source.definition ?? { pages: [] };
-    const created = await createSurvey({ name: newName, keySlug: newKey, definition });
+    const created = await createSurvey({ name: newName, definition });
     if (Object.keys(definition).length > 0) {
-        await publishVersion(created.id, definition);
+        await publishVersion(created.id, { definition, force: true });
     }
     return created;
 }
@@ -157,7 +224,8 @@ export async function fetchResponses(
 ): Promise<{
     items: Array<{
         id: number;
-        surveyId: number;
+        responseId: string;
+        surveyId: string;
         revision: number;
         userId: number | null;
         startedAt: string;
@@ -180,12 +248,39 @@ export async function fetchResponses(
 }
 
 export async function fetchDashboard(surveyId: number): Promise<{
-    surveyId: number;
+    id: number;
+    surveyId: string;
     completedResponses: number;
     currentVersionRevision: number | null;
-    recent: Array<{ id: number; startedAt: string; status: string }>;
+    recent: Array<{ id: number; responseId: string; startedAt: string; status: string }>;
 }> {
     const res = await fetch(`${BASE}/surveys/${surveyId}/dashboard`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson(res);
+}
+
+export async function fetchResponseDetail(
+    surveyId: number,
+    responseId: number | string,
+): Promise<{
+    id: number;
+    responseId: string;
+    surveyId: string;
+    revision: number;
+    userId: number | null;
+    startedAt: string;
+    completedAt: string | null;
+    status: string;
+    answers: Array<{
+        questionName: string;
+        questionType: string;
+        value: string;
+        sanitizedHtml: boolean;
+    }>;
+}> {
+    const res = await fetch(`${BASE}/surveys/${surveyId}/responses/${responseId}`, {
         credentials: 'include',
         headers: { Accept: 'application/json' },
     });

@@ -2,8 +2,8 @@
     "id": "sh2-shp-survey-js",
     "name": "SurveyJS",
     "description": "SurveyJS v2 integration for SelfHelp CMS. Provides a Mantine-themed Survey Creator (admin), a survey runtime style, and a public submission pipeline that writes into the existing data_tables / data_rows / data_cells. Includes optional GPX, Video, and rich-text custom question types.",
-    "version": "0.1.0",
-    "pluginApiVersion": "1.0",
+    "version": "0.2.2",
+    "pluginApiVersion": "1.1",
     "author": {
         "name": "Humdek, University of Bern",
         "email": "selfhelp@unibe.ch",
@@ -32,7 +32,7 @@
         "migrationsNamespace": "Humdek\\SurveyJsBundle\\Migrations",
         "composer": {
             "package": "humdek/sh2-shp-survey-js",
-            "version": "0.1.0"
+            "version": "0.2.2"
         }
     },
     "frontend": {
@@ -45,7 +45,7 @@
     },
     "mobile": {
         "package": "@humdek/sh2-shp-survey-js-mobile",
-        "version": "0.1.0",
+        "version": "0.2.2",
         "readonly": true
     },
     "security": {
@@ -85,9 +85,27 @@
         }
     },
     "permissions": [
-        {"key": "surveyjs.surveys.manage", "description": "Create, edit, publish, delete surveys.", "defaultRoles": ["admin"]},
-        {"key": "surveyjs.surveys.view-responses", "description": "View survey responses + dashboard.", "defaultRoles": ["admin"]},
-        {"key": "surveyjs.surveys.export-pdf", "description": "Export survey responses as PDF.", "defaultRoles": ["admin"]}
+        {
+            "key": "surveyjs.surveys.manage",
+            "description": "Create, edit, publish, delete surveys.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.view-responses",
+            "description": "View survey responses + dashboard.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.export-pdf",
+            "description": "Export survey responses as PDF.",
+            "defaultRoles": [
+                "admin"
+            ]
+        }
     ],
     "dataAccess": {
         "ownedTables": [
@@ -100,6 +118,7 @@
         "read": [
             "data_tables",
             "data_rows",
+            "data_cols",
             "data_cells",
             "lookups",
             "languages"
@@ -107,6 +126,7 @@
         "write": [
             "data_tables",
             "data_rows",
+            "data_cols",
             "data_cells"
         ]
     },
@@ -123,12 +143,36 @@
         }
     ],
     "featureFlags": [
-        {"key": "gpx", "description": "Enable GPX track question type.", "defaultEnabled": false},
-        {"key": "video", "description": "Enable video question type.", "defaultEnabled": false},
-        {"key": "rich-text", "description": "Enable Tiptap-based rich-text question + Creator property editors.", "defaultEnabled": true},
-        {"key": "pdf-export", "description": "Enable PDF export of survey responses.", "defaultEnabled": false},
-        {"key": "dashboard", "description": "Enable response dashboard view.", "defaultEnabled": true},
-        {"key": "collab-editing", "description": "Enable collaborative-edit Mercure notifications in the Creator.", "defaultEnabled": true}
+        {
+            "key": "gpx",
+            "description": "Enable GPX track question type.",
+            "defaultEnabled": false
+        },
+        {
+            "key": "video",
+            "description": "Enable video question type.",
+            "defaultEnabled": false
+        },
+        {
+            "key": "rich-text",
+            "description": "Enable Tiptap-based rich-text question + Creator property editors.",
+            "defaultEnabled": true
+        },
+        {
+            "key": "pdf-export",
+            "description": "Enable PDF export of survey responses.",
+            "defaultEnabled": false
+        },
+        {
+            "key": "dashboard",
+            "description": "Enable response dashboard view.",
+            "defaultEnabled": true
+        },
+        {
+            "key": "collab-editing",
+            "description": "Enable collaborative-edit Mercure notifications in the Creator.",
+            "defaultEnabled": true
+        }
     ],
     "lookups": {
         "extends": [
@@ -136,9 +180,19 @@
                 "typeCode": "surveyJsTheme",
                 "ownership": "plugin_owned",
                 "entries": [
-                    {"code": "default", "value": "Default", "description": "Mantine-bridged default theme."},
-                    {"code": "modern", "value": "Modern"},
-                    {"code": "high-contrast", "value": "High contrast"}
+                    {
+                        "code": "default",
+                        "value": "Default",
+                        "description": "Mantine-bridged default theme."
+                    },
+                    {
+                        "code": "modern",
+                        "value": "Modern"
+                    },
+                    {
+                        "code": "high-contrast",
+                        "value": "High contrast"
+                    }
                 ]
             }
         ]
@@ -166,19 +220,148 @@
         }
     ],
     "apiRoutes": [
-        {"name": "surveyjs_admin_list", "path": "/admin/plugins/sh2-shp-survey-js/surveys", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_create", "path": "/admin/plugins/sh2-shp-survey-js/surveys", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_get", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_update", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["PUT"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_delete", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}", "methods": ["DELETE"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_versions_create", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions", "methods": ["POST"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_dashboard", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
-        {"name": "surveyjs_admin_responses", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses", "methods": ["GET"], "permission": "surveyjs.surveys.view-responses"},
-        {"name": "surveyjs_admin_response_pdf", "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}/pdf", "methods": ["GET"], "permission": "surveyjs.surveys.export-pdf"},
-        {"name": "surveyjs_admin_license_key", "path": "/admin/plugins/sh2-shp-survey-js/license-key", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_admin_health", "path": "/admin/plugins/sh2-shp-survey-js/health", "methods": ["GET"], "permission": "surveyjs.surveys.manage"},
-        {"name": "surveyjs_public_published", "path": "/plugins/sh2-shp-survey-js/published/{key}", "methods": ["GET"]},
-        {"name": "surveyjs_public_submit", "path": "/plugins/sh2-shp-survey-js/published/{key}/submit", "methods": ["POST"]}
+        {
+            "name": "surveyjs_admin_list",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_create",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys",
+            "methods": [
+                "POST"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_get",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_update",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
+            "methods": [
+                "PUT"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_delete",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
+            "methods": [
+                "DELETE"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_draft_save",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/draft",
+            "methods": [
+                "PUT"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_versions_create",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions",
+            "methods": [
+                "POST"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_versions_list",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_versions_restore",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions/{versionId}/restore",
+            "methods": [
+                "POST"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_presence",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/presence",
+            "methods": [
+                "POST"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_dashboard",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.view-responses"
+        },
+        {
+            "name": "surveyjs_admin_responses",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.view-responses"
+        },
+        {
+            "name": "surveyjs_admin_response_detail",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.view-responses"
+        },
+        {
+            "name": "surveyjs_admin_response_pdf",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}/pdf",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.export-pdf"
+        },
+        {
+            "name": "surveyjs_admin_license_key",
+            "path": "/admin/plugins/sh2-shp-survey-js/license-key",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_admin_health",
+            "path": "/admin/plugins/sh2-shp-survey-js/health",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
+            "name": "surveyjs_public_published",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}",
+            "methods": [
+                "GET"
+            ]
+        },
+        {
+            "name": "surveyjs_public_submit",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/submit",
+            "methods": [
+                "POST"
+            ]
+        }
     ],
     "scheduledJobs": [],
     "assets": [],

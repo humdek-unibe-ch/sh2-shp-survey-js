@@ -12,8 +12,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 export interface IPublishedSurvey {
-    surveyId: number;
-    keySlug: string;
+    surveyId: string;
     name: string;
     themeCode: string | null;
     revision: number;
@@ -22,6 +21,7 @@ export interface IPublishedSurvey {
 
 export interface ISubmitResult {
     runId: number;
+    responseId: string;
     submittedAt: string;
 }
 

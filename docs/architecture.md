@@ -47,14 +47,14 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
 | `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
 
-The migration `Version20260522063620.php` creates the four plugin tables, seeds the three permissions, and seeds the `surveyJsTheme` lookup rows. `down()` is safe (drops only plugin-owned objects).
+The migration `Version20260522063620.php` creates the four plugin tables, seeds the three permissions, and seeds the `surveyJsTheme` lookup rows. `surveys.survey_id` and `survey_runs.response_id` are generated stable external keys; shared CMS rows and generated core `data_tables` are still tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
 
 ### Decoupling from the host
 
 The bundle depends on host contracts, not concrete host services:
 
 - `App\Plugin\Realtime\PluginRealtimePublisherInterface` — imported directly from the host. The CMS aliases this to its concrete `App\Plugin\Realtime\PluginRealtimePublisher` in `config/services.yaml`. The bundle ships **no** plugin-local null fallback; the host realtime layer must be present for the bundle to boot.
-- `Service\DataTableWriterInterface` (the host wires its existing form-submission writer here; a `NullDataTableWriter` ships as the default so the bundle boots in isolation while the host writer is still being wired in).
+- `Service\DataTableWriterInterface` (implemented by the plugin's `CoreDataTableWriter`, which writes into the host `data_tables` / `data_rows` / `data_cols` / `data_cells` tables using the declared `sh2_surveyjs_` data-table prefix).
 
 ## Frontend package
 
@@ -93,7 +93,7 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
    - normalizes + sanitizes the answers (`SurveyAnswerNormalizer` + `SurveyJsHtmlSanitizer`),
    - opens a transaction,
    - creates a `SurveyRun`,
-   - hands the normalized cell list to `DataTableWriterInterface::writeRow()` (the host implements this),
+   - hands the normalized cell list to `DataTableWriterInterface::writeRow()` (`CoreDataTableWriter` persists a plugin-owned host data table named `sh2_surveyjs_<survey_id>`),
    - creates one `SurveyAnswerLink` per cell with the returned `id_data_cell`,
    - publishes `surveys/{surveyId}/responses` on Mercure,
    - commits.
@@ -117,7 +117,8 @@ sh2-shp-survey-js/
 │   ├── src/Service/{SurveyService, SurveyResponseService, SurveyDashboardService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
 │   │                SurveyJsGdprService, SurveyJsHealthCheck,
-│   │                DataTableWriterInterface, NullDataTableWriter, DataTableWriteResult}.php
+│   │                CoreDataTableWriter, DataTableWriterInterface,
+│   │                NullDataTableWriter, DataTableWriteResult}.php
 │   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
 │   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic}Subscriber.php
 │   ├── src/Resources/config/services.php

@@ -36,7 +36,8 @@ final class SurveyJsRealtimePublisher
             'surveys/{surveyId}/editing',
             [
                 'type' => 'version_published',
-                'surveyId' => $survey->getId(),
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
                 'revision' => $version->getRevision(),
                 'publishedByUserId' => $userId,
                 'publishedAt' => $version->getCreatedAt()->format(DATE_ATOM),
@@ -49,6 +50,27 @@ final class SurveyJsRealtimePublisher
         );
     }
 
+    public function surveyDraftSaved(Survey $survey, ?int $userId): void
+    {
+        $this->host->publish(
+            self::PLUGIN_ID,
+            'surveys/{surveyId}/editing',
+            [
+                'type' => 'draft_saved',
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
+                'draftHash' => $survey->getDraftDefinitionSha256(),
+                'savedByUserId' => $userId,
+                'savedAt' => $survey->getDraftUpdatedAt()?->format(DATE_ATOM),
+            ],
+            [
+                'audience' => 'permission',
+                'topicParams' => ['surveyId' => (string) $survey->getId()],
+                'event' => 'draft_saved',
+            ],
+        );
+    }
+
     public function surveyEditingPresence(Survey $survey, int $userId, string $userName, string $state): void
     {
         $this->host->publish(
@@ -56,9 +78,12 @@ final class SurveyJsRealtimePublisher
             'surveys/{surveyId}/editing',
             [
                 'type' => 'presence',
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
                 'state' => $state,
                 'userId' => $userId,
                 'userName' => $userName,
+                'at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
             ],
             [
                 'audience' => 'permission',
@@ -75,8 +100,10 @@ final class SurveyJsRealtimePublisher
             'surveys/{surveyId}/responses',
             [
                 'type' => 'response_submitted',
-                'surveyId' => $survey->getId(),
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
                 'runId' => $run->getId(),
+                'responseId' => $run->getResponseId(),
                 'submittedByUserId' => $userId,
                 'submittedAt' => ($run->getCompletedAt() ?? $run->getStartedAt())->format(DATE_ATOM),
             ],

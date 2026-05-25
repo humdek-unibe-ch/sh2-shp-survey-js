@@ -34,6 +34,8 @@ SurveyJS plugin once it's installed in their SelfHelp CMS:
 
 The survey is created as a draft with no versions yet. SurveyJS
 Creator opens immediately.
+The plugin also generates a stable `survey_id` (`SV_...`) for external
+references. The generated `survey_id` is the public identifier.
 
 > **Tip**: the key slug is what you'll paste into the `surveyjs`
 > style's "Survey" dropdown, so pick something meaningful
@@ -143,7 +145,7 @@ The plugin contributes a **`surveyjs`** style. To embed a survey:
 2. Add a new section of style **`surveyjs`**.
 3. Set the section's fields:
    - **Survey** — pick the survey by key slug (dropdown is populated
-     from `surveys.key_slug`).
+     from `surveys.survey_id`).
    - **Mode** — `interactive` (default) or `readonly`.
    - **Submit redirect** — optional path to redirect to on submit.
    - **Save partial answers** — if true, the runtime POSTs partial
@@ -183,9 +185,9 @@ default (theme, rich-text) or the global default (mode).
 
 Responses live in two places:
 
-1. **`survey_runs`** — one row per respondent submission (status,
-   `id_users`, `id_data_rows`, started/completed timestamps,
-   `progress` JSON for partial answers).
+1. **`survey_runs`** — one row per respondent submission (generated
+   `response_id`, status, `id_users`, `id_data_rows`,
+   started/completed timestamps, `progress` JSON for partial answers).
 2. **`survey_answer_links`** — one row per (run, question), linked to
    the host's `data_cells` so the same answer is visible in the host's
    Data Browser.
