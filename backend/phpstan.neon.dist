@@ -20,4 +20,25 @@ parameters:
         -
             identifier: property.unusedType
             path: src/Entity/*.php
+        # Host package not installed during plugin-only CI runs. The
+        # CoreDataTableWriter targets the host's data-table entity which
+        # only exists once the plugin is mounted inside the SelfHelp
+        # backend; treating these as warnings would block CI for no
+        # signal gain.
+        -
+            messages:
+                - '#App\\Entity\\DataTable#'
+                - '#App\\Entity\\Plugin\\Plugin#'
+            path: src/Service/CoreDataTableWriter.php
+        # Optional XLSX / PDF dependencies: rendered as soft requires
+        # so operators can opt into them without forcing every plugin
+        # install to pull the bundle in.
+        -
+            messages:
+                - '#PhpOffice\\PhpSpreadsheet#'
+            path: src/Service/SurveyExportService.php
+        -
+            messages:
+                - '#Dompdf\\Dompdf#'
+            path: src/Service/SurveyPdfService.php
     treatPhpDocTypesAsCertain: false
