@@ -42,19 +42,84 @@ declare module 'leaflet' {
 }
 
 declare module 'survey-core' {
-    export class Model {
-        constructor(definition: unknown);
+    export interface IEvent<TArgs = unknown> {
+        add: (cb: (sender: ISurveyModel, args: TArgs) => void) => void;
+        remove: (cb: (sender: ISurveyModel, args: TArgs) => void) => void;
+    }
+    export interface ISurveyModel {
+        data: Record<string, unknown>;
+        currentPageNo: number;
+        getAllQuestions: () => Array<{ name: string; getType: () => string; value: unknown; readOnly: boolean }>;
         applyTheme(theme: Record<string, unknown>): void;
-        onComplete: { add: (cb: (sender: { data: Record<string, unknown> }) => void) => void };
+        setVariable(name: string, value: unknown): void;
+        getVariable(name: string): unknown;
+        completedHtml: string;
+        showCompletedPage: boolean;
+        addNavigationItem: (item: { id: string; title: string; action: () => void; visible?: boolean }) => void;
+        completeLastPage: () => boolean;
+        doComplete: () => void;
+        navigateToUrl: string | null;
+        locale: string;
+        mergeData: (data: Record<string, unknown>) => void;
+        clear: (clearData?: boolean, gotoFirstPage?: boolean) => void;
+        getPropertyValue: (name: string) => unknown;
+        setPropertyValue: (name: string, value: unknown) => void;
+        onComplete: IEvent<{ data: Record<string, unknown> }>;
+        onCurrentPageChanged: IEvent<{ oldCurrentPage: { name: string }; newCurrentPage: { name: string }; isNextPage: boolean }>;
+        onValueChanged: IEvent<{ name: string; value: unknown }>;
+        onAfterRenderQuestion: IEvent<{ question: unknown; htmlElement: HTMLElement }>;
+        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }>) => void; question: unknown }>;
+        onDownloadFile: IEvent<{ content: unknown; callback: (status: string, value?: string) => void }>;
+        onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
+    }
+    export class Model implements ISurveyModel {
+        constructor(definition: unknown);
+        data: Record<string, unknown>;
+        currentPageNo: number;
+        completedHtml: string;
+        showCompletedPage: boolean;
+        navigateToUrl: string | null;
+        locale: string;
+        getAllQuestions: () => Array<{ name: string; getType: () => string; value: unknown; readOnly: boolean }>;
+        applyTheme(theme: Record<string, unknown>): void;
+        setVariable(name: string, value: unknown): void;
+        getVariable(name: string): unknown;
+        addNavigationItem(item: { id: string; title: string; action: () => void; visible?: boolean }): void;
+        completeLastPage(): boolean;
+        doComplete(): void;
+        mergeData(data: Record<string, unknown>): void;
+        clear(clearData?: boolean, gotoFirstPage?: boolean): void;
+        getPropertyValue(name: string): unknown;
+        setPropertyValue(name: string, value: unknown): void;
+        onComplete: IEvent<{ data: Record<string, unknown> }>;
+        onCurrentPageChanged: IEvent<{ oldCurrentPage: { name: string }; newCurrentPage: { name: string }; isNextPage: boolean }>;
+        onValueChanged: IEvent<{ name: string; value: unknown }>;
+        onAfterRenderQuestion: IEvent<{ question: unknown; htmlElement: HTMLElement }>;
+        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }>) => void; question: unknown }>;
+        onDownloadFile: IEvent<{ content: unknown; callback: (status: string, value?: string) => void }>;
+        onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
     }
     export const ComponentCollection: {
         Instance: {
-            add: (descriptor: { name: string; title: string; questionJSON: Record<string, unknown> }) => void;
+            add: (descriptor: {
+                name: string;
+                title: string;
+                iconName?: string;
+                questionJSON: Record<string, unknown>;
+                onLoaded?: (question: unknown) => void;
+                onItemValuePropertyChanged?: (q: unknown, options: unknown) => void;
+            }) => void;
         };
     };
     export const Serializer: {
         addProperty: (className: string, descriptor: Record<string, unknown>) => void;
         getProperty: (className: string, name: string) => unknown;
+        removeProperty: (className: string, name: string) => void;
+    };
+    export const surveyLocalization: {
+        defaultLocale: string;
+        currentLocale: string;
+        locales: Record<string, Record<string, string>>;
     };
 }
 
@@ -70,4 +135,37 @@ declare module 'survey-creator-react' {
         saveSurveyFunc: (id: unknown, success: (saved: boolean) => void) => void;
     }
     export const SurveyCreatorComponent: React.ComponentType<{ creator: unknown }>;
+}
+
+// Optional commercial / heavy modules. Declared as `any` so the
+// runtime + dashboard pages can dynamically import them with full
+// TypeScript narrowing on the consumer side, but `tsc --noEmit` in
+// the plugin repo does not require the matching `@types/` to be
+// installed when the operator hasn't opted into the feature.
+declare module 'tabulator-tables' {
+    export const Tabulator: new (element: HTMLElement, options: Record<string, unknown>) => {
+        destroy: () => void;
+        replaceData: (data: Array<Record<string, unknown>>) => Promise<unknown>;
+        download: (format: string, filename: string, options?: Record<string, unknown>) => void;
+        setColumns: (columns: Array<Record<string, unknown>>) => void;
+    };
+}
+
+declare module 'survey-analytics' {
+    export const VisualizationPanel: new (
+        questions: Array<unknown>,
+        data: Array<Record<string, unknown>>,
+        options?: Record<string, unknown>,
+    ) => {
+        render: (element: HTMLElement) => void;
+        destroy: () => void;
+    };
+}
+
+declare module 'survey-pdf' {
+    export class SurveyPDF {
+        constructor(definition: unknown, options: unknown);
+        data: Record<string, unknown>;
+        save(filename: string): void;
+    }
 }

@@ -32,6 +32,7 @@ import {
 import { buildCreatorTheme, buildSurveyJsTheme, useMantineLivePalette } from '../theme/mantineBridge';
 import { getPluginApi } from '../runtime/pluginApi';
 import { isRichTextEditorEnabled, registerTiptapPropertyEditors } from '../creator/richTextEditorAdapter';
+import { registerCustomQuestions } from '../custom-questions/register';
 
 interface ICreatorBridge {
     SurveyCreatorComponent: React.ComponentType<{ creator: unknown }>;
@@ -259,6 +260,28 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             if (pluginApi && isRichTextEditorEnabled(survey?.definition ?? {})) {
                 registerTiptapPropertyEditors(bridge.rawModule as never, pluginApi);
             }
+
+            // Register every plugin-owned custom question type once so
+            // the Creator toolbox shows them. Feature flag gating mirrors
+            // the runtime registration so the Designer and the public
+            // renderer expose the same set of components.
+            const isFlagEnabled = (key: string, fallback: boolean): boolean => {
+                if (!pluginApi || typeof pluginApi.isFeatureEnabled !== 'function') return fallback;
+                try {
+                    return pluginApi.isFeatureEnabled(key);
+                } catch {
+                    return fallback;
+                }
+            };
+            await registerCustomQuestions({
+                flags: {
+                    gpx: isFlagEnabled('gpx', false),
+                    video: isFlagEnabled('video', false),
+                    microphone: isFlagEnabled('microphone', false),
+                    richText: isFlagEnabled('rich-text', true),
+                },
+                richTextEditor: pluginApi?.richTextEditor ?? null,
+            });
             const saveHandler = async (
                 _id: unknown,
                 success: (saved: boolean) => void,

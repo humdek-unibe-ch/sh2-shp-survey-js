@@ -15,7 +15,9 @@
         "build:runtime": "vite build",
         "dev": "vite",
         "dev:runtime": "node ../scripts/dev-runtime.mjs",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "peerDependencies": {
         "react": "^19.2.0",
@@ -42,7 +44,9 @@
         "survey-creator-react": "2.5.25",
         "survey-react-ui": "2.5.25",
         "typescript": "^5.9.3",
-        "vite": "^7.0.0"
+        "vite": "^7.0.0",
+        "vitest": "^2.1.0",
+        "jsdom": "^26.0.0"
     },
     "sideEffects": [
         "**/*.css"

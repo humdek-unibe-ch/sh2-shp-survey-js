@@ -5,37 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 /**
  * Survey dashboard.
  *
- * Renders inside the unified `SurveyAdminPage` host shell as the
- * "Dashboard" tab. Surfaces the headline numbers from
- * `SurveyDashboardService::buildSummary()` and a compact recent-runs
- * list. Charts are intentionally deferred until the host's Mantine
- * Charts adapter lands; this page proves the data shape end-to-end.
+ * Mirrors the legacy plugin's two-tab dashboard: a Tabulator-backed
+ * "Table" view that lists every response (sortable, filterable,
+ * exportable) and a "Dashboard" tab that hosts the SurveyAnalytics
+ * `VisualizationPanel` for per-question charts. A small header card
+ * still surfaces the headline counts so operators have an immediate
+ * answer to "how many responses do I have?" without scrolling.
+ *
+ * Realtime updates: subscribes to `surveys/{surveyId}/responses` so
+ * new rows appear without polling. Filters / search / column layout
+ * persist to localStorage via the table panel.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActionIcon,
     Alert,
     Badge,
+    Button,
     Card,
     Group,
     Loader,
+    Menu,
     SimpleGrid,
     Stack,
+    Tabs,
     Text,
     Title,
     Tooltip,
 } from '@mantine/core';
-import { IconChartBar, IconRefresh } from '@tabler/icons-react';
+import {
+    IconChartBar,
+    IconDownload,
+    IconRefresh,
+    IconTable,
+} from '@tabler/icons-react';
+import { usePluginRealtime } from '@selfhelp/shared/plugin-sdk';
 
-import { fetchDashboard } from '../api/surveys-admin';
+import {
+    buildResponsesExportUrl,
+    fetchDashboard,
+    fetchDashboardResults,
+    type IDashboardResults,
+} from '../api/surveys-admin';
+import { SurveyResultsTable } from './dashboard/SurveyResultsTable';
+import { SurveyAnalyticsPanel } from './dashboard/SurveyAnalyticsPanel';
 
 interface IDashboardSummary {
     id: number;
     surveyId: string;
     completedResponses: number;
+    totalResponses: number;
     currentVersionRevision: number | null;
-    recent: Array<{ id: number; startedAt: string; status: string }>;
 }
 
 export interface ISurveyDashboardPageProps {
@@ -44,16 +65,35 @@ export interface ISurveyDashboardPageProps {
 
 export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}): React.ReactElement {
     const [summary, setSummary] = useState<IDashboardSummary | null>(null);
+    const [results, setResults] = useState<IDashboardResults | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState<string | null>('table');
+
+    const realtime = usePluginRealtime<{ type: string }>({
+        pluginId: 'sh2-shp-survey-js',
+        topic: 'surveys/{surveyId}/responses',
+        topicParams: summary ? { surveyId: String(summary.id) } : {},
+        enabled: Boolean(summary),
+    });
 
     const reload = useCallback(async (): Promise<void> => {
         if (!surveyId) return;
         setBusy(true);
         setError(null);
         try {
-            const data = await fetchDashboard(surveyId);
-            setSummary(data);
+            const [summaryData, resultsData] = await Promise.all([
+                fetchDashboard(surveyId),
+                fetchDashboardResults(surveyId, { limit: 5000 }),
+            ]);
+            setSummary({
+                id: summaryData.id,
+                surveyId: summaryData.surveyId,
+                completedResponses: summaryData.completedResponses,
+                totalResponses: summaryData.totalResponses,
+                currentVersionRevision: summaryData.currentVersionRevision,
+            });
+            setResults(resultsData);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -64,6 +104,22 @@ export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}
     useEffect(() => {
         void reload();
     }, [reload]);
+
+    // Realtime: when a new response arrives, refresh the data.
+    useEffect(() => {
+        if (realtime.data?.type === 'response_submitted') {
+            void reload();
+        }
+    }, [realtime.data, reload]);
+
+    const exportLinks = useMemo(() => {
+        if (!surveyId) return null;
+        return {
+            csv: buildResponsesExportUrl(surveyId, 'csv'),
+            xlsx: buildResponsesExportUrl(surveyId, 'xlsx'),
+            json: buildResponsesExportUrl(surveyId, 'json'),
+        };
+    }, [surveyId]);
 
     if (!surveyId) {
         return (
@@ -85,7 +141,7 @@ export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}
             </Alert>
         );
     }
-    if (!summary) {
+    if (!summary || !results) {
         return (
             <Group gap="xs" justify="center" py="md">
                 <Loader size="sm" />
@@ -98,69 +154,85 @@ export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}
         <Stack gap="md">
             <Group justify="space-between">
                 <Title order={4}>Dashboard</Title>
-                <Tooltip label="Reload">
-                    <ActionIcon
-                        variant="subtle"
-                        onClick={() => void reload()}
-                        loading={busy}
-                        aria-label="Reload"
-                    >
-                        <IconRefresh size={16} />
-                    </ActionIcon>
-                </Tooltip>
+                <Group gap="xs">
+                    {realtime.error ? (
+                        <Badge color="yellow" variant="light">Realtime offline</Badge>
+                    ) : (
+                        <Badge color="green" variant="light">Realtime live</Badge>
+                    )}
+                    <Tooltip label="Reload">
+                        <ActionIcon
+                            variant="subtle"
+                            onClick={() => void reload()}
+                            loading={busy}
+                            aria-label="Reload"
+                        >
+                            <IconRefresh size={16} />
+                        </ActionIcon>
+                    </Tooltip>
+                    {exportLinks !== null && (
+                        <Menu shadow="md" withinPortal>
+                            <Menu.Target>
+                                <Button leftSection={<IconDownload size={16} />} variant="light">
+                                    Export
+                                </Button>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item component="a" href={exportLinks.csv} target="_blank" rel="noopener noreferrer">
+                                    CSV
+                                </Menu.Item>
+                                <Menu.Item component="a" href={exportLinks.xlsx} target="_blank" rel="noopener noreferrer">
+                                    Excel (XLSX)
+                                </Menu.Item>
+                                <Menu.Item component="a" href={exportLinks.json} target="_blank" rel="noopener noreferrer">
+                                    JSON
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+                    )}
+                </Group>
             </Group>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                <Card withBorder padding="lg">
-                    <Stack gap={4}>
-                        <Text c="dimmed" size="sm" tt="uppercase">
-                            Completed responses
-                        </Text>
-                        <Text size="xl" fw={700}>
-                            {summary.completedResponses.toLocaleString()}
-                        </Text>
-                    </Stack>
-                </Card>
-                <Card withBorder padding="lg">
-                    <Stack gap={4}>
-                        <Text c="dimmed" size="sm" tt="uppercase">
-                            Current revision
-                        </Text>
-                        <Text size="xl" fw={700}>
-                            {summary.currentVersionRevision === null
-                                ? '—'
-                                : `v${summary.currentVersionRevision}`}
-                        </Text>
-                    </Stack>
-                </Card>
+
+            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+                <SummaryCard label="Completed responses" value={summary.completedResponses} />
+                <SummaryCard label="Total responses" value={summary.totalResponses} />
+                <SummaryCard
+                    label="Current revision"
+                    value={summary.currentVersionRevision === null ? '—' : `v${summary.currentVersionRevision}`}
+                />
             </SimpleGrid>
 
-            <Card withBorder padding="lg">
-                <Stack gap="sm">
-                    <Title order={5}>Recent runs</Title>
-                    {summary.recent.length === 0 ? (
-                        <Text c="dimmed">No runs yet.</Text>
-                    ) : (
-                        <Stack gap={4}>
-                            {summary.recent.map((row) => (
-                                <Group key={row.id} justify="space-between">
-                                    <Text size="sm">
-                                        Run #{row.id} —{' '}
-                                        <Badge
-                                            variant="light"
-                                            color={row.status === 'completed' ? 'green' : 'yellow'}
-                                        >
-                                            {row.status}
-                                        </Badge>
-                                    </Text>
-                                    <Text size="sm" c="dimmed">
-                                        {new Date(row.startedAt).toLocaleString()}
-                                    </Text>
-                                </Group>
-                            ))}
-                        </Stack>
-                    )}
-                </Stack>
-            </Card>
+            <Tabs value={activeTab} onChange={setActiveTab} keepMounted={false}>
+                <Tabs.List>
+                    <Tabs.Tab value="table" leftSection={<IconTable size={14} />}>
+                        Table
+                    </Tabs.Tab>
+                    <Tabs.Tab value="charts" leftSection={<IconChartBar size={14} />}>
+                        Charts
+                    </Tabs.Tab>
+                </Tabs.List>
+                <Tabs.Panel value="table" pt="md">
+                    <SurveyResultsTable surveyId={surveyId} results={results} />
+                </Tabs.Panel>
+                <Tabs.Panel value="charts" pt="md">
+                    <SurveyAnalyticsPanel results={results} />
+                </Tabs.Panel>
+            </Tabs>
         </Stack>
+    );
+}
+
+function SummaryCard({ label, value }: { label: string; value: number | string }): React.ReactElement {
+    return (
+        <Card withBorder padding="lg">
+            <Stack gap={4}>
+                <Text c="dimmed" size="sm" tt="uppercase">
+                    {label}
+                </Text>
+                <Text size="xl" fw={700}>
+                    {typeof value === 'number' ? value.toLocaleString() : value}
+                </Text>
+            </Stack>
+        </Card>
     );
 }

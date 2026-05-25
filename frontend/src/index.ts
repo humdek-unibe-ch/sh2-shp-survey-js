@@ -30,6 +30,7 @@ SPDX-License-Identifier: MPL-2.0
 
 import 'survey-core/survey-core.css';
 import 'survey-creator-core/survey-creator-core.css';
+import './custom-questions/custom-questions.css';
 
 import { definePlugin } from '@selfhelp/shared/plugin-sdk';
 import type { IPluginApi, IPluginRegistration } from '@selfhelp/shared/plugin-sdk';
@@ -117,6 +118,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
         featureFlags: [
             { key: 'gpx', label: 'GPX question type', defaultEnabled: false },
             { key: 'video', label: 'Video question type', defaultEnabled: false },
+            { key: 'microphone', label: 'Microphone (audio recording) question type', defaultEnabled: false },
             {
                 key: 'rich-text',
                 label: 'Tiptap rich-text (runtime + Creator property editors)',

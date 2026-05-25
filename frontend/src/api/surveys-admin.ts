@@ -251,14 +251,70 @@ export async function fetchDashboard(surveyId: number): Promise<{
     id: number;
     surveyId: string;
     completedResponses: number;
+    totalResponses: number;
     currentVersionRevision: number | null;
-    recent: Array<{ id: number; responseId: string; startedAt: string; status: string }>;
+    recent: Array<{
+        id: number;
+        responseId: string;
+        startedAt: string;
+        completedAt: string | null;
+        status: string;
+        idUser: number | null;
+        visitorId: string | null;
+        idDataRow: number | null;
+    }>;
 }> {
     const res = await fetch(`${BASE}/surveys/${surveyId}/dashboard`, {
         credentials: 'include',
         headers: { Accept: 'application/json' },
     });
     return asJson(res);
+}
+
+export interface IDashboardResults {
+    surveyId: string;
+    definition: Record<string, unknown>;
+    rows: Array<Record<string, unknown>>;
+}
+
+export async function fetchDashboardResults(
+    surveyId: number,
+    params: { limit?: number } = {},
+): Promise<IDashboardResults> {
+    const search = new URLSearchParams();
+    if (params.limit) search.set('limit', String(params.limit));
+    const qs = search.toString() ? `?${search.toString()}` : '';
+    const res = await fetch(`${BASE}/surveys/${surveyId}/dashboard/results${qs}`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson<IDashboardResults>(res);
+}
+
+/**
+ * Trigger a server-side response export (CSV / XLSX / JSON). The
+ * server streams the file via `Content-Disposition: attachment`, so
+ * we just open the URL in a new tab and let the browser handle the
+ * download UX. Returns the URL it kicked so callers can re-use it
+ * for a custom download flow.
+ */
+export function buildResponsesExportUrl(
+    surveyId: number,
+    format: 'csv' | 'xlsx' | 'json',
+): string {
+    const search = new URLSearchParams({ format });
+    return `${BASE}/surveys/${surveyId}/responses/export?${search.toString()}`;
+}
+
+export async function deleteResponse(surveyId: number, rid: string): Promise<void> {
+    const res = await fetch(`${BASE}/surveys/${surveyId}/responses/${encodeURIComponent(rid)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json', ...csrfHeaders() },
+    });
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+    }
 }
 
 export async function fetchResponseDetail(

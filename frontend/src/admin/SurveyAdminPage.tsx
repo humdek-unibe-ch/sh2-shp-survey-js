@@ -61,6 +61,7 @@ import {
     IconClipboardList,
     IconCopy,
     IconDots,
+    IconHistory,
     IconList,
     IconPencil,
     IconPlus,
@@ -85,8 +86,9 @@ import { SurveyDesignerPage } from './SurveyDesignerPage';
 import { SurveyResponsesPage } from './SurveyResponsesPage';
 import { SurveyDashboardPage } from './SurveyDashboardPage';
 import { SurveySettingsPage } from './SurveySettingsPage';
+import { SurveyVersionsPage } from './SurveyVersionsPage';
 
-type TView = 'list' | 'designer' | 'responses' | 'dashboard' | 'settings';
+type TView = 'list' | 'designer' | 'responses' | 'dashboard' | 'versions' | 'settings';
 
 interface IUrlState {
     view: TView;
@@ -97,6 +99,7 @@ const VIEWS_REQUIRING_SURVEY: ReadonlySet<TView> = new Set<TView>([
     'designer',
     'responses',
     'dashboard',
+    'versions',
     'settings',
 ]);
 
@@ -106,7 +109,7 @@ function readUrlState(): IUrlState {
     }
     const search = new URLSearchParams(window.location.search);
     const rawView = (search.get('view') ?? 'list') as TView;
-    const view: TView = (['list', 'designer', 'responses', 'dashboard', 'settings'] as const).includes(
+    const view: TView = (['list', 'designer', 'responses', 'dashboard', 'versions', 'settings'] as const).includes(
         rawView,
     )
         ? rawView
@@ -213,6 +216,13 @@ export function SurveyAdminPage(): React.ReactElement {
                     >
                         Dashboard
                     </Tabs.Tab>
+                    <Tabs.Tab
+                        value="versions"
+                        leftSection={<IconHistory size={14} />}
+                        disabled={surveyId === null}
+                    >
+                        Versions
+                    </Tabs.Tab>
                     <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />} disabled={surveyId === null}>
                         Settings
                     </Tabs.Tab>
@@ -231,6 +241,9 @@ export function SurveyAdminPage(): React.ReactElement {
                 </Tabs.Panel>
                 <Tabs.Panel value="dashboard" pt="md">
                     {surveyId !== null && <SurveyDashboardPage surveyId={surveyId} />}
+                </Tabs.Panel>
+                <Tabs.Panel value="versions" pt="md">
+                    {surveyId !== null && <SurveyVersionsPage surveyId={surveyId} />}
                 </Tabs.Panel>
                 <Tabs.Panel value="settings" pt="md">
                     {surveyId !== null && (
