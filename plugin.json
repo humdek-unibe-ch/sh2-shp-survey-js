@@ -105,11 +105,48 @@
             "defaultRoles": [
                 "admin"
             ]
+        },
+        {
+            "key": "surveyjs.surveys.delete-responses",
+            "description": "Delete individual survey responses.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.export-csv",
+            "description": "Export survey responses as CSV.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.export-xlsx",
+            "description": "Export survey responses as Excel (XLSX).",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.export-json",
+            "description": "Export survey responses as JSON.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
+            "key": "surveyjs.surveys.upload-files",
+            "description": "Upload files attached to public survey submissions (file/GPX/microphone questions).",
+            "defaultRoles": [
+                "admin"
+            ]
         }
     ],
     "dataAccess": {
         "ownedTables": [
             "survey_answer_links",
+            "survey_files",
+            "survey_response_drafts",
             "survey_runs",
             "survey_versions",
             "surveys"
@@ -151,6 +188,11 @@
         {
             "key": "video",
             "description": "Enable video question type.",
+            "defaultEnabled": false
+        },
+        {
+            "key": "microphone",
+            "description": "Enable microphone (audio recording) question type.",
             "defaultEnabled": false
         },
         {
@@ -333,6 +375,30 @@
             "permission": "surveyjs.surveys.export-pdf"
         },
         {
+            "name": "surveyjs_admin_response_delete",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
+            "methods": [
+                "DELETE"
+            ],
+            "permission": "surveyjs.surveys.delete-responses"
+        },
+        {
+            "name": "surveyjs_admin_responses_export",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.view-responses"
+        },
+        {
+            "name": "surveyjs_admin_dashboard_results",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard/results",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.view-responses"
+        },
+        {
             "name": "surveyjs_admin_license_key",
             "path": "/admin/plugins/sh2-shp-survey-js/license-key",
             "methods": [
@@ -360,6 +426,62 @@
             "path": "/plugins/sh2-shp-survey-js/published/{key}/submit",
             "methods": [
                 "POST"
+            ]
+        },
+        {
+            "name": "surveyjs_public_progress_get",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
+            "methods": [
+                "GET"
+            ]
+        },
+        {
+            "name": "surveyjs_public_progress_put",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
+            "methods": [
+                "PUT"
+            ]
+        },
+        {
+            "name": "surveyjs_public_progress_delete",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
+            "methods": [
+                "DELETE"
+            ]
+        },
+        {
+            "name": "surveyjs_public_edit",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/edit",
+            "methods": [
+                "GET"
+            ]
+        },
+        {
+            "name": "surveyjs_public_upload",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/files",
+            "methods": [
+                "POST"
+            ]
+        },
+        {
+            "name": "surveyjs_public_file_delete",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/files/{fileId}",
+            "methods": [
+                "DELETE"
+            ]
+        },
+        {
+            "name": "surveyjs_public_file_download",
+            "path": "/plugins/sh2-shp-survey-js/files/{fileId}",
+            "methods": [
+                "GET"
+            ]
+        },
+        {
+            "name": "surveyjs_public_choices",
+            "path": "/plugins/sh2-shp-survey-js/published/{key}/choices/{token}",
+            "methods": [
+                "GET"
             ]
         }
     ],
