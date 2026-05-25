@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Only the subset CMS authors use in labels is supported:
  *   - paragraphs separated by blank lines,
- *   - inline `**bold**`, `*italic*`,
+ *   - inline `**bold**`, `*italic*`, `` `code` ``,
  *   - inline links `[text](https://…)` (https/http/mailto/tel/`/`),
  *   - unordered lists (`- item`).
  *
@@ -30,7 +30,17 @@ function escapeHtml(value: string): string {
 }
 
 function inline(value: string): string {
+    // Escape FIRST so the body of an inline-code span cannot smuggle
+    // raw HTML through (e.g. `<script>` inside backticks must still
+    // render as text). Backtick is not in escapeMap, so the regex
+    // below still matches the same backtick characters the user
+    // typed.
     let out = escapeHtml(value);
+    // Inline code: `text` → <code>text</code>. Anchored with negative
+    // look-arounds so we do not match the opening backtick of a
+    // double-backtick `` literal `` form (intentionally unsupported
+    // for status labels) and never produce empty `<code></code>`.
+    out = out.replace(/(^|[^`])`([^`\r\n]+?)`(?!`)/g, '$1<code>$2</code>');
     out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
     out = out.replace(
