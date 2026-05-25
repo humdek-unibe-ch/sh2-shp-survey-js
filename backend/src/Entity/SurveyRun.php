@@ -28,6 +28,7 @@ use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 #[ORM\Index(columns: ['id_survey_versions'], name: 'idx_survey_runs_survey_versions')]
 #[ORM\Index(columns: ['id_data_rows'], name: 'idx_survey_runs_data_rows')]
 #[ORM\Index(columns: ['response_id'], name: 'idx_survey_runs_response_id')]
+#[ORM\Index(columns: ['id_surveys', 'visitor_id'], name: 'idx_survey_runs_surveys_visitor')]
 class SurveyRun
 {
     public const STATUS_IN_PROGRESS = 'in_progress';
@@ -52,6 +53,15 @@ class SurveyRun
 
     #[ORM\Column(name: 'id_users', type: 'integer', nullable: true)]
     private ?int $idUser = null;
+
+    /**
+     * Anonymous-user stable id derived from the signed visitor cookie
+     * (`_sh_sjs_vid`). Stored alongside `id_users` so the
+     * `once_per_user` guard can dedupe unauthenticated repeat
+     * submissions for the same browser/profile.
+     */
+    #[ORM\Column(name: 'visitor_id', type: 'string', length: 64, nullable: true)]
+    private ?string $visitorId = null;
 
     /** Foreign key into core `data_rows.id`. Kept as a plain int because the core repo owns the canonical mapping. */
     #[ORM\Column(name: 'id_data_rows', type: 'integer', nullable: true)]
@@ -79,12 +89,18 @@ class SurveyRun
     #[ORM\OneToMany(mappedBy: 'run', targetEntity: SurveyAnswerLink::class, cascade: ['persist', 'remove'])]
     private Collection $answerLinks;
 
-    public function __construct(Survey $survey, SurveyVersion $version, string $responseId, ?int $idUser)
-    {
+    public function __construct(
+        Survey $survey,
+        SurveyVersion $version,
+        string $responseId,
+        ?int $idUser,
+        ?string $visitorId = null,
+    ) {
         $this->survey = $survey;
         $this->version = $version;
         $this->responseId = $responseId;
         $this->idUser = $idUser;
+        $this->visitorId = $visitorId;
         $this->status = self::STATUS_IN_PROGRESS;
         $this->startedAt = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $this->answerLinks = new ArrayCollection();
@@ -113,6 +129,17 @@ class SurveyRun
     public function getIdUser(): ?int
     {
         return $this->idUser;
+    }
+
+    public function getVisitorId(): ?string
+    {
+        return $this->visitorId;
+    }
+
+    public function setVisitorId(?string $visitorId): self
+    {
+        $this->visitorId = $visitorId;
+        return $this;
     }
 
     public function getIdDataRow(): ?int
