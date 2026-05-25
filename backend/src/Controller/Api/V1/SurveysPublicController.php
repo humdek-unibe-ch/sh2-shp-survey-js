@@ -161,7 +161,12 @@ final class SurveysPublicController
         try {
             $run = $this->responseService->submit($survey, $answers, $userId, $visitorId, $enforce);
         } catch (SurveySubmissionRejectedException $e) {
-            $status = $e->reason === SurveySubmissionRejectedException::REASON_AUTH_REQUIRED ? 401 : 409;
+            $status = match ($e->reason) {
+                SurveySubmissionRejectedException::REASON_AUTH_REQUIRED => 401,
+                SurveySubmissionRejectedException::REASON_EDIT_FORBIDDEN => 403,
+                SurveySubmissionRejectedException::REASON_EDIT_NOT_FOUND => 404,
+                default => 409,
+            };
             $response->setData([
                 'error' => $e->getMessage(),
                 'reason' => $e->reason,

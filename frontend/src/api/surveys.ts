@@ -91,6 +91,17 @@ export interface ISubmissionEnforcePayload {
     windowStart?: string | null;
     windowEnd?: string | null;
     responseId?: string;
+    /**
+     * When true, the backend updates the existing run identified by
+     * `responseId` in place instead of creating a fresh one. Used by
+     * the runtime when the participant is editing a previously
+     * submitted response (`?record_id=…`).
+     *
+     * Without this flag the backend silently generates a new
+     * `responseId` and writes a duplicate row, which breaks the
+     * legacy plugin's "edit" parity.
+     */
+    editMode?: boolean;
     progress?: Record<string, unknown>;
 }
 

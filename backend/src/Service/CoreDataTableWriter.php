@@ -41,6 +41,7 @@ final class CoreDataTableWriter implements DataTableWriterInterface
         array $cells,
         ?int $userId,
         string $responseId,
+        ?int $existingDataRowId = null,
     ): DataTableWriteResult {
         $tableName = $this->getDataTableName($survey);
         $this->ensureDataTableExists($tableName, $survey);
@@ -63,7 +64,7 @@ final class CoreDataTableWriter implements DataTableWriterInterface
             $tableName,
             $data,
             $userId === null ? self::TRANSACTION_BY_ANONYMOUS_USER : self::TRANSACTION_BY_USER,
-            null,
+            $existingDataRowId,
             false,
         );
 

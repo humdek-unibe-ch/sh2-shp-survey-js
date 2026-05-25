@@ -24,6 +24,19 @@ final class SurveySubmissionRejectedException extends \RuntimeException
     public const REASON_WINDOW_EXHAUSTED = 'already_submitted_in_window';
     public const REASON_AUTH_REQUIRED = 'authentication_required';
 
+    /**
+     * Edit-mode submit referenced a responseId that does not exist
+     * for this survey. Mapped to HTTP 404 by the public controller.
+     */
+    public const REASON_EDIT_NOT_FOUND = 'edit_target_not_found';
+
+    /**
+     * Edit-mode submit referenced an existing response not owned by
+     * the caller (different user id and different visitor cookie).
+     * Mapped to HTTP 403 by the public controller.
+     */
+    public const REASON_EDIT_FORBIDDEN = 'edit_forbidden';
+
     public function __construct(
         public readonly string $reason,
         string $message,

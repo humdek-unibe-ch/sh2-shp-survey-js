@@ -31,7 +31,8 @@ final class NullDataTableWriter implements DataTableWriterInterface
         array $cells,
         ?int $userId,
         string $responseId,
+        ?int $existingDataRowId = null,
     ): DataTableWriteResult {
-        return new DataTableWriteResult(0);
+        return new DataTableWriteResult($existingDataRowId ?? 0);
     }
 }

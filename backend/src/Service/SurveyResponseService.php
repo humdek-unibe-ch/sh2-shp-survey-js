@@ -13,7 +13,9 @@ use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyAnswerLink;
 use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
 use Humdek\SurveyJsBundle\Entity\SurveyRun;
+use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
+use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyResponseDraftRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 
@@ -38,6 +40,7 @@ final class SurveyResponseService
         private readonly DataTableWriterInterface $writer,
         private readonly SurveyRunRepository $runs,
         private readonly SurveyResponseDraftRepository $drafts,
+        private readonly SurveyAnswerLinkRepository $answerLinks,
         private readonly SurveyFileStorage $fileStorage,
     ) {
     }
@@ -50,6 +53,7 @@ final class SurveyResponseService
      *     windowStart?: string,
      *     windowEnd?: string,
      *     responseId?: string,
+     *     editMode?: bool,
      *     progress?: array<string, mixed>,
      * } $enforce
      *
@@ -65,6 +69,10 @@ final class SurveyResponseService
         $version = $survey->getCurrentVersion();
         if ($version === null) {
             throw new \DomainException(sprintf('Survey "%s" has no published version.', $survey->getSurveyId()));
+        }
+
+        if ((bool) ($enforce['editMode'] ?? false)) {
+            return $this->updateExistingRun($survey, $version, $answers, $userId, $visitorId, $enforce);
         }
 
         $this->guardAgainstReSubmission($survey, $userId, $visitorId, $enforce);
@@ -107,6 +115,105 @@ final class SurveyResponseService
             $this->realtime->surveyResponseSubmitted($survey, $run, $userId);
             return $run;
         });
+    }
+
+    /**
+     * Update-in-place path for edit-mode submissions.
+     *
+     * Mirrors the legacy plugin's "edit record" flow: the existing
+     * `SurveyRun` is kept (id + responseId preserved), the data-table
+     * row is updated in place, and the answer links are replaced.
+     * Once-per-user is intentionally skipped — the caller already has
+     * a completed run on this survey; that is the precondition for
+     * editing it.
+     *
+     * @param array<string, mixed>                                     $answers
+     * @param array{responseId?: string, progress?: array<string, mixed>} $enforce
+     *
+     * @throws SurveySubmissionRejectedException
+     */
+    private function updateExistingRun(
+        Survey $survey,
+        SurveyVersion $version,
+        array $answers,
+        ?int $userId,
+        ?string $visitorId,
+        array $enforce,
+    ): SurveyRun {
+        $candidate = $enforce['responseId'] ?? null;
+        if (!is_string($candidate) || $candidate === '') {
+            throw new SurveySubmissionRejectedException(
+                SurveySubmissionRejectedException::REASON_EDIT_NOT_FOUND,
+                'Edit mode requires the responseId of an existing run.',
+            );
+        }
+
+        $existing = $this->runs->findOneByResponseId($candidate);
+        if ($existing === null || $existing->getSurvey()->getId() !== $survey->getId()) {
+            throw new SurveySubmissionRejectedException(
+                SurveySubmissionRejectedException::REASON_EDIT_NOT_FOUND,
+                sprintf('No existing response "%s" to edit.', $candidate),
+            );
+        }
+        if (!$this->runBelongsTo($existing, $userId, $visitorId)) {
+            throw new SurveySubmissionRejectedException(
+                SurveySubmissionRejectedException::REASON_EDIT_FORBIDDEN,
+                'You do not own the response being edited.',
+            );
+        }
+
+        $normalized = $this->normalizer->normalize($version, $answers);
+        $progress = is_array($enforce['progress'] ?? null) ? $enforce['progress'] : [];
+        $progress['answered'] = count($normalized);
+
+        return $this->em->wrapInTransaction(function () use ($survey, $version, $normalized, $existing, $userId, $progress): SurveyRun {
+            foreach ($this->answerLinks->findForRun($existing) as $link) {
+                $this->em->remove($link);
+            }
+            $this->em->flush();
+
+            foreach ($normalized as $entry) {
+                $link = new SurveyAnswerLink(
+                    $existing,
+                    $entry['name'],
+                    $entry['type'],
+                    $this->stringifyAnswerValue($entry['value']),
+                );
+                $link->setSanitizedHtml($entry['sanitizedHtml']);
+                $this->em->persist($link);
+            }
+
+            $writeResult = $this->writer->writeRow(
+                $survey,
+                $version,
+                $normalized,
+                $userId,
+                $existing->getResponseId(),
+                $existing->getIdDataRow(),
+            );
+            $existing->setIdDataRow($writeResult->idDataRow);
+            $existing->setProgress($progress);
+            // Status was already COMPLETED for any editable run;
+            // setStatus only refreshes `completedAt` on the first
+            // COMPLETED transition, so calling it here intentionally
+            // preserves the original submission timestamp.
+            $existing->setStatus(SurveyRun::STATUS_COMPLETED);
+            $this->em->flush();
+
+            $this->realtime->surveyResponseSubmitted($survey, $existing, $userId);
+            return $existing;
+        });
+    }
+
+    private function runBelongsTo(SurveyRun $run, ?int $userId, ?string $visitorId): bool
+    {
+        if ($userId !== null && $run->getIdUser() === $userId) {
+            return true;
+        }
+        if ($visitorId !== null && $visitorId !== '' && $run->getVisitorId() === $visitorId) {
+            return true;
+        }
+        return false;
     }
 
     /**

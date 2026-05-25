@@ -22,11 +22,15 @@ interface DataTableWriterInterface
 {
     /**
      * @param list<array{name:string, type:string, value:mixed, sanitizedHtml:bool}> $cells
-     * @param string $responseId the SurveyJS `R_...` response id that is also persisted on
-     *                           `survey_runs.response_id`; the writer stores it inside the
-     *                           target `data_tables` row (`response_id` cell) so the CMS
-     *                           Data Management browser can trace any row back to a survey
-     *                           response without joining the plugin-owned tables.
+     * @param string   $responseId        the SurveyJS `R_...` response id that is also persisted on
+     *                                    `survey_runs.response_id`; the writer stores it inside the
+     *                                    target `data_tables` row (`response_id` cell) so the CMS
+     *                                    Data Management browser can trace any row back to a survey
+     *                                    response without joining the plugin-owned tables.
+     * @param ?int     $existingDataRowId when non-null, the writer updates that exact `data_rows`
+     *                                    row in place (used by edit-mode submit so a re-submission
+     *                                    does not duplicate rows in `data_tables`). When null,
+     *                                    the writer inserts a fresh row.
      */
     public function writeRow(
         Survey $survey,
@@ -34,5 +38,6 @@ interface DataTableWriterInterface
         array $cells,
         ?int $userId,
         string $responseId,
+        ?int $existingDataRowId = null,
     ): DataTableWriteResult;
 }

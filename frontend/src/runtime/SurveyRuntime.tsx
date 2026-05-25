@@ -321,6 +321,7 @@ export function SurveyRuntime({
                 pageNo: sender.currentPageNo,
                 triggerType: 'finished',
                 meta: metaRef.current,
+                editMode: editModeResponseIdRef.current !== null,
             });
             void submitSurveyAnswers(published.surveyId, sender.data, enforce)
                 .then((result) => {
@@ -579,7 +580,7 @@ function extractDraftData(payload: Record<string, unknown>): Record<string, unkn
 function buildEnforcePayload(
     config: IRuntimeSectionConfig,
     responseId: string | null,
-    progress: { pageNo: number; triggerType: string; meta: ISurveyMeta | null },
+    progress: { pageNo: number; triggerType: string; meta: ISurveyMeta | null; editMode?: boolean },
 ): ISubmissionEnforcePayload {
     return {
         oncePerUser: config.oncePerUser,
@@ -588,6 +589,7 @@ function buildEnforcePayload(
         windowStart: config.oncePerSchedule ? scheduleBoundaryIso(config.startTime) : null,
         windowEnd: config.oncePerSchedule ? scheduleBoundaryIso(config.endTime) : null,
         responseId: responseId ?? undefined,
+        editMode: progress.editMode ?? false,
         progress: {
             pageNo: progress.pageNo,
             triggerType: progress.triggerType,
