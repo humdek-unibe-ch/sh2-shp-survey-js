@@ -39,7 +39,12 @@ export interface IAdminSurveyVersion {
     definitionSha256: string;
 }
 
-const BASE = '/api/admin/plugins/sh2-shp-survey-js';
+// Matches the host's ApiRouteLoader prefix
+// (`/cms-api/<version>` + the contributed path). Keep this in sync
+// with backend/src/EventSubscriber/SurveyJsApiRouteSubscriber.php
+// and plugin.json#apiRoutes — those declare paths starting at
+// `/admin/plugins/...`, the host prepends `/cms-api/v1`.
+const BASE = '/cms-api/v1/admin/plugins/sh2-shp-survey-js';
 
 function csrfHeaders(): Record<string, string> {
     if (typeof document === 'undefined') {
@@ -297,13 +302,16 @@ export async function fetchDashboardResults(
  * we just open the URL in a new tab and let the browser handle the
  * download UX. Returns the URL it kicked so callers can re-use it
  * for a custom download flow.
+ *
+ * Each format is a distinct backend route so the host's
+ * `ApiSecurityListener` can gate them by the format-specific
+ * permission (`surveyjs.surveys.export-csv` / `-xlsx` / `-json`).
  */
 export function buildResponsesExportUrl(
     surveyId: number,
     format: 'csv' | 'xlsx' | 'json',
 ): string {
-    const search = new URLSearchParams({ format });
-    return `${BASE}/surveys/${surveyId}/responses/export?${search.toString()}`;
+    return `${BASE}/surveys/${surveyId}/responses/export/${format}`;
 }
 
 export async function deleteResponse(surveyId: number, rid: string): Promise<void> {

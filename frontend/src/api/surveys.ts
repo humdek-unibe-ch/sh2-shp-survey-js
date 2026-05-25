@@ -100,7 +100,12 @@ export interface ISubmissionError extends Error {
     body?: unknown;
 }
 
-const BASE = '/api/plugins/sh2-shp-survey-js';
+// Matches the host's ApiRouteLoader prefix
+// (`/cms-api/<version>` + the contributed path). Keep this in sync
+// with backend/src/EventSubscriber/SurveyJsApiRouteSubscriber.php
+// and plugin.json#apiRoutes — those declare paths starting at
+// `/plugins/...`, the host prepends `/cms-api/v1`.
+const BASE = '/cms-api/v1/plugins/sh2-shp-survey-js';
 
 function csrfHeaders(): Record<string, string> {
     if (typeof document === 'undefined') {

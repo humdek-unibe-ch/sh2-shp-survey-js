@@ -13,9 +13,10 @@ SPDX-License-Identifier: MPL-2.0
  * `backend/src/Migrations/Version20260522063620.php` seeds the field type
  * and links it to the `survey-js` field on the `surveyjs` style.
  *
- * The picker hits the plugin's own admin API (`/api/admin/plugins/sh2-shp
- * -survey-js/surveys`) - identical contract to the legacy host
- * implementation that used to live in `FieldRenderer.tsx`. The value
+ * The picker hits the plugin's own admin API
+ * (`/cms-api/v1/admin/plugins/sh2-shp-survey-js/surveys`) — identical
+ * contract to the legacy host implementation that used to live in
+ * `FieldRenderer.tsx`. The value
  * persisted on the section field is the generated public survey id
  * (`SV_...`), which is also the public runtime submission key.
  */
