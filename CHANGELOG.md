@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Legacy `sh-shp-survey_js` plugin parity: anonymous submissions via
+  signed `_sh_sjs_vid` visitor cookie (`VisitorIdResolver`), cross-device
+  draft autosave with server-side `survey_response_drafts` table +
+  client-side `LocalDraftStore`, client-side `CountdownTimer` timeout
+  enforcement, schedule (`start_time`/`end_time`) gating, edit mode via
+  `?record_id=`, URL-parameter forwarding through `extra_param_<key>`
+  SurveyJS variables, and the `label_survey_done` / `label_survey_not_active`
+  Markdown messages.
+- Secure file pipeline: new `SurveyFile` entity + `SurveyFileStorage`
+  (private uploads under `var/plugin-data/sh2-shp-survey-js/uploads/`),
+  HMAC-signed download URLs via `SignedFileUrlService`, SurveyJS
+  upload/download/clear events wired through the plugin's secure
+  `/files` endpoints, and graceful promotion of draft files to runs on
+  submission.
+- All four custom question types: rich-text (via the host's Tiptap
+  adapter), video (with required-watch segment enforcement), GPX
+  (file picker → in-browser parse → Leaflet preview → upload), and
+  microphone (`MediaRecorder` → upload pipeline). Each is gated by an
+  individual feature flag so existing surveys keep working.
+- Server-side `{{token}}` interpolation (`SurveyDataInterpolator`) with
+  JSON-injection-safe substitution. Tokens declared in `data_config` /
+  `dynamic_replacement` are replaced inline; URL params can override
+  declared tokens but cannot inject new ones.
+- Server-side export endpoints for CSV (UTF-8 BOM, Excel-friendly
+  delimiters), XLSX (when `phpoffice/phpspreadsheet` is installed) and
+  JSON (streaming so wide surveys do not buffer in PHP memory). Per-
+  response PDF endpoint (`/responses/{rid}/pdf`) uses `dompdf/dompdf`
+  when available, gracefully falls back to a print-friendly HTML page
+  otherwise.
+- Runtime "Save as PDF" navigation button gated by the `save_pdf`
+  section field. Uses `survey-pdf` when installed, falls back to the
+  browser print dialog so the button keeps working everywhere.
+- Dashboard rewrite: Tabulator-backed results table with persisted
+  column layout per survey, SurveyAnalytics chart panel (with
+  graceful fallback when the optional `survey-analytics` package isn't
+  installed), Mantine-themed export menu, realtime refresh on
+  `surveys/{surveyId}/responses`, and a new "Versions" tab listing
+  every published revision with restore support.
+- Responses page enhancements: filter input, per-row delete + open-PDF
+  actions, server-side export menu, realtime live updates.
+- `surveyjs.surveys.delete-responses`, `surveyjs.surveys.export-csv|
+  xlsx|json`, `surveyjs.surveys.upload-files` permissions wired
+  through `plugin.json` and seeded by Doctrine migration
+  `Version20260525200000`.
+- Backend tests under `backend/tests/Service/` for
+  `SignedFileUrlService`, `SurveyDataInterpolator`, and
+  `VisitorIdResolver`. Frontend Vitest scaffolding under
+  `frontend/tests/` covers `markdown`, `LocalDraftStore`,
+  `CountdownTimer`, and `extractUrlParams`.
+- QA scenarios catalogue at `docs/qa-scenarios.md` documenting every
+  legacy-parity behaviour we expect operators to validate against.
+
 ## [0.2.2] — Unreleased
 
 ### Added
