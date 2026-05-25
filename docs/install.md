@@ -15,7 +15,7 @@ You **don't** need to restart the backend or rebuild the frontend by hand — ev
 | Install your own local copy that lives on disk             | **Option 2** — UI → Install plugin button                        |
 | Install from a terminal in one command                     | **Option 3** — `node scripts/install-local.mjs` (every OS)       |
 
-> The plugin is currently at version **0.1.0** (pre-release).
+> The plugin is currently at version **0.2.2** (pre-release).
 
 ---
 
@@ -134,12 +134,21 @@ By default (`.shplugin` upload mode):
 
 With `--symlink` (dev fast-path):
 
-1. Adds a Composer **path repository** to the host backend so PHP
-   `vendor/` resolves to the plugin's `backend/` folder.
-2. Runs `composer require humdek/sh2-shp-survey-js:@dev`.
-3. Calls `php bin/console selfhelp:plugin:install <path>/plugin.json` —
-   the same command Options 1 and 2 trigger from the UI.
-4. Drains the Messenger queue.
+1. Writes a temporary development `plugin.json` whose
+   `backend.composer.repository` points at this checkout's `backend/`
+   folder.
+2. Calls `php bin/console selfhelp:plugin:install <temp>/plugin.json`
+   or `selfhelp:plugin:update` if the plugin is already installed.
+3. Drains the Messenger queue. The host worker installs the backend
+   package into `var/plugin-composer/`, not the host root Composer
+   project.
+4. Enables the plugin.
+5. Prints the runtime dev-server command.
+
+The dev fast-path deliberately does **not** edit
+`sh-selfhelp_backend/composer.json`, `composer.lock`, `symfony.lock`, or
+`config/bundles.php`. Those files are release-critical host files and
+must not receive local plugin path repositories.
 
 ### Quick start (every OS)
 
@@ -155,8 +164,11 @@ cp .env.example .env
 # 2. Default flow — .shplugin upload + queue drain:
 node scripts/install-local.mjs
 
-# Or, the dev fast-path that wires composer + symlinks:
+# Or, the dev fast-path that uses the isolated plugin Composer root:
 node scripts/install-local.mjs --symlink
+
+# Keep this running while editing the plugin UI:
+npm --prefix frontend run dev:runtime
 ```
 
 `SELFHELP_ADMIN_TOKEN` can also be passed via `--token <jwt>`; real
@@ -181,7 +193,7 @@ SELFHELP_API_BASE=http://localhost:8000
 
 | Flag                  | Effect                                                                     |
 | --------------------- | -------------------------------------------------------------------------- |
-| `--symlink`           | Skip the upload, wire the Composer path repo + invoke the CLI installer.   |
+| `--symlink`           | Skip the upload, attach the local backend through the isolated plugin Composer root, and invoke the CLI installer/updater. |
 | `--skip-build`        | Skip the `npm run build:runtime` step inside `build-shplugin.mjs`.         |
 | `--skip-consume`      | Skip `messenger:consume`. Useful if a long-running worker is already up.   |
 | `--token <jwt>`       | Admin JWT (overrides `SELFHELP_ADMIN_TOKEN`).                              |
@@ -193,11 +205,15 @@ SELFHELP_API_BASE=http://localhost:8000
 
 | Layer    | How it picks up the change                                                   |
 | -------- | ---------------------------------------------------------------------------- |
-| Backend  | Symfony auto-reloads `config/selfhelp_plugin_bundles.php` on the next request |
-| Frontend | Next.js HMR picks up the npm link instantly; a hard refresh of `/admin` is enough |
+| Backend  | `--symlink` registers the bundle/routes/tables once through `var/plugin-composer`; restart only after backend PHP changes that affect boot-time services |
+| Frontend | `npm --prefix frontend run dev:runtime` serves the Vite watch build and emits reload events consumed by the host PluginRuntime |
 | Mobile   | Press `r` in the Metro/Expo terminal to reload                                |
 
-You should **not** need to manually `composer dump-autoload`, `php bin/console cache:clear`, or `npm run build` in the host repos — the install command already does that for you.
+After the one-time attach you should **not** need to rebuild an archive,
+reinstall the plugin, or restart the host frontend for normal SurveyJS
+admin UI edits. The browser imports
+`http://localhost:5174/sh2-shp-survey-js/plugin.esm.js` and reloads it
+when the plugin dev runtime emits a change event.
 
 ---
 
@@ -255,7 +271,7 @@ curl --fail-with-body \
 
 Open `http://localhost:3000/admin/plugins`. You should see:
 
-- A row with **SurveyJS** version `0.1.0` in the **Installed** tab.
+- A row with **SurveyJS** version `0.2.2` in the **Installed** tab.
 - Status = `enabled`.
 - Compatibility = `ok`.
 
@@ -275,11 +291,11 @@ It checks: lock-file parity, Composer/npm package presence, Mercure reachability
 
 | Problem                                                          | Fix                                                                                             |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **"Composer not found"** when running `install-local.mjs`          | Install Composer 2 globally; the `--symlink` mode shells out to the host's `composer` binary.   |
-| **Frontend tab still shows the plugin as missing**                | Hard-refresh the admin page (`Ctrl+Shift+R`). The Next.js dev server picks up `npm link` instantly but the browser may have cached the old bundle. |
+| **"Composer not found"** during queue drain                        | Install Composer 2 globally; the host Messenger worker uses Composer inside `var/plugin-composer/`. |
+| **Frontend tab still shows the plugin as missing**                | Start `npm --prefix frontend run dev:runtime`, verify `http://localhost:5174/sh2-shp-survey-js/plugin.esm.js` loads, then hard-refresh the admin page (`Ctrl+Shift+R`). |
 | **Backend says "Class … not found"** after install               | Restart the Symfony dev server once so the Composer autoloader regenerates.                     |
 | **Available tab is empty even though a Source is configured**     | Verify the registry's `<URL>/registry.json` endpoint returns valid JSON. The "Available" tab calls `GET /cms-api/v1/admin/plugins/available` which walks every enabled Source. |
-| **Doctor reports `npm_package_not_installed`**                    | The host frontend `node_modules` does not contain the plugin yet. Run `npm install` in `sh-selfhelp_frontend` OR re-run `node scripts/install-local.mjs --symlink` so it re-links. |
+| **Doctor reports the plugin backend package is missing**           | Re-run `node scripts/install-local.mjs --symlink` and drain the `plugin_ops` queue so `var/plugin-composer/` is rebuilt. |
 | **Admin → Plugins page shows "Plugins" but no data**             | The current user is missing the `admin.plugins.manage` permission. Add it to the admin role.   |
 
 ---
@@ -288,7 +304,7 @@ It checks: lock-file parity, Composer/npm package presence, Mercure reachability
 
 When the install completes, the host writes the following:
 
-- **Database**: 4 plugin-owned tables (`surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`) and 9 plugin-owned `data_tables` prefixed with `sh2_surveyjs_`.
+- **Database**: 4 plugin-owned tables (`surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`). `surveys.survey_id` and `survey_runs.response_id` are generated stable keys. Runtime submissions create plugin-owned host `data_tables` on demand with the `sh2_surveyjs_` prefix.
 - **Permissions**: `surveyjs.surveys.manage`, `surveyjs.surveys.view-responses`, `surveyjs.surveys.export-pdf` (assigned to admin role by default).
 - **Lookups**: `surveyJsTheme` (default / modern / high-contrast).
 - **Styles**: `surveyjs`, `gpxMap` (available in the page builder).

@@ -22,10 +22,14 @@ SPDX-License-Identifier: MPL-2.0
  *        finalised before the script exits.
  *
  *   --symlink (dev fast-path)
- *     1. composer config repositories.<id> path <plugin>/backend
- *     2. composer require humdek/<id>:@dev
- *     3. php bin/console selfhelp:plugin:install <plugin.json>
- *     4. messenger:consume (unless --skip-consume)
+ *     1. write a temporary plugin.json with backend.composer.repository
+ *        pointing at <plugin>/backend
+ *     2. php bin/console selfhelp:plugin:install|update <temp plugin.json>
+ *     3. messenger:consume (unless --skip-consume)
+ *
+ * The dev fast-path intentionally does NOT touch the host root
+ * composer.json/composer.lock. The host worker installs the plugin into
+ * var/plugin-composer/, the isolated plugin Composer root.
  *
  * Required env (default flow): SELFHELP_ADMIN_TOKEN (or --token).
  *
@@ -34,7 +38,8 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -72,7 +77,7 @@ async function main(opts) {
     step(`Mode:          ${opts.symlink ? 'symlink (dev)' : '.shplugin upload'}`);
 
     if (opts.symlink) {
-        await runSymlinkMode({ pluginId, manifestPath, backendPath, opts });
+        await runSymlinkMode({ pluginId, version, manifestPath, backendPath, opts });
         return;
     }
 
@@ -110,33 +115,40 @@ async function main(opts) {
     process.stdout.write(`\nDONE.\nVerify: ${apiBase}/admin/plugins\n`);
 }
 
-async function runSymlinkMode({ pluginId, manifestPath, backendPath, opts }) {
+async function runSymlinkMode({ pluginId, version, manifestPath, backendPath, opts }) {
     const backendDir = path.join(PLUGIN_ROOT, 'backend');
     if (!existsSync(backendDir)) throw new Error(`Plugin backend dir not found: ${backendDir}`);
 
-    step('Wiring composer path repository');
-    runStreaming('composer', ['config', `repositories.selfhelp/${pluginId}`, 'path', backendDir], {
-        cwd: backendPath,
-    });
-    runStreaming('composer', ['require', `humdek/${pluginId}:@dev`, '--no-interaction'], { cwd: backendPath });
-    ok('Composer path repo registered + bundle required.');
+    step('Preparing isolated plugin Composer path repository');
+    const installManifestPath = prepareSymlinkManifest(manifestPath, backendDir);
+    ok('Temporary development manifest prepared. Host root Composer files are untouched.');
 
-    step('Invoking host CLI installer');
-    runStreaming('php', ['bin/console', 'selfhelp:plugin:install', manifestPath], { cwd: backendPath });
-    ok('selfhelp:plugin:install dispatched.');
-
-    if (opts['skip-consume']) {
-        warn('Skipped messenger:consume (--skip-consume). Run it manually to finalise the install.');
+    const installedVersion = getInstalledVersion(pluginId, backendPath);
+    if (installedVersion === version) {
+        ok(`Plugin already installed at ${version}; backend attach is current.`);
     } else {
-        step('Draining plugin_ops Messenger queue');
-        runStreaming('php', ['bin/console', 'messenger:consume', 'plugin_ops', '--limit=1', '--time-limit=120'], {
-            cwd: backendPath,
-        });
-        ok('Plugin installed + finalised.');
+        const installed = installedVersion !== null;
+        step(installed ? 'Invoking host CLI updater' : 'Invoking host CLI installer');
+        runStreaming('php', ['bin/console', installed ? 'selfhelp:plugin:update' : 'selfhelp:plugin:install', installManifestPath], { cwd: backendPath });
+        ok(installed ? 'selfhelp:plugin:update dispatched.' : 'selfhelp:plugin:install dispatched.');
+
+        if (opts['skip-consume']) {
+            warn('Skipped messenger:consume (--skip-consume). Run it manually to finalise the install.');
+        } else {
+            step('Draining plugin_ops Messenger queue');
+            runStreaming('php', ['bin/console', 'messenger:consume', 'plugin_ops', '--limit=1', '--time-limit=120'], {
+                cwd: backendPath,
+            });
+            ok('Plugin installed + finalised.');
+        }
     }
 
+    step('Enabling plugin');
+    runStreaming('php', ['bin/console', 'selfhelp:plugin:enable', pluginId], { cwd: backendPath });
+    ok('Plugin enabled.');
+
     process.stdout.write(
-        `\nDONE (symlink mode).\nStart the frontend runtime dev server:\n  npm --prefix ${path.join(PLUGIN_ROOT, 'frontend')} run dev:runtime\n`,
+        `\nDONE (symlink mode).\nStart the frontend runtime dev server:\n  npm --prefix ${path.join(PLUGIN_ROOT, 'frontend')} run dev:runtime\n\nKeep the host frontend open at /admin/plugins-host/${pluginId}/surveys; plugin UI changes reload from the local runtime URL.\n`,
     );
 }
 
@@ -210,6 +222,34 @@ function hasBinary(name) {
     return result.status === 0;
 }
 
+function prepareSymlinkManifest(manifestPath, backendDir) {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.backend = manifest.backend || {};
+    manifest.backend.composer = manifest.backend.composer || {};
+    manifest.backend.composer.repository = {
+        type: 'path',
+        url: backendDir,
+    };
+
+    const dir = mkdtempSync(path.join(tmpdir(), 'selfhelp-surveyjs-install-'));
+    const out = path.join(dir, 'plugin.json');
+    writeFileSync(out, JSON.stringify(manifest, null, 4) + '\n', 'utf8');
+    return out;
+}
+
+function getInstalledVersion(pluginId, backendPath) {
+    const result = spawnSync('php', ['bin/console', 'selfhelp:plugin:status', pluginId], {
+        cwd: backendPath,
+        encoding: 'utf8',
+        shell: process.platform === 'win32',
+    });
+    if (result.status !== 0) {
+        return null;
+    }
+    const match = String(result.stdout).match(/Version\s+([^\s]+)/);
+    return match ? match[1] : null;
+}
+
 function runStreaming(cmd, argv, opts = {}) {
     const result = spawnSync(cmd, argv, {
         stdio: 'inherit',
@@ -260,8 +300,9 @@ Default mode (.shplugin upload):
   --skip-consume       Skip messenger:consume after the upload.
 
 Symlink mode (dev fast-path):
-  --symlink            Skip the .shplugin build + upload. Wire a Composer
-                       path repo and call the CLI installer directly.
+  --symlink            Skip the .shplugin build + upload. Pass a temporary
+                       path-repo manifest to the CLI installer/updater.
+                       Host root Composer files are not modified.
 
 Common options:
   --backend <path>     Path to the sh-selfhelp_backend checkout
