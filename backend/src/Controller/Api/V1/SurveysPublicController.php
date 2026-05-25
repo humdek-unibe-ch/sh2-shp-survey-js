@@ -312,6 +312,46 @@ final class SurveysPublicController
 
         $draft = $this->drafts->findOneByResponseId($responseId);
         $run = $this->runs->findOneByResponseId($responseId);
+        $isAdmin = $this->hasAdminViewResponses($request);
+
+        // Equivalent safe rule for the seeded
+        // `surveyjs.surveys.upload-files` permission: the caller
+        // must already own a draft or completed run on this survey
+        // identified by `responseId`. This blocks anonymous
+        // attackers from injecting files into other participants'
+        // drafts/runs while still letting legitimate anonymous
+        // participants upload after their first autosave creates a
+        // draft.
+        if (!$isAdmin) {
+            if ($draft === null && $run === null) {
+                $response->setData([
+                    'error' => 'Cannot upload before starting the survey. Save the first page before uploading files.',
+                    'reason' => SurveyFileException::REASON_FORBIDDEN,
+                ]);
+                $response->setStatusCode(403);
+                return $response;
+            }
+            if ($draft !== null && $draft->getSurvey()->getId() !== $survey->getId()) {
+                $response->setData(['error' => 'Draft does not belong to this survey.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
+                $response->setStatusCode(403);
+                return $response;
+            }
+            if ($run !== null && $run->getSurvey()->getId() !== $survey->getId()) {
+                $response->setData(['error' => 'Run does not belong to this survey.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
+                $response->setStatusCode(403);
+                return $response;
+            }
+            if ($draft !== null && !$this->draftBelongsTo($draft, $userId, $visitorId)) {
+                $response->setData(['error' => 'You do not own this draft.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
+                $response->setStatusCode(403);
+                return $response;
+            }
+            if ($draft === null && $run !== null && !$this->runBelongsTo($run, $userId, $visitorId)) {
+                $response->setData(['error' => 'You do not own this response.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
+                $response->setStatusCode(403);
+                return $response;
+            }
+        }
 
         try {
             $stored = $this->fileStorage->upload(
@@ -614,6 +654,42 @@ final class SurveysPublicController
         }
         $roles = $payload['roles'] ?? null;
         if (is_array($roles) && in_array('admin', $roles, true)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Mirrors {@see \Humdek\SurveyJsBundle\Service\SurveyResponseDraftService::draftBelongsTo()}
+     * for the public upload / file routes: a draft "belongs to" the
+     * caller when the authenticated user id matches, OR the signed
+     * visitor cookie matches, OR the draft started anonymously and
+     * the same visitor cookie is presented after login.
+     */
+    private function draftBelongsTo(SurveyResponseDraft $draft, ?int $userId, ?string $visitorId): bool
+    {
+        if ($userId !== null && $draft->getIdUser() === $userId) {
+            return true;
+        }
+        if ($visitorId !== null && $visitorId !== '' && $draft->getVisitorId() === $visitorId) {
+            return true;
+        }
+        if ($userId !== null
+            && $draft->getIdUser() === null
+            && $draft->getVisitorId() !== null
+            && $draft->getVisitorId() === $visitorId
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    private function runBelongsTo(SurveyRun $run, ?int $userId, ?string $visitorId): bool
+    {
+        if ($userId !== null && $run->getIdUser() === $userId) {
+            return true;
+        }
+        if ($visitorId !== null && $visitorId !== '' && $run->getVisitorId() === $visitorId) {
             return true;
         }
         return false;

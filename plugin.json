@@ -383,12 +383,28 @@
             "permission": "surveyjs.surveys.delete-responses"
         },
         {
-            "name": "surveyjs_admin_responses_export",
-            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export",
+            "name": "surveyjs_admin_responses_export_csv",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/csv",
             "methods": [
                 "GET"
             ],
-            "permission": "surveyjs.surveys.view-responses"
+            "permission": "surveyjs.surveys.export-csv"
+        },
+        {
+            "name": "surveyjs_admin_responses_export_xlsx",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/xlsx",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.export-xlsx"
+        },
+        {
+            "name": "surveyjs_admin_responses_export_json",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/json",
+            "methods": [
+                "GET"
+            ],
+            "permission": "surveyjs.surveys.export-json"
         },
         {
             "name": "surveyjs_admin_dashboard_results",

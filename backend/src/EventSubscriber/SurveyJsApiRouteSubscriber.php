@@ -45,6 +45,9 @@ final class SurveyJsApiRouteSubscriber implements EventSubscriberInterface
         $manage = ['surveyjs.surveys.manage'];
         $viewResp = ['surveyjs.surveys.view-responses'];
         $exportPdf = ['surveyjs.surveys.export-pdf'];
+        $exportCsv = ['surveyjs.surveys.export-csv'];
+        $exportXlsx = ['surveyjs.surveys.export-xlsx'];
+        $exportJson = ['surveyjs.surveys.export-json'];
         $deleteResp = ['surveyjs.surveys.delete-responses'];
 
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_list', '/admin/plugins/' . self::PLUGIN_ID . '/surveys', $admin . '::list', ['GET'], [], $manage);
@@ -60,7 +63,14 @@ final class SurveyJsApiRouteSubscriber implements EventSubscriberInterface
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_dashboard', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/dashboard', $admin . '::dashboard', ['GET'], ['id' => '\d+'], $viewResp);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_dashboard_results', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/dashboard/results', $admin . '::dashboardResults', ['GET'], ['id' => '\d+'], $viewResp);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses', $admin . '::responses', ['GET'], ['id' => '\d+'], $viewResp);
-        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses_export', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/export', $admin . '::exportResponses', ['GET'], ['id' => '\d+'], $viewResp);
+        // Format-specific export routes so each carries its own
+        // permission. Splitting the route is the only way the host's
+        // `ApiSecurityListener` (which gates statically from the route
+        // metadata) can enforce per-format access control — a single
+        // `?format=` query param cannot be statically permissioned.
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses_export_csv', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/export/csv', $admin . '::exportResponsesCsv', ['GET'], ['id' => '\d+'], $exportCsv);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses_export_xlsx', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/export/xlsx', $admin . '::exportResponsesXlsx', ['GET'], ['id' => '\d+'], $exportXlsx);
+        $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_responses_export_json', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/export/json', $admin . '::exportResponsesJson', ['GET'], ['id' => '\d+'], $exportJson);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_detail', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}', $admin . '::responseDetail', ['GET'], ['id' => '\d+', 'rid' => '[A-Za-z0-9_-]+'], $viewResp);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_pdf', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}/pdf', $admin . '::responsePdf', ['GET'], ['id' => '\d+', 'rid' => '[A-Za-z0-9_-]+'], $exportPdf);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_admin_response_delete', '/admin/plugins/' . self::PLUGIN_ID . '/surveys/{id}/responses/{rid}', $admin . '::deleteResponse', ['DELETE'], ['id' => '\d+', 'rid' => '[A-Za-z0-9_-]+'], $deleteResp);
@@ -72,6 +82,27 @@ final class SurveyJsApiRouteSubscriber implements EventSubscriberInterface
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_progress_put', '/plugins/' . self::PLUGIN_ID . '/published/{key}/progress', $public . '::progressPut', ['PUT'], ['key' => '[a-zA-Z0-9_-]+']);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_progress_delete', '/plugins/' . self::PLUGIN_ID . '/published/{key}/progress', $public . '::progressDelete', ['DELETE'], ['key' => '[a-zA-Z0-9_-]+']);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_edit', '/plugins/' . self::PLUGIN_ID . '/published/{key}/edit', $public . '::editResponse', ['GET'], ['key' => '[a-zA-Z0-9_-]+']);
+        // The public file routes intentionally carry NO permission
+        // metadata: anonymous participants of a public survey must be
+        // able to upload files attached to their draft / completed
+        // run. The seeded `surveyjs.surveys.upload-files` permission
+        // cannot be enforced statically here (it would 401 every
+        // anonymous submission). Instead, equivalent safety is
+        // enforced in the controller:
+        //
+        //   - uploadFile() rejects uploads whose `responseId` does
+        //     not match an existing draft or completed run owned by
+        //     the caller (visitor cookie or user id).
+        //   - deleteFile() requires `isOwnedBy()` of the same
+        //     uploader identity, or admin `view-responses`.
+        //   - downloadFile() requires a short-lived HMAC-signed URL
+        //     bound to the uploader identity, or admin
+        //     `view-responses`.
+        //
+        // Together this enforces a "must own the draft / run" rule
+        // that is strictly more conservative than a global
+        // `upload-files` permission would be for an anonymous
+        // survey.
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_upload', '/plugins/' . self::PLUGIN_ID . '/published/{key}/files', $public . '::uploadFile', ['POST'], ['key' => '[a-zA-Z0-9_-]+']);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_file_delete', '/plugins/' . self::PLUGIN_ID . '/published/{key}/files/{fileId}', $public . '::deleteFile', ['DELETE'], ['key' => '[a-zA-Z0-9_-]+', 'fileId' => '\d+']);
         $event->addRoute(self::PLUGIN_ID, 'surveyjs_public_file_download', '/plugins/' . self::PLUGIN_ID . '/files/{fileId}', $public . '::downloadFile', ['GET'], ['fileId' => '\d+']);

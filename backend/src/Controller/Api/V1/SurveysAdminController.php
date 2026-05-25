@@ -330,26 +330,44 @@ final class SurveysAdminController
     }
 
     /**
-     * Server-side CSV / XLSX / JSON export. Backed by
-     * {@see SurveyExportService} and streamed via Symfony
-     * `StreamedResponse` so wide surveys do not buffer in PHP memory.
-     *
-     * The XLSX path requires `phpoffice/phpspreadsheet`; when missing
-     * it returns a 501 with an actionable error message.
+     * Server-side CSV export. Gated by
+     * `surveyjs.surveys.export-csv` at the route layer.
      */
-    public function exportResponses(int $id, Request $request): Response
+    public function exportResponsesCsv(int $id): Response
     {
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
-        $format = strtolower((string) $request->query->get('format', SurveyExportService::FORMAT_CSV));
-        return match ($format) {
-            SurveyExportService::FORMAT_CSV => $this->exportService->streamCsv($survey),
-            SurveyExportService::FORMAT_XLSX => $this->exportService->streamXlsx($survey),
-            SurveyExportService::FORMAT_JSON => $this->exportService->streamJson($survey),
-            default => new JsonResponse(['error' => 'Unknown format. Use csv, xlsx or json.'], 422),
-        };
+        return $this->exportService->streamCsv($survey);
+    }
+
+    /**
+     * Server-side XLSX export. Gated by
+     * `surveyjs.surveys.export-xlsx` at the route layer. Returns a
+     * 501 with an actionable error message when
+     * `phpoffice/phpspreadsheet` is not installed.
+     */
+    public function exportResponsesXlsx(int $id): Response
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        return $this->exportService->streamXlsx($survey);
+    }
+
+    /**
+     * Server-side JSON export. Gated by
+     * `surveyjs.surveys.export-json` at the route layer.
+     */
+    public function exportResponsesJson(int $id): Response
+    {
+        $survey = $this->surveys->find($id);
+        if (!$survey instanceof Survey) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        return $this->exportService->streamJson($survey);
     }
 
     public function responseDetail(int $id, string $rid): JsonResponse
