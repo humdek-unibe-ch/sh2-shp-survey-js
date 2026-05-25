@@ -64,7 +64,12 @@ final class CoreDataTableWriter implements DataTableWriterInterface
             $tableName,
             $data,
             $userId === null ? self::TRANSACTION_BY_ANONYMOUS_USER : self::TRANSACTION_BY_USER,
-            $existingDataRowId,
+            // In edit mode we re-use the existing data_rows row by
+            // passing the matching constraint to DataService, which
+            // resolves it to an UPDATE instead of an INSERT. Outside
+            // edit mode we leave it null so a brand-new row is
+            // inserted.
+            $existingDataRowId !== null ? ['id' => $existingDataRowId] : null,
             false,
         );
 

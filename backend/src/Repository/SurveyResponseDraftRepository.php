@@ -17,7 +17,7 @@ use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
 /**
  * @extends ServiceEntityRepository<SurveyResponseDraft>
  */
-final class SurveyResponseDraftRepository extends ServiceEntityRepository
+class SurveyResponseDraftRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {

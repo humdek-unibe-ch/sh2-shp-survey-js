@@ -20,7 +20,7 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
  * `App\Plugin\Realtime\PluginRealtimePublisherInterface`. Topic keys
  * mirror those declared in `plugin.json` under `realtimeTopics`.
  */
-final class SurveyJsRealtimePublisher
+class SurveyJsRealtimePublisher
 {
     public function __construct(
         private readonly PluginRealtimePublisherInterface $host,

@@ -35,7 +35,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * Creator's question authoring stays flexible — the host's host-wide
  * upload policies (CSP, AV scan, etc.) still apply.
  */
-final class SurveyFileStorage
+class SurveyFileStorage
 {
     private const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 
