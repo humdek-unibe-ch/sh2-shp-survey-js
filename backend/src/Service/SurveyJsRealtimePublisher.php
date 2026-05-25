@@ -114,4 +114,25 @@ final class SurveyJsRealtimePublisher
             ],
         );
     }
+
+    public function surveyResponseDeleted(Survey $survey, string $responseId, ?int $userId): void
+    {
+        $this->host->publish(
+            self::PLUGIN_ID,
+            'surveys/{surveyId}/responses',
+            [
+                'type' => 'response_deleted',
+                'id' => $survey->getId(),
+                'surveyId' => $survey->getSurveyId(),
+                'responseId' => $responseId,
+                'deletedByUserId' => $userId,
+                'deletedAt' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
+            ],
+            [
+                'audience' => 'permission',
+                'topicParams' => ['surveyId' => (string) $survey->getId()],
+                'event' => 'response_deleted',
+            ],
+        );
+    }
 }

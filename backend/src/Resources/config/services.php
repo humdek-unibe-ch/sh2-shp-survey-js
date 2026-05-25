@@ -15,20 +15,28 @@ use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsLookupRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsRealtimeTopicSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsStyleRegistrySubscriber;
 use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
+use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
+use Humdek\SurveyJsBundle\Repository\SurveyResponseDraftRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\CoreDataTableWriter;
 use Humdek\SurveyJsBundle\Service\DataTableWriterInterface;
+use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
 use Humdek\SurveyJsBundle\Service\SurveyAnswerNormalizer;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
+use Humdek\SurveyJsBundle\Service\SurveyDataInterpolator;
+use Humdek\SurveyJsBundle\Service\SurveyExportService;
+use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
 use Humdek\SurveyJsBundle\Service\SurveyJsGdprService;
 use Humdek\SurveyJsBundle\Service\SurveyJsHealthCheck;
 use Humdek\SurveyJsBundle\Service\SurveyJsHtmlSanitizer;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
+use Humdek\SurveyJsBundle\Service\SurveyResponseDraftService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
 use Humdek\SurveyJsBundle\Service\SurveyService;
+use Humdek\SurveyJsBundle\Service\VisitorIdResolver;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 return static function (ContainerConfigurator $configurator): void {
@@ -39,7 +47,7 @@ return static function (ContainerConfigurator $configurator): void {
 
     $services->load('Humdek\\SurveyJsBundle\\', '../../*')
         ->exclude([
-            '../../{Entity,Migrations,Resources,Tests}',
+            '../../{Entity,Exception,Migrations,Resources,Tests}',
             '../../HumdekSurveyJsBundle.php',
             '../../Service/DataTableWriterInterface.php',
             '../../Service/DataTableWriteResult.php',
@@ -49,19 +57,43 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyVersionRepository::class)->autowire();
     $services->set(SurveyRunRepository::class)->autowire();
     $services->set(SurveyAnswerLinkRepository::class)->autowire();
+    $services->set(SurveyResponseDraftRepository::class)->autowire();
+    $services->set(SurveyFileRepository::class)->autowire();
 
     $services->set(SurveyJsHtmlSanitizer::class)->autowire();
     $services->set(SurveyAnswerNormalizer::class)->autowire();
     $services->set(SurveyService::class)->autowire();
     $services->set(SurveyResponseService::class)->autowire();
+    $services->set(SurveyResponseDraftService::class)->autowire();
     $services->set(SurveyDashboardService::class)->autowire();
+    $services->set(SurveyExportService::class)->autowire();
+    $services->set(SurveyDataInterpolator::class)->autowire();
     $services->set(SurveyJsGdprService::class)->autowire();
     $services->set(SurveyPdfService::class)->autowire();
+
+    // Anonymous-user identity for once-per-user enforcement.
+    $services->set(VisitorIdResolver::class)
+        ->arg('$secret', '%env(default:APP_SECRET:SURVEYJS_VISITOR_SECRET)%');
+
+    // Private file storage (outside web root). Defaults resolve to
+    // `<project>/var/plugin-data/sh2-shp-survey-js/uploads` when the
+    // env override is missing.
+    $services->set(SurveyFileStorage::class)
+        ->arg('$uploadDir', '%env(default:surveyjs_default_upload_dir:SURVEYJS_UPLOAD_DIR)%')
+        ->arg('$maxBytes', '%env(default:25000000:int:SURVEYJS_UPLOAD_MAX_BYTES)%');
+
+    $services->set(SignedFileUrlService::class)
+        ->arg('$secret', '%env(default:APP_SECRET:SURVEYJS_FILE_URL_SECRET)%')
+        ->arg('$defaultTtlSeconds', '%env(default:300:int:SURVEYJS_FILE_URL_TTL_SECONDS)%');
 
     // SurveyJS answers should land in the host's legacy form-data
     // tables immediately, matching the old plugin's data flow.
     $services->set(CoreDataTableWriter::class)->autowire();
     $services->set(DataTableWriterInterface::class, CoreDataTableWriter::class);
+
+    // Default upload directory: `<project_dir>/var/plugin-data/sh2-shp-survey-js/uploads`.
+    $configurator->parameters()
+        ->set('surveyjs_default_upload_dir', '%kernel.project_dir%/var/plugin-data/sh2-shp-survey-js/uploads');
 
     // SurveyJsRealtimePublisher is autowired against the host
     // `App\Plugin\Realtime\PluginRealtimePublisherInterface` which the

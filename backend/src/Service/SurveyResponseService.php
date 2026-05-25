@@ -11,8 +11,10 @@ namespace Humdek\SurveyJsBundle\Service;
 use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyAnswerLink;
+use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
 use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
+use Humdek\SurveyJsBundle\Repository\SurveyResponseDraftRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 
 /**
@@ -20,11 +22,12 @@ use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
  *
  * Receives the SurveyJS answer JSON from the public submission
  * endpoint, normalizes + sanitizes it, persists `survey_runs` /
- * `survey_answer_links` metadata, and emits the realtime event the
- * Responses dashboard listens to. The actual answer values land in
- * the host `data_tables` / `data_rows` / `data_cells` via the
- * `DataTableWriterInterface` injected by the host (decoupled so the
- * plugin does not import core CMS internals directly).
+ * `survey_answer_links` metadata, promotes any in-progress draft,
+ * and emits the realtime event the Responses dashboard listens to.
+ * The actual answer values land in the host `data_tables` /
+ * `data_rows` / `data_cells` via the `DataTableWriterInterface`
+ * injected by the host (decoupled so the plugin does not import core
+ * CMS internals directly).
  */
 final class SurveyResponseService
 {
@@ -34,6 +37,8 @@ final class SurveyResponseService
         private readonly SurveyJsRealtimePublisher $realtime,
         private readonly DataTableWriterInterface $writer,
         private readonly SurveyRunRepository $runs,
+        private readonly SurveyResponseDraftRepository $drafts,
+        private readonly SurveyFileStorage $fileStorage,
     ) {
     }
 
@@ -41,37 +46,40 @@ final class SurveyResponseService
      * @param array<string, mixed> $answers
      * @param array{
      *     oncePerUser?: bool,
+     *     allowAnonymous?: bool,
      *     windowStart?: string,
      *     windowEnd?: string,
+     *     responseId?: string,
+     *     progress?: array<string, mixed>,
      * } $enforce
      *
-     * The `enforce` block lets the section runtime ask the server to
-     * apply its `once_per_user` / `once_per_schedule` flags so a client
-     * cannot bypass them by hitting the public submit endpoint
-     * directly. When `oncePerUser=true` or a window is supplied,
-     * anonymous submissions are rejected (we have no stable identity
-     * to deduplicate against). Window timestamps must be ISO 8601 and
-     * are interpreted as UTC.
-     *
-     * @throws SurveySubmissionRejectedException when a server-side guard rejects the submission.
+     * @throws SurveySubmissionRejectedException
      */
-    public function submit(Survey $survey, array $answers, ?int $userId, array $enforce = []): SurveyRun
-    {
+    public function submit(
+        Survey $survey,
+        array $answers,
+        ?int $userId,
+        ?string $visitorId,
+        array $enforce = [],
+    ): SurveyRun {
         $version = $survey->getCurrentVersion();
         if ($version === null) {
             throw new \DomainException(sprintf('Survey "%s" has no published version.', $survey->getSurveyId()));
         }
 
-        $this->guardAgainstReSubmission($survey, $userId, $enforce);
+        $this->guardAgainstReSubmission($survey, $userId, $visitorId, $enforce);
 
         $normalized = $this->normalizer->normalize($version, $answers);
 
-        $responseId = $this->generateResponseId();
+        $responseId = $this->resolveResponseId($enforce, $userId, $visitorId);
+        $progress = is_array($enforce['progress'] ?? null) ? $enforce['progress'] : [];
+        $progress['answered'] = count($normalized);
 
-        return $this->em->wrapInTransaction(function () use ($survey, $version, $normalized, $responseId, $userId): SurveyRun {
-            $run = new SurveyRun($survey, $version, $responseId, $userId);
+        return $this->em->wrapInTransaction(function () use ($survey, $version, $normalized, $responseId, $userId, $visitorId, $progress): SurveyRun {
+            $draft = $this->drafts->findOneByResponseId($responseId);
+            $run = new SurveyRun($survey, $version, $responseId, $userId, $visitorId);
             $run->setStatus(SurveyRun::STATUS_COMPLETED);
-            $run->setProgress(['answered' => count($normalized)]);
+            $run->setProgress($progress);
             $this->em->persist($run);
             $this->em->flush();
 
@@ -88,8 +96,13 @@ final class SurveyResponseService
                 $link->setSanitizedHtml($entry['sanitizedHtml']);
                 $this->em->persist($link);
             }
-
             $this->em->flush();
+
+            if ($draft instanceof SurveyResponseDraft) {
+                $this->fileStorage->promoteDraftFilesToRun($draft, $run);
+                $this->em->remove($draft);
+                $this->em->flush();
+            }
 
             $this->realtime->surveyResponseSubmitted($survey, $run, $userId);
             return $run;
@@ -97,11 +110,12 @@ final class SurveyResponseService
     }
 
     /**
-     * @param array{oncePerUser?: bool, windowStart?: string, windowEnd?: string} $enforce
+     * @param array{oncePerUser?: bool, allowAnonymous?: bool, windowStart?: string, windowEnd?: string} $enforce
      */
-    private function guardAgainstReSubmission(Survey $survey, ?int $userId, array $enforce): void
+    private function guardAgainstReSubmission(Survey $survey, ?int $userId, ?string $visitorId, array $enforce): void
     {
         $oncePerUser = (bool) ($enforce['oncePerUser'] ?? false);
+        $allowAnonymous = (bool) ($enforce['allowAnonymous'] ?? false);
         $windowStart = $this->parseEnforceTimestamp($enforce['windowStart'] ?? null);
         $windowEnd = $this->parseEnforceTimestamp($enforce['windowEnd'] ?? null);
 
@@ -109,18 +123,20 @@ final class SurveyResponseService
             return;
         }
 
-        if ($userId === null) {
-            // No stable identity → we cannot dedupe anonymous re-submissions.
-            // The runtime is expected to require authentication when these
-            // flags are on; the server-side guard surfaces the same error
-            // explicitly instead of silently letting the row through.
+        if ($userId === null && (!$allowAnonymous || $visitorId === null || $visitorId === '')) {
             throw new SurveySubmissionRejectedException(
                 SurveySubmissionRejectedException::REASON_AUTH_REQUIRED,
-                'Once-per-user / scheduled survey submissions require an authenticated session.',
+                'Once-per-user / scheduled survey submissions require an authenticated session or a visitor cookie.',
             );
         }
 
-        $existing = $this->runs->findLatestCompletedForUser($survey, $userId, $windowStart, $windowEnd);
+        $existing = null;
+        if ($userId !== null) {
+            $existing = $this->runs->findLatestCompletedForUser($survey, $userId, $windowStart, $windowEnd);
+        }
+        if ($existing === null && $visitorId !== null && $visitorId !== '') {
+            $existing = $this->runs->findLatestCompletedForVisitor($survey, $visitorId, $windowStart, $windowEnd);
+        }
         if ($existing === null) {
             return;
         }
@@ -146,11 +162,27 @@ final class SurveyResponseService
         try {
             return new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
         } catch (\Exception) {
-            // Invalid datetime in `enforce.windowStart` / `enforce.windowEnd`
-            // is treated as "no window passed" rather than a hard error so a
-            // misconfigured section cannot turn into a 5xx for the respondent.
             return null;
         }
+    }
+
+    /**
+     * @param array{responseId?: string} $enforce
+     */
+    private function resolveResponseId(array $enforce, ?int $userId, ?string $visitorId): string
+    {
+        $candidate = $enforce['responseId'] ?? null;
+        if (is_string($candidate) && $candidate !== '') {
+            $existingRun = $this->runs->findOneByResponseId($candidate);
+            if ($existingRun === null) {
+                return $candidate;
+            }
+            // A run already exists with this responseId; this is the
+            // edit-mode scenario but the dedicated `editResponse`
+            // controller action handles updates. Falling back to a
+            // fresh id avoids violating the unique constraint.
+        }
+        return $this->generateResponseId();
     }
 
     private function generateResponseId(): string
