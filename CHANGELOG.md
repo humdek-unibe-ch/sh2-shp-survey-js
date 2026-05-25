@@ -53,12 +53,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   through `plugin.json` and seeded by Doctrine migration
   `Version20260525200000`.
 - Backend tests under `backend/tests/Service/` for
-  `SignedFileUrlService`, `SurveyDataInterpolator`, and
-  `VisitorIdResolver`. Frontend Vitest scaffolding under
-  `frontend/tests/` covers `markdown`, `LocalDraftStore`,
-  `CountdownTimer`, and `extractUrlParams`.
+  `SignedFileUrlService`, `SurveyDataInterpolator`,
+  `VisitorIdResolver`, and `SurveyResponseService` edit-mode submit
+  path (`SurveyResponseServiceEditModeTest`). Frontend Vitest
+  scaffolding under `frontend/tests/` covers `markdown`,
+  `LocalDraftStore`, `CountdownTimer`, and `extractUrlParams`.
 - QA scenarios catalogue at `docs/qa-scenarios.md` documenting every
   legacy-parity behaviour we expect operators to validate against.
+
+### Fixed
+
+- Export endpoints now enforce per-format permissions. The single
+  `/admin/surveys/{id}/responses/export?format=...` route used to
+  resolve to one permission entry in `plugin.json`, so the
+  `export-csv` / `export-xlsx` / `export-json` permissions seeded by
+  `Version20260525200000` were never actually checked. The route is
+  now split into three real endpoints (`.../export/csv`,
+  `.../export/xlsx`, `.../export/json`) — each declared in both
+  `SurveyJsApiRouteSubscriber` and `plugin.json` with its specific
+  permission — and `buildResponsesExportUrl()` builds the matching
+  URLs. The runtime export menu calls the format-specific URLs;
+  scheduled callers must update any hard-coded `?format=...` URLs.
+- File upload (`POST /surveys/{surveyId}/files`) now enforces
+  ownership of the supplied `responseId`. Anonymous callers must hold
+  the matching `_sh_sjs_vid` visitor cookie for the draft/run they
+  are uploading into; authenticated callers must own the draft/run
+  (or hold `surveyjs.surveys.view-responses`). This closes the gap
+  where the seeded `surveyjs.surveys.upload-files` permission could
+  not be enforced as a static route permission because the endpoint
+  must remain reachable for anonymous respondents.
+- Edit-mode submit (`enforce.editMode === true`) now updates the
+  existing `survey_runs` row in place instead of creating a second
+  run with a fresh `response_id`. The corresponding `data_rows` row
+  is rewritten through `DataService::saveData(..., ['id' => $row])`,
+  the previous `survey_answer_links` are replaced atomically, and
+  `completed_at` is preserved. Edit attempts against runs owned by
+  another user/visitor are rejected with HTTP 403; missing
+  `responseId` or unknown ids return HTTP 404.
+- Frontend API clients (`frontend/src/api/surveys.ts`,
+  `frontend/src/api/surveys-admin.ts`, the runtime license-key health
+  check in `frontend/src/index.ts`, the responses-page PDF link and
+  the survey-select field renderer) now call the real backend
+  prefixes `/cms-api/v1/plugins/...` and
+  `/cms-api/v1/admin/plugins/...`. The previous `/api/plugins/...`
+  and `/api/admin/plugins/...` paths were leftovers from a different
+  host conventions and 404'd against the route table registered by
+  `SurveyJsApiRouteSubscriber`.
+- `markdown.ts` now renders inline backtick code as `<code>...</code>`
+  with HTML-escaped content. The implementation previously left
+  backticks as literal characters even though `markdown.test.ts`
+  expected the inline-code rendering, so the suite was red.
+
+### Tests / coverage status
+
+Phase 6 of the parity plan is **in progress**, not completed. The
+new tests added in this changeset cover the critical fixes above
+(edit-mode submit happy + reject paths) but the full Phase 6
+checklist still has open items:
+
+- `SurveyResponseServiceTest` — once-per-user, per-schedule,
+  anonymous + visitor cookie, draft promotion (only the edit-mode
+  subset ships today).
+- `SurveyResponseDraftServiceTest`, `SurveyFileStorageTest`,
+  `SurveyExportServiceTest`.
+- Symfony `WebTestCase` coverage for the public/admin API (upload,
+  signed download, exports, edit mode, permission enforcement).
+- Vitest coverage for `SurveyRuntime` lifecycle, custom question
+  types and the dashboard renderer.
+- Mobile read-only regression test.
+
+These remain explicit follow-ups.
 
 ## [0.2.2] — Unreleased
 
