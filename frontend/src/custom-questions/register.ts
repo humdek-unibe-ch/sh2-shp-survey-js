@@ -3,75 +3,53 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * Custom question registration entry point.
+ * Central registration of every custom question type the plugin
+ * contributes. Called from the Survey Designer (Creator side) and
+ * from the runtime style (renderer side) so the same components
+ * appear in both contexts.
  *
- * Called by `SurveyDesignerPage` (Creator side) and `SurveyJsStyle`
- * (runtime side) to register the plugin's three custom question
- * types — `rich-text`, `gpx`, and `video` — against
- * `survey-core`'s `ComponentCollection`.
- *
- * Feature flags from the host plugin runtime gate which custom
- * questions are exposed; disabled types are silently skipped so a
- * stale survey definition referencing them falls back to plain text
- * rather than crashing.
- *
- * Tiptap initialization happens lazily through the host's
- * `IRichTextEditorAdapter` (passed via `IPluginApi.richTextEditor`)
- * so the plugin never bundles its own editor instance.
+ * Feature flags from the host gate exposure: disabled types are
+ * silently skipped so an existing survey definition referencing them
+ * falls back to a plain `comment` / `file` question instead of
+ * crashing the renderer.
  */
 
 import type { IRichTextEditorAdapter } from '@selfhelp/shared/plugin-sdk';
-
-interface IComponentRegistrar {
-    ComponentCollection: {
-        Instance: {
-            add: (descriptor: { name: string; title: string; questionJSON: Record<string, unknown> }) => void;
-        };
-    };
-}
+import { registerRichTextQuestion } from './richText';
+import { registerVideoQuestion, mountVideoQuestion } from './video';
+import { registerGpxQuestion, mountGpxQuestion } from './gpx';
+import { registerMicrophoneQuestion, mountMicrophoneQuestion } from './microphone';
 
 export interface IRegisterOptions {
-    flags: { gpx: boolean; video: boolean; richText: boolean };
+    flags: {
+        gpx: boolean;
+        video: boolean;
+        richText: boolean;
+        microphone: boolean;
+    };
     richTextEditor: IRichTextEditorAdapter | null;
 }
 
 export async function registerCustomQuestions(opts: IRegisterOptions): Promise<void> {
-    const core = (await import('survey-core')) as unknown as IComponentRegistrar;
-    const c = core.ComponentCollection.Instance;
+    const core = await import('survey-core');
+    const { ComponentCollection, Serializer } = core;
 
-    if (opts.flags.richText && opts.richTextEditor) {
-        c.add({
-            name: 'rich-text',
-            title: 'Rich text',
-            questionJSON: {
-                type: 'comment',
-                rows: 4,
-                placeholder: 'Type here…',
-            },
-        });
-    }
-    if (opts.flags.gpx) {
-        c.add({
-            name: 'gpx',
-            title: 'GPX track',
-            questionJSON: {
-                type: 'file',
-                acceptedTypes: '.gpx',
-                storeDataAsText: false,
-                allowMultiple: false,
-            },
-        });
+    if (opts.flags.richText) {
+        registerRichTextQuestion({ componentCollection: ComponentCollection, richTextEditor: opts.richTextEditor });
     }
     if (opts.flags.video) {
-        c.add({
-            name: 'video',
-            title: 'Video reply',
-            questionJSON: {
-                type: 'file',
-                acceptedTypes: 'video/*',
-                storeDataAsText: false,
-                allowMultiple: false,
-            },
-        });
+        registerVideoQuestion({ componentCollection: ComponentCollection, serializer: Serializer });
+    }
+    if (opts.flags.gpx) {
+        registerGpxQuestion({ componentCollection: ComponentCollection, serializer: Serializer });
+    }
+    if (opts.flags.microphone) {
+        registerMicrophoneQuestion({ componentCollection: ComponentCollection, serializer: Serializer });
     }
 }
+
+export {
+    mountVideoQuestion,
+    mountGpxQuestion,
+    mountMicrophoneQuestion,
+};

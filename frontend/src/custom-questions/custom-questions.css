@@ -1,0 +1,40 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+ * SPDX-License-Identifier: MPL-2.0
+ *
+ * Minimal styling for the plugin's custom question types. Kept
+ * deliberately small + dependency-free so the runtime never collides
+ * with the host Mantine theme. Customisation is expected to happen
+ * via the section-level `css` field on the host renderer.
+ */
+
+.sh2-gpx-question__map {
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.sh2-gpx-question__meta {
+    margin-top: 4px;
+    color: rgba(0, 0, 0, 0.65);
+}
+
+.sh2-microphone-question {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sh2-microphone-question button {
+    align-self: flex-start;
+}
+
+.sh2-microphone-question__status {
+    font-size: 0.85em;
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.sh2-video-placeholder {
+    font-style: italic;
+    color: rgba(0, 0, 0, 0.6);
+}
