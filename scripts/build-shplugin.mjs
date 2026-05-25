@@ -141,6 +141,7 @@ try {
 
 async function main() {
     const manifestPath = path.join(PLUGIN_ROOT, 'plugin.json');
+    syncPluginVersionMetadata(manifestPath);
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     const id = manifest.id;
     const version = manifest.version;
@@ -707,6 +708,86 @@ function parseArgs(rest) {
 
 function log(msg) {
     process.stderr.write(`[build-shplugin] ${msg}\n`);
+}
+
+/**
+ * Treat `plugin.json#version` as the single canonical plugin version
+ * and rewrite mirrored version fields before packaging. This keeps the
+ * archive contract intact while letting authors bump only one value.
+ */
+function syncPluginVersionMetadata(manifestPath) {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const version = manifest?.version;
+    if (typeof version !== 'string' || version === '') {
+        throw new Error('plugin.json missing version.');
+    }
+
+    const touched = [];
+
+    if (manifest?.backend?.composer?.version !== version) {
+        manifest.backend.composer.version = version;
+        touched.push('plugin.json#backend.composer.version');
+    }
+    if (manifest?.mobile?.version !== version) {
+        manifest.mobile.version = version;
+        touched.push('plugin.json#mobile.version');
+    }
+    if (touched.length > 0) {
+        writeJsonFile(manifestPath, manifest);
+    }
+
+    syncJsonVersionField(path.join(PLUGIN_ROOT, 'backend', 'composer.json'), version);
+    syncJsonVersionField(path.join(PLUGIN_ROOT, 'frontend', 'package.json'), version);
+    syncJsonVersionField(path.join(PLUGIN_ROOT, 'mobile', 'package.json'), version);
+    syncPackageLockVersion(path.join(PLUGIN_ROOT, 'frontend', 'package-lock.json'), version);
+    syncPackageLockVersion(path.join(PLUGIN_ROOT, 'mobile', 'package-lock.json'), version);
+    syncMobileSourceVersion(path.join(PLUGIN_ROOT, 'mobile', 'src', 'index.ts'), version);
+
+    if (touched.length > 0) {
+        log(`Synced manifest version mirrors to ${version}.`);
+    }
+}
+
+function syncJsonVersionField(filePath, version) {
+    if (!existsSync(filePath)) return;
+    const json = JSON.parse(readFileSync(filePath, 'utf8'));
+    if (json.version === version) return;
+    json.version = version;
+    writeJsonFile(filePath, json);
+    log(`Synced ${path.relative(PLUGIN_ROOT, filePath)} -> ${version}`);
+}
+
+function syncPackageLockVersion(filePath, version) {
+    if (!existsSync(filePath)) return;
+    const json = JSON.parse(readFileSync(filePath, 'utf8'));
+    let changed = false;
+    if (json.version !== version) {
+        json.version = version;
+        changed = true;
+    }
+    if (json.packages && json.packages[''] && json.packages[''].version !== version) {
+        json.packages[''].version = version;
+        changed = true;
+    }
+    if (!changed) return;
+    writeJsonFile(filePath, json);
+    log(`Synced ${path.relative(PLUGIN_ROOT, filePath)} -> ${version}`);
+}
+
+function syncMobileSourceVersion(filePath, version) {
+    if (!existsSync(filePath)) return;
+    const src = readFileSync(filePath, 'utf8');
+    const next = src.replace(
+        /export const PLUGIN_VERSION = '([^']+)';/,
+        `export const PLUGIN_VERSION = '${version}';`,
+    );
+    if (next === src) return;
+    writeFileSync(filePath, next, 'utf8');
+    log(`Synced ${path.relative(PLUGIN_ROOT, filePath)} -> ${version}`);
+}
+
+function writeJsonFile(filePath, data) {
+    writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
 /**
