@@ -26,7 +26,18 @@ export interface IAdminSurveyDetail extends IAdminSurveySummary {
     definition: Record<string, unknown> | null;
 }
 
-const BASE = '/cms-api/v1/admin/plugins/sh2-shp-survey-js';
+const BASE = '/api/admin/plugins/sh2-shp-survey-js';
+
+function csrfHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') {
+        return {};
+    }
+    const token = document.cookie
+        .split('; ')
+        .find((part) => part.startsWith('sh_csrf='))
+        ?.slice('sh_csrf='.length);
+    return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
+}
 
 async function asJson<T>(res: Response): Promise<T> {
     if (!res.ok) {
@@ -63,6 +74,7 @@ export async function createSurvey(body: {
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...csrfHeaders(),
         },
         body: JSON.stringify(body),
     });
@@ -79,6 +91,7 @@ export async function publishVersion(
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...csrfHeaders(),
         },
         body: JSON.stringify({ definition }),
     });
@@ -103,6 +116,7 @@ export async function updateSurvey(
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...csrfHeaders(),
         },
         body: JSON.stringify(body),
     });
@@ -113,7 +127,7 @@ export async function deleteSurvey(id: number): Promise<{ deleted: boolean }> {
     const res = await fetch(`${BASE}/surveys/${id}`, {
         method: 'DELETE',
         credentials: 'include',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...csrfHeaders() },
     });
     return asJson<{ deleted: boolean }>(res);
 }

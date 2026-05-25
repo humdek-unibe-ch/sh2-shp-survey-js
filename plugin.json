@@ -160,7 +160,7 @@
     "adminPages": [
         {
             "slug": "surveys",
-            "label": "Surveys",
+            "label": "SurveyJS",
             "permission": "surveyjs.surveys.manage",
             "icon": "tabler-clipboard-list"
         }

@@ -25,7 +25,18 @@ export interface ISubmitResult {
     submittedAt: string;
 }
 
-const BASE = '/cms-api/v1/plugins/sh2-shp-survey-js';
+const BASE = '/api/plugins/sh2-shp-survey-js';
+
+function csrfHeaders(): Record<string, string> {
+    if (typeof document === 'undefined') {
+        return {};
+    }
+    const token = document.cookie
+        .split('; ')
+        .find((part) => part.startsWith('sh_csrf='))
+        ?.slice('sh_csrf='.length);
+    return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
+}
 
 export async function fetchPublishedSurvey(key: string): Promise<IPublishedSurvey> {
     const res = await fetch(`${BASE}/published/${encodeURIComponent(key)}`, {
@@ -49,6 +60,7 @@ export async function submitSurveyAnswers(
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
+            ...csrfHeaders(),
         },
         body: JSON.stringify({ answers }),
     });

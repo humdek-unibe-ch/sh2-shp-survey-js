@@ -92,7 +92,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
             // route, we can split these back into separate registrations.
             {
                 slug: 'surveys',
-                title: 'Surveys',
+                title: 'SurveyJS',
                 permission: 'surveyjs.surveys.manage',
                 component: SurveyAdminPage as never,
             },
@@ -100,7 +100,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
         menuItems: [
             {
                 key: 'surveyjs.surveys',
-                label: 'Surveys',
+                label: 'SurveyJS',
                 icon: 'tabler-clipboard-list',
                 href: '/admin/plugins-host/sh2-shp-survey-js/surveys',
                 permission: 'surveyjs.surveys.manage',
@@ -141,7 +141,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 run: async () => {
                     try {
                         const res = await fetch(
-                            `/cms-api/v1/admin/plugins/${PLUGIN_ID}/license-key`,
+                            `/api/admin/plugins/${PLUGIN_ID}/license-key`,
                             {
                                 credentials: 'include',
                                 headers: { Accept: 'application/json' },

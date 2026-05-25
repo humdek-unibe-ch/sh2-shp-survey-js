@@ -7,7 +7,7 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Reads the survey `keySlug` from the section field map, fetches the
  * published definition from
- * `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}`, and renders
+ * `/api/plugins/sh2-shp-survey-js/published/{key}`, and renders
  * it through `survey-react-ui`. On submit it posts the answers to the
  * matching `/submit` endpoint.
  *

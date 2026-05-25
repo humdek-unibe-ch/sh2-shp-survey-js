@@ -138,12 +138,10 @@ export function SurveyAdminPage(): React.ReactElement {
 
     const setView = useCallback((nextView: TView, nextId?: number | null) => {
         setUrlState((prev) => {
-            const next: IUrlState = {
+            return {
                 view: nextView,
                 surveyId: nextId === undefined ? prev.surveyId : nextId,
             };
-            writeUrlState(next);
-            return next;
         });
     }, []);
 
@@ -161,11 +159,15 @@ export function SurveyAdminPage(): React.ReactElement {
         return view;
     }, [view, surveyId]);
 
+    useEffect(() => {
+        writeUrlState({ view: safeView, surveyId: safeView === view ? surveyId : null });
+    }, [safeView, surveyId, view]);
+
     return (
         <Stack gap="md" p="md">
             <Group justify="space-between" align="flex-end">
                 <Stack gap={2}>
-                    <Title order={2}>Surveys</Title>
+                    <Title order={2}>SurveyJS</Title>
                     <Text c="dimmed" size="sm">
                         Manage SurveyJS surveys: design, publish, view responses, and configure the plugin.
                     </Text>
