@@ -405,7 +405,7 @@ export function SurveyRuntime({
                 // holds the answer; the next autosave will retry.
             }
         }
-    }, [bridge, published, configuredTheme, livePalette, lifecycle.kind, config]);
+    }, [bridge, published, configuredTheme, livePalette, config]);
 
     const startOver = useCallback(() => {
         if (!published || !model) return;
@@ -433,36 +433,35 @@ export function SurveyRuntime({
         );
     }
 
-    if (lifecycle.kind === 'loading' || !bridge || !published || !model) {
-        return (
-            <Stack align="center" gap="xs" py="md">
-                <Loader size="md" />
-                <Text>Loading survey…</Text>
-            </Stack>
-        );
-    }
-
+    // These lifecycle states intentionally render before the generic
+    // loading guard because they do not build a SurveyJS model at all.
     if (lifecycle.kind === 'not-active') {
         return renderInfoBlock(
-            'Survey not available',
-            lifecycle.label ?? 'This survey is currently outside its scheduled availability window.',
+            lifecycle.label,
             'gray',
         );
     }
 
     if (lifecycle.kind === 'locked') {
         return renderInfoBlock(
-            'Already submitted',
-            lifecycle.label ?? 'You have already submitted this survey.',
+            lifecycle.label,
             'blue',
         );
     }
 
     if (lifecycle.kind === 'timed-out') {
         return renderInfoBlock(
-            'Time is up',
-            lifecycle.label ?? 'The available time for this survey has elapsed.',
+            lifecycle.label,
             'orange',
+        );
+    }
+
+    if (lifecycle.kind === 'loading' || !bridge || !published || !model) {
+        return (
+            <Stack align="center" gap="xs" py="md">
+                <Loader size="md" />
+                <Text>Loading survey…</Text>
+            </Stack>
         );
     }
 
@@ -501,13 +500,44 @@ export function SurveyRuntime({
     );
 }
 
-function renderInfoBlock(title: string, body: string, color: string): React.ReactElement {
-    const html = renderMarkdown(body);
+function renderInfoBlock(label: string | null, color: string): React.ReactElement | null {
+    const html = renderStatusLabel(label);
+    if (html === null) {
+        return null;
+    }
     return (
-        <Alert color={color} title={title}>
+        <Alert color={color}>
             <Box dangerouslySetInnerHTML={{ __html: html }} />
         </Alert>
     );
+}
+
+function renderStatusLabel(label: string | null): string | null {
+    const value = label?.trim() ?? '';
+    if (value === '') {
+        return null;
+    }
+
+    // CMS translation fields often arrive as already-rendered HTML
+    // (`<p>...</p>` from the editor). Preserve that as-is instead of
+    // escaping it through the markdown fallback path. Empty editor
+    // output like `<p></p>` or `<p>&nbsp;</p>` counts as "not set".
+    if (value.startsWith('<') && value.endsWith('>')) {
+        return hasMeaningfulHtmlContent(value) ? value : null;
+    }
+
+    const rendered = renderMarkdown(value);
+    return hasMeaningfulHtmlContent(rendered) ? rendered : null;
+}
+
+function hasMeaningfulHtmlContent(value: string): boolean {
+    const text = value
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<br\s*\/?>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .trim();
+    return text !== '';
 }
 
 interface IHydrateArgs {
