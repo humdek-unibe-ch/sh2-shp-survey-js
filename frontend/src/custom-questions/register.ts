@@ -30,7 +30,15 @@ export interface IRegisterOptions {
     richTextEditor: IRichTextEditorAdapter | null;
 }
 
+// Global flag to track if custom questions have been registered
+let customQuestionsRegistered = false;
+
 export async function registerCustomQuestions(opts: IRegisterOptions): Promise<void> {
+    // Skip registration if already done - custom questions persist globally in SurveyJS
+    if (customQuestionsRegistered) {
+        return;
+    }
+
     const core = await import('survey-core');
     const { ComponentCollection, Serializer } = core;
 
@@ -46,6 +54,8 @@ export async function registerCustomQuestions(opts: IRegisterOptions): Promise<v
     if (opts.flags.microphone) {
         registerMicrophoneQuestion({ componentCollection: ComponentCollection, serializer: Serializer });
     }
+
+    customQuestionsRegistered = true;
 }
 
 export {
