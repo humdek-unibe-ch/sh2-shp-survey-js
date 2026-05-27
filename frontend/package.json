@@ -40,6 +40,8 @@
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "survey-core": "2.5.25",
+        "survey-analytics": "2.5.25",
+        "survey-pdf": "2.5.25",
         "survey-creator-core": "2.5.25",
         "survey-creator-react": "2.5.25",
         "survey-react-ui": "2.5.25",
