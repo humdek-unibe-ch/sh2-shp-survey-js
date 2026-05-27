@@ -36,7 +36,8 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { useMemo } from 'react';
-import { useMantineColorScheme, useMantineTheme } from '@mantine/core';
+import { useComputedColorScheme, useMantineTheme } from '@mantine/core';
+import { DefaultDark as SurveyCreatorDefaultDark, DefaultLight as SurveyCreatorDefaultLight } from 'survey-creator-core/themes';
 
 interface IThemePalette {
     background: string;
@@ -45,6 +46,7 @@ interface IThemePalette {
     primary: string;
     primaryText: string;
     border: string;
+    mode: 'light' | 'dark';
     /** Subtle hover/selection surface — used for toolbox row hovers. */
     surfaceMuted: string;
     /** Fills used for active/selected accents (lighter than primary). */
@@ -52,6 +54,7 @@ interface IThemePalette {
 }
 
 const HOST_PALETTE_LIGHT: IThemePalette = {
+    mode: 'light',
     background: '#f8f9fa',
     surface: '#ffffff',
     text: '#212529',
@@ -63,6 +66,7 @@ const HOST_PALETTE_LIGHT: IThemePalette = {
 };
 
 const HOST_PALETTE_HIGH_CONTRAST: IThemePalette = {
+    mode: 'dark',
     background: '#000000',
     surface: '#111111',
     text: '#ffffff',
@@ -74,6 +78,7 @@ const HOST_PALETTE_HIGH_CONTRAST: IThemePalette = {
 };
 
 const HOST_PALETTE_MODERN: IThemePalette = {
+    mode: 'light',
     background: '#f1f3f5',
     surface: '#ffffff',
     text: '#1c2025',
@@ -102,7 +107,9 @@ const STATIC_PALETTES: Record<string, IThemePalette> = {
  */
 export function useMantineLivePalette(): IThemePalette {
     const theme = useMantineTheme();
-    const { colorScheme } = useMantineColorScheme();
+    const colorScheme = useComputedColorScheme('light', {
+        getInitialValueInEffect: true,
+    });
 
     // Memoise so the reference is stable across renders that don't
     // actually change the palette. The Designer init effect depends
@@ -116,6 +123,7 @@ export function useMantineLivePalette(): IThemePalette {
         const darkScale = theme.colors.dark;
 
         return {
+            mode: isDark ? 'dark' : 'light',
             primary: primaryScale[6],
             primaryText: theme.white,
             primarySoft: isDark ? primaryScale[8] : primaryScale[1],
@@ -198,6 +206,26 @@ export function buildCreatorTheme(
     livePalette: IThemePalette | null = null,
 ): Record<string, unknown> {
     const palette = resolvePalette(themeCode, livePalette);
+    if (themeCode === 'default' && palette.mode === 'dark') {
+        return {
+            ...SurveyCreatorDefaultDark,
+            cssVariables: {
+                ...SurveyCreatorDefaultDark.cssVariables,
+                '--ctr-font-family':
+                    'var(--mantine-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif)',
+            },
+        };
+    }
+    if (themeCode === 'default' && palette.mode === 'light') {
+        return {
+            ...SurveyCreatorDefaultLight,
+            cssVariables: {
+                ...SurveyCreatorDefaultLight.cssVariables,
+                '--ctr-font-family':
+                    'var(--mantine-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif)',
+            },
+        };
+    }
     return {
         themeName: `mantine-${themeCode}`,
         cssVariables: {
