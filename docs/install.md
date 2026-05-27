@@ -17,6 +17,17 @@ You **don't** need to restart the backend or rebuild the frontend by hand — ev
 
 > The plugin is currently at version **0.2.2** (pre-release).
 
+### Install vs Enable
+
+The host treats install and enable as two distinct lifecycle steps:
+
+- **Install** runs the migration, registers permissions/styles/lookups/api_routes, writes the `plugins` row, and stops. The plugin is in the database but **inactive** — its admin pages, menu items, and styles do not load yet.
+- **Enable** flips `plugins.enabled = 1`, invalidates the relevant Redis caches, regenerates `config/selfhelp_plugin_bundles.php`, and publishes a Mercure event so the admin UI refreshes without a page reload.
+
+Why the split? Because production hosts run an admin review between the two steps — trust level, capabilities, permissions, and external hosts are all things a security-minded admin will want to inspect on the **Installed** tab before turning the plugin on. The UI **Install plugin** modal has an *Enable plugin after install* switch that defaults to ON for convenience; tick it off to install without enabling.
+
+The development workflow (Option 3 with `--symlink`) already runs `php bin/console selfhelp:plugin:enable <plugin-id>` for you, so a fresh checkout shows the plugin in the side menu immediately.
+
 ---
 
 ## Before you start
@@ -292,11 +303,14 @@ It checks: lock-file parity, Composer/npm package presence, Mercure reachability
 | Problem                                                          | Fix                                                                                             |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | **"Composer not found"** during queue drain                        | Install Composer 2 globally; the host Messenger worker uses Composer inside `var/plugin-composer/`. |
+| **"1 plugin could not be mounted — Plugin package import failed"** | The host stored a dev runtime URL (`http://localhost:5174/sh2-shp-survey-js/plugin.esm.js`) but the dev server is down. Start `npm --prefix frontend run dev:runtime`, wait for the first `built in <Ns>` line, then hard-refresh the admin page (`Ctrl+Shift+R`). |
+| **"Expected v\<version\>"** in the mount-failure banner            | The host already knows the plugin; the loaded ESM bundle just hasn't reported its version yet (because it never loaded). The expected value comes from `plugins.version` in the host DB, captured at install time from `plugin.json#version`. Fix the import failure above and the banner clears. Bumping `plugin.json#version` without re-running `install-local.mjs` is the only way to make the two numbers diverge intentionally. |
 | **Frontend tab still shows the plugin as missing**                | Start `npm --prefix frontend run dev:runtime`, verify `http://localhost:5174/sh2-shp-survey-js/plugin.esm.js` loads, then hard-refresh the admin page (`Ctrl+Shift+R`). |
 | **Backend says "Class … not found"** after install               | Restart the Symfony dev server once so the Composer autoloader regenerates.                     |
 | **Available tab is empty even though a Source is configured**     | Verify the registry's `<URL>/registry.json` endpoint returns valid JSON. The "Available" tab calls `GET /cms-api/v1/admin/plugins/available` which walks every enabled Source. |
 | **Doctor reports the plugin backend package is missing**           | Re-run `node scripts/install-local.mjs --symlink` and drain the `plugin_ops` queue so `var/plugin-composer/` is rebuilt. |
 | **Admin → Plugins page shows "Plugins" but no data**             | The current user is missing the `admin.plugins.manage` permission. Add it to the admin role.   |
+| **Install succeeded but the SurveyJS menu/UI is missing**         | Default upload mode (Options 1, 2) does **not** auto-enable — open `Admin → Plugins → Installed` and click **Enable** on the SurveyJS row. The `--symlink` flow used by Option 3 already enables the plugin for you. The host invalidates the relevant Redis categories and publishes a Mercure event on enable so the UI refreshes automatically. |
 
 ---
 

@@ -18,6 +18,36 @@ SurveyJS v2 plugin for the SelfHelp CMS. Provides:
 
 Submissions land in the existing `data_tables` / `data_rows` / `data_cols` / `data_cells` tables, normalized by `SurveyAnswerNormalizer`. HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns four entities — `surveys`, `survey_versions`, `survey_runs`, `survey_answer_links` — for surveys, version snapshots, response metadata, and per-question links into form storage. Surveys and responses also get generated stable keys (`survey_id` / `response_id`) for external references.
 
+## Develop locally in 60 seconds
+
+Two terminals from this plugin checkout:
+
+```bash
+# Terminal 1 — install + auto-enable into the local host (one-time per checkout).
+# Runs the same Messenger pipeline as production but in DEVELOPMENT install mode,
+# attaches the plugin through the isolated plugin Composer root
+# (`var/plugin-composer/`), and finishes with `selfhelp:plugin:enable`.
+node scripts/install-local.mjs --symlink
+
+# Terminal 2 — keep the runtime dev server running. This is what
+# the host frontend imports while you edit the plugin UI. If this
+# server is not running the host shows
+# "Plugin package import failed — http://localhost:5174/... failed".
+npm --prefix frontend run dev:runtime
+```
+
+Then open `http://localhost:3000/admin/plugins` and `http://localhost:3000/admin/surveys`. Plugin UI edits hot-reload through the dev server's SSE channel; backend edits require restarting the Symfony dev server. See [`docs/install.md`](docs/install.md#option-3--one-shot-install-from-the-terminal) for the full reference (every flag, every mode, every troubleshooting hint).
+
+### "Plugin could not be mounted — Expected v0.2.2"
+
+This is the host runtime telling you it knows about the plugin (the database row was created by `install-local.mjs --symlink`) but could not load the JS bundle from `http://localhost:5174/sh2-shp-survey-js/plugin.esm.js`. Three things to check, in order:
+
+1. **Is `npm --prefix frontend run dev:runtime` running in another terminal?** That command serves the URL above. If you closed the terminal, the import 404s.
+2. **Did the first Vite watch build finish?** Wait until you see `built in <Ns>` in the dev-runtime output before reloading the host page.
+3. **The "Expected v0.2.2" string is read from the host's database** (`plugins.version` column, set when you ran `install-local.mjs` from this plugin's `plugin.json`). The host returns it through `GET /cms-api/v1/plugins/manifest`; the host frontend then compares it against `registration.version` from the loaded ESM bundle. Bump `plugin.json#version` AND re-run `install-local.mjs --symlink` together, otherwise the two numbers go out of sync.
+
+The full chain is documented in the host repo: [`docs/plugins/installation.md` §6.2](../../sh-selfhelp_backend/docs/plugins/installation.md#62-troubleshooting-plugin-could-not-be-mounted).
+
 ## Repository layout
 
 ```
