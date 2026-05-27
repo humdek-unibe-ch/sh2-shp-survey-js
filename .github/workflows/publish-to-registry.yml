@@ -9,16 +9,23 @@
 #      copy under docs/plugins/).
 #   2. Build the frontend runtime via Vite (`dist/plugin.esm.js`
 #      and `dist/plugin.css`).
-#   3. Build the .shplugin archive with `scripts/build-shplugin.mjs`.
-#      The archive contains plugin.json + artifacts/{plugin.esm.js,
-#      plugin.css,SHA256SUMS} + signature.json (Ed25519). The same
-#      canonical signed payload is reused for the registry entry.
+#   3. Build the CONNECTED .shplugin with `scripts/build-shplugin.mjs
+#      --mode connected`. Used by the registry publish step below
+#      because the registry serves manifest + raw artifacts and the
+#      host resolves the backend Composer package from the declared
+#      `backend.composer.repository`.
 #   4. If REGISTRY_PUSH_TOKEN is set, checkout the registry repo and
 #      run `node scripts/publish-to-registry.mjs --skip-build --push`
 #      to copy the manifest + artifacts and splice the signed
-#      pluginEntry into registry.json. (The publisher is a single
-#      cross-platform Node script — no .ps1/.sh wrappers.)
-#   5. Always: upload the .shplugin as a release asset.
+#      pluginEntry into registry.json.
+#   5. Build the STANDALONE .shplugin (`--mode standalone`). The
+#      standalone layout carries `backend/package/` inside the archive
+#      so the host can install via a Composer path repository — no
+#      Packagist / git fetch required for the plugin's own code. This
+#      is the asset humans download from the GitHub Release for
+#      offline / drag-and-drop installs.
+#   6. Always: upload BOTH archives (connected + standalone) as
+#      workflow artifacts and as GitHub Release assets.
 #
 # Required secrets:
 #   SELFHELP_PLUGIN_SIGNING_KEY      Ed25519 64-byte secret key (base64).
@@ -95,7 +102,7 @@ jobs:
                   npm install --legacy-peer-deps --no-audit --no-fund
                   npm run build:runtime
 
-            - name: Build .shplugin (signed)
+            - name: Build connected .shplugin (registry publish)
               working-directory: plugin
               env:
                   SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
@@ -111,6 +118,7 @@ jobs:
                   echo "id=$ID"   >> "$GITHUB_OUTPUT"
                   echo "ver=$VER" >> "$GITHUB_OUTPUT"
                   echo "archive=plugin/dist/${ID}-${VER}.shplugin" >> "$GITHUB_OUTPUT"
+                  echo "standalone_archive=plugin/dist/${ID}-${VER}-standalone.shplugin" >> "$GITHUB_OUTPUT"
 
             - name: Extract per-version changelog notes
               id: notes
@@ -164,18 +172,43 @@ jobs:
                       --skip-build \
                       --push
 
-            - name: Upload .shplugin as workflow artifact
+            # Build a STANDALONE .shplugin (carries backend/package/ so the
+            # archive is self-contained — no Composer fetch from the
+            # registry required). This is what humans download from the
+            # GitHub Release and drag-and-drop into Admin → Plugins →
+            # Upload .shplugin. The connected .shplugin built earlier
+            # remains the source the registry publish consumed.
+            - name: Build standalone .shplugin (GitHub Release asset)
+              working-directory: plugin
+              env:
+                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
+                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
+              run: |
+                  # build-shplugin.mjs always writes to dist/<id>-<ver>.shplugin.
+                  # Move the connected archive out of the way so we keep both
+                  # files and the standalone build does not clobber it.
+                  mv "dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}.shplugin" \
+                     "dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}-connected.shplugin"
+                  node scripts/build-shplugin.mjs --skip-build --mode standalone
+                  mv "dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}.shplugin" \
+                     "dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}-standalone.shplugin"
+
+            - name: Upload .shplugin archives as workflow artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}.shplugin
-                  path: ${{ steps.pkg.outputs.archive }}
+                  name: ${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}-shplugin
+                  path: |
+                      plugin/dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}-connected.shplugin
+                      ${{ steps.pkg.outputs.standalone_archive }}
 
             - name: Create GitHub Release
               if: startsWith(github.ref, 'refs/tags/v')
               uses: softprops/action-gh-release@v2
               with:
                   name: ${{ steps.pkg.outputs.id }} ${{ steps.pkg.outputs.ver }}
-                  files: ${{ steps.pkg.outputs.archive }}
+                  files: |
+                      ${{ steps.pkg.outputs.standalone_archive }}
+                      plugin/dist/${{ steps.pkg.outputs.id }}-${{ steps.pkg.outputs.ver }}-connected.shplugin
                   body_path: ${{ steps.notes.outputs.notes-file }}
                   fail_on_unmatched_files: true
                   token: ${{ github.token }}
