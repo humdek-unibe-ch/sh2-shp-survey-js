@@ -265,7 +265,6 @@
         {
             "name": "surveyjs_admin_list",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::list",
             "methods": [
                 "GET"
             ],
@@ -274,7 +273,6 @@
         {
             "name": "surveyjs_admin_create",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::create",
             "methods": [
                 "POST"
             ],
@@ -283,228 +281,150 @@
         {
             "name": "surveyjs_admin_get",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::get",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_update",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::update",
             "methods": [
                 "PUT"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_delete",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::delete",
             "methods": [
                 "DELETE"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_draft_save",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/draft",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::saveDraft",
             "methods": [
                 "PUT"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_versions_create",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::publishVersion",
             "methods": [
                 "POST"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_versions_list",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::versions",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_versions_restore",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions/{versionId}/restore",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::restoreVersion",
             "methods": [
                 "POST"
             ],
-            "requirements": {
-                "id": "\\d+",
-                "versionId": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_versions_get",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions/{versionId}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::getVersion",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+",
-                "versionId": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_presence",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/presence",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::presence",
             "methods": [
                 "POST"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.manage"
         },
         {
             "name": "surveyjs_admin_dashboard",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::dashboard",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.view-responses"
         },
         {
             "name": "surveyjs_admin_dashboard_results",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/dashboard/results",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::dashboardResults",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.view-responses"
         },
         {
             "name": "surveyjs_admin_responses",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::responses",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.view-responses"
         },
         {
             "name": "surveyjs_admin_response_detail",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::responseDetail",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+",
-                "rid": "[A-Za-z0-9_-]+"
-            },
             "permission": "surveyjs.surveys.view-responses"
         },
         {
             "name": "surveyjs_admin_response_pdf",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}/pdf",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::responsePdf",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+",
-                "rid": "[A-Za-z0-9_-]+"
-            },
             "permission": "surveyjs.surveys.export-pdf"
         },
         {
             "name": "surveyjs_admin_response_delete",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::deleteResponse",
             "methods": [
                 "DELETE"
             ],
-            "requirements": {
-                "id": "\\d+",
-                "rid": "[A-Za-z0-9_-]+"
-            },
             "permission": "surveyjs.surveys.delete-responses"
         },
         {
             "name": "surveyjs_admin_responses_export_csv",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/csv",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::exportResponsesCsv",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.export-csv"
         },
         {
             "name": "surveyjs_admin_responses_export_xlsx",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/xlsx",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::exportResponsesXlsx",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.export-xlsx"
         },
         {
             "name": "surveyjs_admin_responses_export_json",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/export/json",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::exportResponsesJson",
             "methods": [
                 "GET"
             ],
-            "requirements": {
-                "id": "\\d+"
-            },
             "permission": "surveyjs.surveys.export-json"
         },
         {
             "name": "surveyjs_admin_license_key",
             "path": "/admin/plugins/sh2-shp-survey-js/license-key",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysLicenseController::__invoke",
             "methods": [
                 "GET"
             ],
@@ -513,7 +433,6 @@
         {
             "name": "surveyjs_admin_health",
             "path": "/admin/plugins/sh2-shp-survey-js/health",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysHealthController::__invoke",
             "methods": [
                 "GET"
             ],
@@ -522,114 +441,72 @@
         {
             "name": "surveyjs_public_published",
             "path": "/plugins/sh2-shp-survey-js/published/{key}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::published",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_submit",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/submit",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::submit",
             "methods": [
                 "POST"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_progress_get",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::progressGet",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_progress_put",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::progressPut",
             "methods": [
                 "PUT"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_progress_delete",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/progress",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::progressDelete",
             "methods": [
                 "DELETE"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_edit",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/edit",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::editResponse",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_upload",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/files",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::uploadFile",
             "methods": [
                 "POST"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_file_delete",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/files/{fileId}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::deleteFile",
             "methods": [
                 "DELETE"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+",
-                "fileId": "\\d+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_file_download",
             "path": "/plugins/sh2-shp-survey-js/files/{fileId}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::downloadFile",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "fileId": "\\d+"
-            }
+            ]
         },
         {
             "name": "surveyjs_public_choices",
             "path": "/plugins/sh2-shp-survey-js/published/{key}/choices/{token}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::choices",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+",
-                "token": "[a-zA-Z0-9_-]+"
-            }
+            ]
         }
     ],
     "scheduledJobs": [],
