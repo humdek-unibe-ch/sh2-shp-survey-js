@@ -57,6 +57,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 final class SurveysPublicController
 {
     public function __construct(
+        private readonly ?string $licenseKey,
         private readonly SurveyRepository $surveys,
         private readonly SurveyResponseService $responseService,
         private readonly SurveyResponseDraftService $draftService,
@@ -138,6 +139,9 @@ final class SurveysPublicController
                 ],
             ],
         ];
+        if (($config['savePdf'] ?? false) && is_string($this->licenseKey) && $this->licenseKey !== '') {
+            $response->headers->set('X-SurveyJs-License-Key', $this->licenseKey);
+        }
         $response->setData($payload);
         return $response;
     }

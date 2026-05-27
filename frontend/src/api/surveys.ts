@@ -122,6 +122,7 @@ export interface ISubmissionError extends Error {
 // entries in `plugin.json#apiRoutes` — those are the single source
 // of truth the host installer persists into `api_routes`.
 const BASE = '/api/plugins/sh2-shp-survey-js';
+export const RUNTIME_LICENSE_HEADER = 'X-SurveyJs-License-Key';
 
 function csrfHeaders(): Record<string, string> {
     if (typeof document === 'undefined') {
@@ -179,6 +180,15 @@ export async function fetchPublishedSurvey(
             ...runtimeConfigHeader(config),
         },
     });
+    const runtimeLicenseKey = res.headers.get(RUNTIME_LICENSE_HEADER);
+    if (typeof window !== 'undefined') {
+        const runtimeWindow = window as Window & { __SURVEYJS_LICENSE_KEY?: string };
+        if (typeof runtimeLicenseKey === 'string' && runtimeLicenseKey !== '') {
+            runtimeWindow.__SURVEYJS_LICENSE_KEY = runtimeLicenseKey;
+        } else {
+            delete runtimeWindow.__SURVEYJS_LICENSE_KEY;
+        }
+    }
     const body = await ensureOk<{ data: IPublishedSurvey }>(res);
     return body.data;
 }

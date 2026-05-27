@@ -43,6 +43,7 @@ import {
     type IDraftPayload,
     type IPublishedSurvey,
     type ISubmissionEnforcePayload,
+    RUNTIME_LICENSE_HEADER,
     deleteDraft,
     deleteSurveyFile,
     fetchDraft,
@@ -84,6 +85,7 @@ export interface ISurveyJsStyleProps {
 interface ISurveyRuntimeBridge {
     Survey: React.ComponentType<{ model: unknown }>;
     Model: new (definition: unknown) => import('survey-core').ISurveyModel;
+    setLicenseKey: (key: string) => void;
     Serializer: {
         addProperty: (className: string, descriptor: Record<string, unknown>) => void;
         getProperty: (className: string, name: string) => unknown;
@@ -100,8 +102,6 @@ type LifecycleState =
     | { kind: 'submitted'; responseId: string; submittedAt: string }
     | { kind: 'timed-out'; label: string | null };
 
-const RUNTIME_LICENSE_HEADER = 'X-SurveyJs-License-Key';
-
 async function loadRuntime(): Promise<ISurveyRuntimeBridge> {
     const [core, ui] = await Promise.all([
         import('survey-core'),
@@ -110,6 +110,7 @@ async function loadRuntime(): Promise<ISurveyRuntimeBridge> {
     return {
         Survey: ui.Survey as unknown as React.ComponentType<{ model: unknown }>,
         Model: core.Model as unknown as new (definition: unknown) => import('survey-core').ISurveyModel,
+        setLicenseKey: core.setLicenseKey as (key: string) => void,
         Serializer: core.Serializer,
     };
 }
@@ -254,7 +255,11 @@ export function SurveyRuntime({
         });
 
         if (config.savePdf && published.runtimeConfig.savePdf) {
-            registerSavePdfButton(nextModel);
+            const licenseKey = readRuntimeLicenseKey();
+            if (licenseKey) {
+                bridge.setLicenseKey(licenseKey);
+            }
+            registerSavePdfButton(nextModel, bridge);
         }
 
         // Step 4: hydrate (server draft / local cache / edit-mode response).
@@ -577,6 +582,11 @@ function extractDraftData(payload: Record<string, unknown>): Record<string, unkn
     return {};
 }
 
+function readRuntimeLicenseKey(): string {
+    if (typeof window === 'undefined') return '';
+    return (window as Window & { __SURVEYJS_LICENSE_KEY?: string }).__SURVEYJS_LICENSE_KEY ?? '';
+}
+
 function buildEnforcePayload(
     config: IRuntimeSectionConfig,
     responseId: string | null,
@@ -677,9 +687,11 @@ function ensureRuntimeProperties(bridge: ISurveyRuntimeBridge): void {
     });
 }
 
-function registerSavePdfButton(model: import('survey-core').ISurveyModel): void {
+function registerSavePdfButton(
+    model: import('survey-core').ISurveyModel,
+    bridge: Pick<ISurveyRuntimeBridge, 'setLicenseKey'>,
+): void {
     if (typeof window === 'undefined') return;
-    const licenseKey = (window as { __SURVEYJS_LICENSE_KEY?: string }).__SURVEYJS_LICENSE_KEY ?? '';
     // We always wire the button: if the SurveyJS commercial PDF
     // package isn't installed, `exportSurveyAsPdf` falls back to the
     // browser print dialog, which lets the user "Save as PDF" too.
@@ -687,16 +699,20 @@ function registerSavePdfButton(model: import('survey-core').ISurveyModel): void 
         id: 'sh2-save-pdf',
         title: 'Save as PDF',
         action: () => {
-            void exportSurveyAsPdf(model, licenseKey);
+            void exportSurveyAsPdf(model, bridge, readRuntimeLicenseKey());
         },
     });
 }
 
 async function exportSurveyAsPdf(
     model: import('survey-core').ISurveyModel,
+    bridge: Pick<ISurveyRuntimeBridge, 'setLicenseKey'>,
     licenseKey: string,
 ): Promise<void> {
     try {
+        if (licenseKey) {
+            bridge.setLicenseKey(licenseKey);
+        }
         // `survey-pdf` is an optional commercial dependency. We
         // dynamically import it so non-PDF deployments don't pay
         // for the bundle. When it isn't installed we fall back to
@@ -712,11 +728,7 @@ async function exportSurveyAsPdf(
         };
         const survey = model as unknown as { jsonObj?: unknown; toJSON?: () => unknown };
         const definition = survey.jsonObj ?? survey.toJSON?.();
-        const pdf = new mod.SurveyPDF(definition, {
-            isLicenseExpired: false,
-            haveCommercialLicense: Boolean(licenseKey),
-            commercialLicenseKey: licenseKey,
-        });
+        const pdf = new mod.SurveyPDF(definition, undefined);
         pdf.data = (model as { data: Record<string, unknown> }).data;
         pdf.save(`survey-${Date.now()}.pdf`);
     } catch {

@@ -117,7 +117,9 @@ return static function (ContainerConfigurator $configurator): void {
         ->tag('controller.service_arguments');
 
     $services->set(SurveysAdminController::class)->tag('controller.service_arguments');
-    $services->set(SurveysPublicController::class)->tag('controller.service_arguments');
+    $services->set(SurveysPublicController::class)
+        ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%')
+        ->tag('controller.service_arguments');
     $services->set(SurveysHealthController::class)->tag('controller.service_arguments');
 
     $services->set(SurveyJsStyleRegistrySubscriber::class)->tag('kernel.event_subscriber');

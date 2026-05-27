@@ -99,6 +99,7 @@ declare module 'survey-core' {
         onDownloadFile: IEvent<{ content: unknown; callback: (status: string, value?: string) => void }>;
         onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
     }
+    export function setLicenseKey(key: string): void;
     export const ComponentCollection: {
         Instance: {
             add: (descriptor: {

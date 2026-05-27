@@ -14,10 +14,12 @@ SPDX-License-Identifier: MPL-2.0
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Code, Stack, Text } from '@mantine/core';
 
+import { fetchLicenseKey } from '../../api/surveys-admin';
 import type { IDashboardResults } from '../../api/surveys-admin';
 
 interface IAnalyticsBridge {
     Model: new (definition: unknown) => unknown;
+    setLicenseKey: (key: string) => void;
     VisualizationPanel: new (
         questions: Array<unknown>,
         data: Array<Record<string, unknown>>,
@@ -36,6 +38,7 @@ async function loadAnalytics(): Promise<IAnalyticsBridge | null> {
         ]);
         return {
             Model: (core as unknown as IAnalyticsBridge).Model,
+            setLicenseKey: (core as unknown as IAnalyticsBridge).setLicenseKey,
             VisualizationPanel: (analytics as unknown as IAnalyticsBridge).VisualizationPanel,
         };
     } catch {
@@ -51,14 +54,22 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [bridge, setBridge] = useState<IAnalyticsBridge | null>(null);
     const [bridgeMissing, setBridgeMissing] = useState<boolean>(false);
+    const [licenseConfigured, setLicenseConfigured] = useState<boolean | null>(null);
 
     useEffect(() => {
         let cancelled = false;
-        void loadAnalytics().then((b) => {
+        void Promise.all([
+            loadAnalytics(),
+            fetchLicenseKey().catch(() => ({ licenseKey: null, configured: false })),
+        ]).then(([b, license]) => {
             if (cancelled) return;
             if (b === null) {
                 setBridgeMissing(true);
                 return;
+            }
+            setLicenseConfigured(Boolean(license.configured));
+            if (license.licenseKey) {
+                b.setLicenseKey(license.licenseKey);
             }
             setBridge(b);
         });
@@ -68,7 +79,7 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
     }, []);
 
     useEffect(() => {
-        if (!bridge || !containerRef.current) return;
+        if (!bridge || !containerRef.current || licenseConfigured !== true) return;
         const surveyModel = new bridge.Model(results.definition) as { getAllQuestions: () => Array<unknown> };
         const panel = new bridge.VisualizationPanel(
             surveyModel.getAllQuestions(),
@@ -77,7 +88,7 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
         );
         panel.render(containerRef.current);
         return () => panel.destroy();
-    }, [bridge, results]);
+    }, [bridge, results, licenseConfigured]);
 
     if (bridgeMissing) {
         return (
@@ -86,6 +97,19 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
                     <Text size="sm">
                         Install <Code>survey-analytics</Code> (commercial) to enable per-question chart
                         visualizations. The table tab still gives full access to the response data.
+                    </Text>
+                </Stack>
+            </Alert>
+        );
+    }
+    if (licenseConfigured === false) {
+        return (
+            <Alert color="yellow" title="SurveyJS Dashboard license not configured">
+                <Stack gap="xs">
+                    <Text size="sm">
+                        The charts view uses <Code>survey-analytics</Code>, which requires a SurveyJS
+                        developer license. Configure <Code>SURVEYJS_LICENSE_KEY</Code> in the backend
+                        environment to enable charts.
                     </Text>
                 </Stack>
             </Alert>
