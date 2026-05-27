@@ -100,8 +100,20 @@ async function main(opts) {
     const cssFile = path.join(stageArtifacts, 'plugin.css');
     const hasCss = existsSync(cssFile);
 
-    const entrypointUrl = `artifacts/${pluginId}-${version}/plugin.esm.js`;
-    const stylesheetUrl = hasCss ? `artifacts/${pluginId}-${version}/plugin.css` : null;
+    // The host frontend imports the runtime via dynamic `import(<url>)`,
+    // which requires an absolute https URL (browsers reject bare module
+    // specifiers like "artifacts/...js"). Join the artifact path to the
+    // registry's published `baseUrl` so the URL written into the signed
+    // payload AND the registry entry are both absolute.
+    const registryBaseUrl = resolveRegistryBaseUrl({
+        cliValue: opts['registry-base-url'],
+        envValue: process.env.SELFHELP_REGISTRY_BASE_URL,
+        registryPath,
+    });
+    step(`Registry baseUrl: ${registryBaseUrl}`);
+    const artifactPathPrefix = `artifacts/${pluginId}-${version}`;
+    const entrypointUrl = joinAbsoluteUrl(registryBaseUrl, `${artifactPathPrefix}/plugin.esm.js`);
+    const stylesheetUrl = hasCss ? joinAbsoluteUrl(registryBaseUrl, `${artifactPathPrefix}/plugin.css`) : null;
 
     step('Generating signed registry entry');
     const entryScript = path.join(registryPath, 'scripts', 'build-registry-entry.mjs');
@@ -207,6 +219,54 @@ function resolveRegistryPath(explicit) {
     return candidate;
 }
 
+/**
+ * Decide the absolute base URL that the registry is published under.
+ *
+ * Resolution order (highest priority first):
+ *   1. `--registry-base-url <https://.../>` CLI flag.
+ *   2. `SELFHELP_REGISTRY_BASE_URL` environment variable.
+ *   3. `baseUrl` field declared at the top of `<registryPath>/registry.json`.
+ *
+ * Throws when none of those is set, because relative `entrypointUrl`
+ * values break the host frontend's `await import(<url>)` and silently
+ * publishing them again would just reproduce the bug.
+ */
+function resolveRegistryBaseUrl({ cliValue, envValue, registryPath }) {
+    const candidate = typeof cliValue === 'string' && cliValue !== ''
+        ? cliValue
+        : typeof envValue === 'string' && envValue !== ''
+            ? envValue
+            : readRegistryBaseUrlFromFile(registryPath);
+    if (typeof candidate !== 'string' || candidate === '') {
+        throw new Error(
+            'Could not determine the registry base URL. Set the `baseUrl` field at the top of '
+            + `${path.join(registryPath, 'registry.json')}, or pass --registry-base-url <https://.../>, `
+            + 'or export SELFHELP_REGISTRY_BASE_URL=<https://.../>.',
+        );
+    }
+    if (!/^https?:\/\//i.test(candidate)) {
+        throw new Error(`Registry baseUrl must be an absolute http(s) URL, got "${candidate}".`);
+    }
+    return candidate.endsWith('/') ? candidate : `${candidate}/`;
+}
+
+function readRegistryBaseUrlFromFile(registryPath) {
+    const registryJsonPath = path.join(registryPath, 'registry.json');
+    if (!existsSync(registryJsonPath)) return null;
+    try {
+        const parsed = parseJsonFile(registryJsonPath);
+        return typeof parsed.baseUrl === 'string' && parsed.baseUrl !== '' ? parsed.baseUrl : null;
+    } catch {
+        return null;
+    }
+}
+
+function joinAbsoluteUrl(baseUrl, relativePath) {
+    const trimmedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    const trimmedPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+    return `${trimmedBase}${trimmedPath}`;
+}
+
 function captureNode(argv) {
     const result = spawnSync('node', argv, {
         encoding: 'utf8',
@@ -279,6 +339,11 @@ Options:
   --registry <path>   Path to the sh2-plugin-registry checkout
                       (default: ../sh2-plugin-registry; or
                       SELFHELP_REGISTRY_PATH env).
+  --registry-base-url <https://.../>
+                      Override the absolute base URL the registry is
+                      served under. By default the publisher reads
+                      "baseUrl" from <registry>/registry.json, or falls
+                      back to SELFHELP_REGISTRY_BASE_URL.
   --channel <name>    stable (default), beta, alpha, or nightly.
   --skip-build        Skip the frontend rebuild inside build-shplugin.mjs.
   --dry-run           Print the planned changes without writing/committing.
