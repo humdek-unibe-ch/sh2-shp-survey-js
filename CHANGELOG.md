@@ -4,6 +4,89 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
+## 0.2.6 — 2026-05-26
+
+### Changed
+
+- **Plugin API routes are now host-persisted, not event-registered.**
+  The host (`sh-selfhelp_backend` ≥ pre-release) replaced the event-
+  based `ApiRouteRegistryEvent` with a database-backed pipeline: the
+  installer's `PluginApiRouteSynchronizer` reads `plugin.json#apiRoutes`
+  and writes one row per route into `api_routes` (tagged with
+  `id_plugins`), linked to permissions via `rel_api_routes_permissions`.
+  `ApiRouteLoader` then loads plugin routes through the same
+  DB-backed pipeline used for core routes and filters out rows whose
+  owning plugin is disabled. To match the new contract:
+
+  - `plugin.json#apiRoutes` now declares `controller`
+    (`Humdek\SurveyJsBundle\Controller\Api\V1\…::method`) and
+    `requirements` (regex per path placeholder) for every route, so
+    the host can validate the manifest, resolve permissions, and
+    build the `api_routes` row up-front.
+  - `backend/src/EventSubscriber/SurveyJsApiRouteSubscriber.php`
+    and its `App\Plugin\Event\ApiRouteRegistryEvent` stub were
+    removed — the manifest is now the only source of truth.
+  - The plugin's migration still seeds the eight
+    `surveyjs.surveys.*` permissions and links them to the `admin`
+    role so administrators get full access out of the box.
+  - The vendored `docs/plugins/plugin-manifest.schema.json` was
+    refreshed to the host's canonical copy (which now requires
+    `controller` on every `apiRoutes` entry and accepts optional
+    `version` / `requirements` / `params` / `permission` /
+    `permissions`).
+
+  No DB schema change — this is a code-level change only (patch
+  bump per the host's plugin version semantics).
+
+## 0.2.5 — 2026-05-26
+
+### Fixed
+
+- **Admin Surveys page now loads.** Browser-side API clients were
+  hitting the Symfony route prefix (`/cms-api/v1/...`) directly,
+  which 404'd against the Next.js dev server because the host
+  frontend funnels every API call through its BFF proxy at
+  `/api/[...path]`. The plugin now uses the BFF-relative form
+  (`/api/admin/plugins/sh2-shp-survey-js/...` and
+  `/api/plugins/sh2-shp-survey-js/...`); the proxy validates CSRF,
+  attaches the httpOnly JWT, and forwards to
+  `/cms-api/v1/...` on the Symfony backend. Affected files:
+  `frontend/src/api/surveys-admin.ts`, `frontend/src/api/surveys.ts`,
+  `frontend/src/index.ts` (license-key health check),
+  `frontend/src/admin/SurveyResponsesPage.tsx` (PDF download link),
+  and the `select-survey-js` field renderer comment.
+
+### Changed
+
+- **Migrations consolidated into a single install file.** The plugin
+  is still pre-release, so the schema + CMS surface registration that
+  used to be split across `Version20260522063620`,
+  `Version20260525200000`, and `Version20260525200500` now lives in a
+  single `Version20260522063620.php`. Fresh installs (and
+  `selfhelp:plugin:install` followed by enable) run one migration
+  that creates the six plugin-owned tables (`surveys`,
+  `survey_versions`, `survey_runs` with `visitor_id`,
+  `survey_answer_links`, `survey_response_drafts`, `survey_files`),
+  seeds the full field set (including `timeout`,
+  `dynamic_replacement`, `own_entries_only`, `data_config`,
+  `allow_anonymous`, `sample_points`), and registers all eight
+  permissions (`surveyjs.surveys.{manage, view-responses, export-pdf,
+  delete-responses, export-csv, export-xlsx, export-json,
+  upload-files}`).
+
+### Upgrading from 0.2.x
+
+This release REPLACES the migration set. Reinstall the plugin
+locally to apply the unified migration:
+
+```bash
+node scripts/install-local.mjs --symlink
+```
+
+The install script purges the previous install (which drops the
+plugin-owned tables thanks to `id_plugins` tagging) before
+re-running the consolidated migration.
+
 ## Unreleased
 
 ### Added
