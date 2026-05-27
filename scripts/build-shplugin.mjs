@@ -278,16 +278,14 @@ async function main() {
             ...(hasCss ? { frontendCss: cssHash } : {}),
         },
         compatibility: manifest.compatibility,
+        archive: { mode },
     };
     if (mode === 'standalone') {
-        payloadInput.archive = {
-            mode: 'standalone',
-            backend: {
-                included: true,
-                path: 'backend/package',
-                installMode: 'composer-path-repository',
-                packageHash: computeBackendPackageHash(sums),
-            },
+        payloadInput.archive.backend = {
+            included: true,
+            path: 'backend/package',
+            installMode: 'composer-path-repository',
+            packageHash: computeBackendPackageHash(sums),
         };
     }
     const canonical = execFileSync('node', [signScript, 'build-payload', '--input', '-'], {
