@@ -1,6 +1,6 @@
 {
     "name": "@humdek/sh2-shp-survey-js-mobile",
-    "version": "0.2.12",
+    "version": "0.2.13",
     "description": "SurveyJS v2 readonly mobile renderer for the SelfHelp plugin ecosystem.",
     "license": "MPL-2.0",
     "main": "dist/index.js",
