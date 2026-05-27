@@ -643,6 +643,6 @@
         "namespace": "surveyjs"
     },
     "archive": {
-        "mode": "standalone"
+        "mode": "connected"
     }
 }

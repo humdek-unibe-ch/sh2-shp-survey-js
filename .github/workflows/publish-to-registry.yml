@@ -100,7 +100,7 @@ jobs:
               env:
                   SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
                   SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
-              run: node scripts/build-shplugin.mjs --skip-build
+              run: node scripts/build-shplugin.mjs --skip-build --mode connected
 
             - name: Extract plugin id + version
               id: pkg
