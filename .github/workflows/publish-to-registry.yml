@@ -53,6 +53,8 @@ jobs:
     publish:
         name: Build, sign, publish .shplugin
         runs-on: ubuntu-latest
+        env:
+            REGISTRY_PUSH_TOKEN: ${{ secrets.REGISTRY_PUSH_TOKEN }}
         steps:
             - name: Checkout plugin
               uses: actions/checkout@v4
@@ -63,7 +65,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                   repository: humdek-unibe-ch/sh2-plugin-registry
-                  token: ${{ secrets.REGISTRY_PUSH_TOKEN || github.token }}
+                  token: ${{ env.REGISTRY_PUSH_TOKEN != '' && env.REGISTRY_PUSH_TOKEN || github.token }}
                   path: sh2-plugin-registry
                   fetch-depth: 1
 
@@ -148,7 +150,7 @@ jobs:
                   echo "notes-file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
             - name: Publish to registry
-              if: ${{ secrets.REGISTRY_PUSH_TOKEN != '' }}
+              if: ${{ env.REGISTRY_PUSH_TOKEN != '' }}
               working-directory: plugin
               env:
                   CHANNEL: ${{ inputs.channel || 'stable' }}
@@ -178,10 +180,13 @@ jobs:
                   token: ${{ github.token }}
 
             - name: Summary
-              if: ${{ !secrets.REGISTRY_PUSH_TOKEN }}
               run: |
-                  echo "::warning::REGISTRY_PUSH_TOKEN secret is not set."
-                  echo ".shplugin was built and (if tagged) uploaded as a release asset,"
-                  echo "but the registry was NOT updated. Add a PAT with contents:write on"
-                  echo "humdek-unibe-ch/sh2-plugin-registry as REGISTRY_PUSH_TOKEN to enable"
-                  echo "auto-publishing."
+                  if [ -z "$REGISTRY_PUSH_TOKEN" ]; then
+                      echo "::warning::REGISTRY_PUSH_TOKEN secret is not set."
+                      echo ".shplugin was built and (if tagged) uploaded as a release asset,"
+                      echo "but the registry was NOT updated. Add a PAT with contents:write on"
+                      echo "humdek-unibe-ch/sh2-plugin-registry as REGISTRY_PUSH_TOKEN to enable"
+                      echo "auto-publishing."
+                  else
+                      echo "Registry push token is set. Plugin published to sh2-plugin-registry."
+                  fi
