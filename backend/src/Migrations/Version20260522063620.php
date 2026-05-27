@@ -12,40 +12,43 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * SurveyJS plugin initial schema + CMS surface registration.
+ * SurveyJS plugin — single consolidated install migration.
  *
- * Phase 1 — plugin-owned tables:
- *   - `surveys`              survey aggregate root.
- *   - `survey_versions`      immutable definition snapshots.
- *   - `survey_runs`          submission metadata, FK into core `data_rows`.
- *   - `survey_answer_links`  per-question link into core `data_cells`.
+ * The plugin is still pre-release, so fresh installs use this one
+ * migration to register the complete schema + CMS surface in one
+ * shot. Previously this work was split across three Doctrine
+ * migrations (`Version20260522063620`, `Version20260525200000`,
+ * `Version20260525200500`); the latter two have been folded into
+ * this file so install / uninstall always sees a single matching
+ * pair of up / down statements.
  *
- * Phase 2 — CMS registration so surveys reach the editor + admin:
- *   - new `style_groups` row "Plugin: SurveyJS" so the plugin's styles
+ * Plugin-owned tables:
+ *   - `surveys`                   survey aggregate root + draft columns.
+ *   - `survey_versions`           immutable definition snapshots.
+ *   - `survey_runs`               submission metadata, FK into core `data_rows`,
+ *                                 carries `visitor_id` for anonymous once-per-user.
+ *   - `survey_answer_links`       per-question link into core `data_cells`.
+ *   - `survey_response_drafts`    cross-device per-page autosave drafts.
+ *   - `survey_files`              private file uploads (GPX / mic / image).
+ *
+ * CMS registration:
+ *   - `style_groups` row "Plugin: SurveyJS" so the plugin's styles
  *     show up in their own bucket of the Add-Section modal,
- *   - two new `field_types` rows (`select-survey-js`,
- *     `select-survey-js-theme`) consumed by the section-field editor,
- *   - the legacy plugin's field set seeded as plugin-owned `fields`,
+ *   - `field_types` rows (`select-survey-js`, `select-survey-js-theme`)
+ *     consumed by the section-field editor,
+ *   - the full legacy plugin field set seeded as plugin-owned `fields`,
  *   - `surveyjs` and `gpxMap` rows in `styles`, both stamped with
- *     `id_plugins` so the host PluginPurger can reverse them on
- *     uninstall,
- *   - `rel_fields_styles` links wiring every field to the `surveyjs`
- *     style with the help text reused from the legacy plugin,
- *   - the three plugin permissions stamped with `id_plugins` and linked
- *     to the host `admin` role via `rel_permissions_roles` so anyone
- *     in the role can manage surveys / view responses / export PDFs.
- *
- * The plugin is still pre-release, so draft editing columns live in
- * this initial migration instead of a follow-up migration. Fresh test
- * installs remain easier to audit: one migration creates the complete
- * SurveyJS schema and CMS surface.
+ *     `id_plugins`,
+ *   - `rel_fields_styles` links wiring every field to its style,
+ *   - eight plugin permissions stamped with `id_plugins` and linked
+ *     to the host `admin` role via `rel_permissions_roles`.
  *
  * All names follow host AGENTS.md DB rules: plural lowercase_snake_case
  * tables, `id_<plural_target_table>` foreign keys,
  * `pk_/fk_/idx_/uq_<table>_<column>` constraint names.
  *
- * `down()` is declared safe: it deletes only rows it owns (matched by
- * `id_plugins` on shared CMS rows or by the seeded names) and drops only the four
+ * `down()` deletes only rows it owns (matched by `id_plugins` on
+ * shared CMS rows or by the seeded names) and drops only the six
  * plugin-owned tables. Existing core data is untouched.
  */
 final class Version20260522063620 extends AbstractMigration
@@ -56,9 +59,14 @@ final class Version20260522063620 extends AbstractMigration
 
     /** @var array<int, array{name: string, description: string}> */
     private const PERMISSIONS = [
-        ['name' => 'surveyjs.surveys.manage',          'description' => 'Create, edit, publish, delete surveys.'],
-        ['name' => 'surveyjs.surveys.view-responses',  'description' => 'View survey responses + dashboard.'],
-        ['name' => 'surveyjs.surveys.export-pdf',      'description' => 'Export survey responses as PDF.'],
+        ['name' => 'surveyjs.surveys.manage',           'description' => 'Create, edit, publish, delete surveys.'],
+        ['name' => 'surveyjs.surveys.view-responses',   'description' => 'View survey responses + dashboard.'],
+        ['name' => 'surveyjs.surveys.export-pdf',       'description' => 'Export survey responses as PDF.'],
+        ['name' => 'surveyjs.surveys.delete-responses', 'description' => 'Delete individual survey responses (admin only).'],
+        ['name' => 'surveyjs.surveys.export-csv',       'description' => 'Export survey responses as CSV.'],
+        ['name' => 'surveyjs.surveys.export-xlsx',      'description' => 'Export survey responses as Excel (XLSX).'],
+        ['name' => 'surveyjs.surveys.export-json',      'description' => 'Export survey responses as JSON.'],
+        ['name' => 'surveyjs.surveys.upload-files',     'description' => 'Upload files (GPX / microphone / image) attached to public survey submissions.'],
     ];
 
     /** @var array<int, array{name: string, position: int}> */
@@ -81,7 +89,7 @@ final class Version20260522063620 extends AbstractMigration
      * @var array<int, array{name: string, type: string, display: int, config: ?array}>
      */
     private const FIELDS = [
-        ['name' => 'survey-js',                'type' => 'select-survey-js', 'display' => 0, 'config' => null],
+        ['name' => 'survey-js', 'type' => 'select-survey-js', 'display' => 0, 'config' => null],
         [
             'name'    => 'survey-js-theme',
             'type'    => 'select',
@@ -96,18 +104,24 @@ final class Version20260522063620 extends AbstractMigration
                 ],
             ],
         ],
-        ['name' => 'restart_on_refresh',       'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'once_per_user',            'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'once_per_schedule',        'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'save_pdf',                 'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'close_modal_at_end',       'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'url_params',               'type' => 'checkbox', 'display' => 0, 'config' => null],
-        ['name' => 'start_time',               'type' => 'time',     'display' => 0, 'config' => null],
-        ['name' => 'end_time',                 'type' => 'time',     'display' => 0, 'config' => null],
-        ['name' => 'redirect_at_end',          'type' => 'text',     'display' => 0, 'config' => null],
-        ['name' => 'auto_save_interval',       'type' => 'number',   'display' => 0, 'config' => null],
-        ['name' => 'label_survey_done',        'type' => 'markdown-inline', 'display' => 1, 'config' => null],
-        ['name' => 'label_survey_not_active',  'type' => 'markdown-inline', 'display' => 1, 'config' => null],
+        ['name' => 'restart_on_refresh',      'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'once_per_user',           'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'once_per_schedule',       'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'save_pdf',                'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'close_modal_at_end',      'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'url_params',              'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'start_time',              'type' => 'time',            'display' => 0, 'config' => null],
+        ['name' => 'end_time',                'type' => 'time',            'display' => 0, 'config' => null],
+        ['name' => 'redirect_at_end',         'type' => 'text',            'display' => 0, 'config' => null],
+        ['name' => 'auto_save_interval',      'type' => 'number',          'display' => 0, 'config' => null],
+        ['name' => 'label_survey_done',       'type' => 'markdown-inline', 'display' => 1, 'config' => null],
+        ['name' => 'label_survey_not_active', 'type' => 'markdown-inline', 'display' => 1, 'config' => null],
+        ['name' => 'timeout',                 'type' => 'number',          'display' => 0, 'config' => null],
+        ['name' => 'dynamic_replacement',     'type' => 'json',            'display' => 0, 'config' => null],
+        ['name' => 'own_entries_only',        'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'data_config',             'type' => 'json',            'display' => 0, 'config' => null],
+        ['name' => 'allow_anonymous',         'type' => 'checkbox',        'display' => 0, 'config' => null],
+        ['name' => 'sample_points',           'type' => 'json',            'display' => 0, 'config' => null],
     ];
 
     /** @var array<int, array{name: string, description: string}> */
@@ -204,6 +218,31 @@ final class Version20260522063620 extends AbstractMigration
             'help'  => 'If enabled, query-string parameters are passed into the survey (e.g. `?par1=2&par2=3`).',
             'hidden' => 0, 'title' => 'URL Parameters',
         ],
+        [
+            'style' => 'surveyjs', 'field' => 'timeout', 'default' => '0',
+            'help'  => 'Survey expires after N minutes from when the participant started it. Set to 0 to disable.',
+            'hidden' => 0, 'title' => 'Timeout (minutes)',
+        ],
+        [
+            'style' => 'surveyjs', 'field' => 'dynamic_replacement', 'default' => null,
+            'help'  => 'JSON map of `{{var}}` tokens to replace inside the survey definition at render time. Only declared tokens are substituted.',
+            'hidden' => 0, 'title' => 'Dynamic Replacement',
+        ],
+        [
+            'style' => 'surveyjs', 'field' => 'own_entries_only', 'default' => '0',
+            'help'  => 'When enabled, only the participant who originally submitted a response can resume / edit it.',
+            'hidden' => 0, 'title' => 'Own Entries Only',
+        ],
+        [
+            'style' => 'surveyjs', 'field' => 'data_config', 'default' => null,
+            'help'  => 'JSON configuration used to source dynamic data (e.g. CMS data tables) referenced by `{{var}}` tokens inside the survey definition.',
+            'hidden' => 0, 'title' => 'Data Config',
+        ],
+        [
+            'style' => 'surveyjs', 'field' => 'allow_anonymous', 'default' => '1',
+            'help'  => 'When enabled, the survey may be submitted by unauthenticated visitors. Once-per-user is then enforced by the signed visitor cookie.',
+            'hidden' => 0, 'title' => 'Allow Anonymous',
+        ],
         // host-shared fields reused at the bottom of every style
         [
             'style' => 'surveyjs', 'field' => 'condition', 'default' => null,
@@ -221,7 +260,12 @@ final class Version20260522063620 extends AbstractMigration
             'hidden' => 0, 'title' => 'CSS (Mobile)',
         ],
 
-        // gpxMap (only reuses host fields for now — runtime config lives in the runtime)
+        // gpxMap
+        [
+            'style' => 'gpxMap', 'field' => 'sample_points', 'default' => null,
+            'help'  => 'Inline GPX sample points or a reference to a GPX answer field (`{{question_name}}`). Renders the polyline on the Leaflet map.',
+            'hidden' => 0, 'title' => 'Sample Points',
+        ],
         [
             'style' => 'gpxMap', 'field' => 'css', 'default' => null,
             'help'  => 'CSS classes appended to the map container on web.',
@@ -241,7 +285,7 @@ final class Version20260522063620 extends AbstractMigration
 
     public function getDescription(): string
     {
-        return 'sh2-shp-survey-js initial schema (surveys, survey_versions, survey_runs, survey_answer_links) + style group, styles, fields, field types, field-style links, permissions linked to admin role.';
+        return 'sh2-shp-survey-js consolidated install — schema (surveys, survey_versions, survey_runs, survey_answer_links, survey_response_drafts, survey_files) + style group, styles, fields, field types, field-style links, permissions linked to admin role.';
     }
 
     public function up(Schema $schema): void
@@ -312,12 +356,17 @@ final class Version20260522063620 extends AbstractMigration
 
         // 7. Theme lookups + permissions.
         $this->addSql("DELETE FROM lookups WHERE type_code = 'surveyJsTheme'");
-        $this->addSql(
-            'DELETE FROM permissions WHERE name IN '
-            . "('surveyjs.surveys.manage', 'surveyjs.surveys.view-responses', 'surveyjs.surveys.export-pdf')",
-        );
+        foreach (self::PERMISSIONS as $perm) {
+            $this->addSql(
+                'DELETE FROM permissions WHERE name = :name',
+                ['name' => $perm['name']],
+            );
+        }
 
-        // 8. Plugin-owned tables.
+        // 8. Plugin-owned tables. Drop in reverse FK order so cascading
+        //    deletes do not fight with explicit DROPs.
+        $this->addSql('DROP TABLE IF EXISTS survey_files');
+        $this->addSql('DROP TABLE IF EXISTS survey_response_drafts');
         $this->addSql('ALTER TABLE surveys DROP FOREIGN KEY fk_surveys_current_survey_versions');
         $this->addSql('DROP TABLE IF EXISTS survey_answer_links');
         $this->addSql('DROP TABLE IF EXISTS survey_runs');
@@ -379,6 +428,7 @@ final class Version20260522063620 extends AbstractMigration
                 id_surveys INT NOT NULL,
                 id_survey_versions INT NOT NULL,
                 id_users INT DEFAULT NULL,
+                visitor_id VARCHAR(64) DEFAULT NULL,
                 id_data_rows INT DEFAULT NULL,
                 status VARCHAR(32) NOT NULL,
                 started_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
@@ -390,6 +440,7 @@ final class Version20260522063620 extends AbstractMigration
                 INDEX idx_survey_runs_survey_versions (id_survey_versions),
                 INDEX idx_survey_runs_data_rows (id_data_rows),
                 INDEX idx_survey_runs_users (id_users),
+                INDEX idx_survey_runs_surveys_visitor (id_surveys, visitor_id),
                 CONSTRAINT pk_survey_runs PRIMARY KEY (id),
                 CONSTRAINT fk_survey_runs_surveys
                     FOREIGN KEY (id_surveys) REFERENCES surveys (id) ON DELETE CASCADE,
@@ -411,6 +462,62 @@ final class Version20260522063620 extends AbstractMigration
                 CONSTRAINT pk_survey_answer_links PRIMARY KEY (id),
                 CONSTRAINT fk_survey_answer_links_survey_runs
                     FOREIGN KEY (id_survey_runs) REFERENCES survey_runs (id) ON DELETE CASCADE
+            ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
+        SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE survey_response_drafts (
+                id INT AUTO_INCREMENT NOT NULL,
+                response_id VARCHAR(100) NOT NULL,
+                id_surveys INT NOT NULL,
+                id_survey_versions INT NOT NULL,
+                id_users INT DEFAULT NULL,
+                visitor_id VARCHAR(64) DEFAULT NULL,
+                payload JSON NOT NULL,
+                page_no INT NOT NULL DEFAULT 0,
+                last_saved_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                expires_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                UNIQUE INDEX uq_survey_drafts_response_id (response_id),
+                INDEX idx_survey_drafts_surveys (id_surveys),
+                INDEX idx_survey_drafts_surveys_users (id_surveys, id_users),
+                INDEX idx_survey_drafts_surveys_visitor (id_surveys, visitor_id),
+                INDEX idx_survey_drafts_expires_at (expires_at),
+                CONSTRAINT pk_survey_response_drafts PRIMARY KEY (id),
+                CONSTRAINT fk_survey_drafts_surveys
+                    FOREIGN KEY (id_surveys) REFERENCES surveys (id) ON DELETE CASCADE,
+                CONSTRAINT fk_survey_drafts_survey_versions
+                    FOREIGN KEY (id_survey_versions) REFERENCES survey_versions (id) ON DELETE CASCADE
+            ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
+        SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE survey_files (
+                id INT AUTO_INCREMENT NOT NULL,
+                id_surveys INT NOT NULL,
+                id_survey_runs INT DEFAULT NULL,
+                id_survey_response_drafts INT DEFAULT NULL,
+                response_id VARCHAR(100) NOT NULL,
+                question_name VARCHAR(191) NOT NULL,
+                original_filename VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(128) NOT NULL,
+                size_bytes INT NOT NULL,
+                storage_path VARCHAR(512) NOT NULL,
+                sha256 VARCHAR(64) NOT NULL,
+                uploaded_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                uploaded_by_user_id INT DEFAULT NULL,
+                uploaded_by_visitor_id VARCHAR(64) DEFAULT NULL,
+                INDEX idx_survey_files_response_id (response_id),
+                INDEX idx_survey_files_survey_runs (id_survey_runs),
+                INDEX idx_survey_files_survey_drafts (id_survey_response_drafts),
+                INDEX idx_survey_files_sha256 (sha256),
+                CONSTRAINT pk_survey_files PRIMARY KEY (id),
+                CONSTRAINT fk_survey_files_surveys
+                    FOREIGN KEY (id_surveys) REFERENCES surveys (id) ON DELETE CASCADE,
+                CONSTRAINT fk_survey_files_survey_runs
+                    FOREIGN KEY (id_survey_runs) REFERENCES survey_runs (id) ON DELETE SET NULL,
+                CONSTRAINT fk_survey_files_survey_response_drafts
+                    FOREIGN KEY (id_survey_response_drafts) REFERENCES survey_response_drafts (id) ON DELETE SET NULL
             ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
         SQL);
     }
