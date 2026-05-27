@@ -53,7 +53,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * for every release; the publish script (`scripts/publish-to-registry.mjs`)
  * already enforces the same alignment server-side.
  */
-export const PLUGIN_VERSION = '0.2.2';
+export const PLUGIN_VERSION = '0.2.7';
 
 /**
  * Called by `PluginRuntime.registerOne()`. The runtime captures the

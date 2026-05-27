@@ -370,6 +370,11 @@ function buildArchivedManifest(manifest, mode) {
     } else {
         cloned.archive = { mode: 'connected' };
     }
+    // Remove devEntrypointUrl from archived manifest so the host uses
+    // the bundled artifacts instead of trying to load from a dev server.
+    if (cloned.frontend?.runtime?.devEntrypointUrl) {
+        delete cloned.frontend.runtime.devEntrypointUrl;
+    }
     return cloned;
 }
 
@@ -741,7 +746,8 @@ function syncPluginVersionMetadata(manifestPath) {
     syncJsonVersionField(path.join(PLUGIN_ROOT, 'mobile', 'package.json'), version);
     syncPackageLockVersion(path.join(PLUGIN_ROOT, 'frontend', 'package-lock.json'), version);
     syncPackageLockVersion(path.join(PLUGIN_ROOT, 'mobile', 'package-lock.json'), version);
-    syncMobileSourceVersion(path.join(PLUGIN_ROOT, 'mobile', 'src', 'index.ts'), version);
+    syncSourceVersion(path.join(PLUGIN_ROOT, 'frontend', 'src', 'index.ts'), version);
+    syncSourceVersion(path.join(PLUGIN_ROOT, 'mobile', 'src', 'index.ts'), version);
 
     if (touched.length > 0) {
         log(`Synced manifest version mirrors to ${version}.`);
@@ -774,7 +780,7 @@ function syncPackageLockVersion(filePath, version) {
     log(`Synced ${path.relative(PLUGIN_ROOT, filePath)} -> ${version}`);
 }
 
-function syncMobileSourceVersion(filePath, version) {
+function syncSourceVersion(filePath, version) {
     if (!existsSync(filePath)) return;
     const src = readFileSync(filePath, 'utf8');
     const next = src.replace(
