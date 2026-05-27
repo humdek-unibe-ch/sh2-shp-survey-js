@@ -178,7 +178,7 @@ jobs:
                   token: ${{ github.token }}
 
             - name: Summary
-              if: ${{ secrets.REGISTRY_PUSH_TOKEN == '' }}
+              if: ${{ !secrets.REGISTRY_PUSH_TOKEN }}
               run: |
                   echo "::warning::REGISTRY_PUSH_TOKEN secret is not set."
                   echo ".shplugin was built and (if tagged) uploaded as a release asset,"
