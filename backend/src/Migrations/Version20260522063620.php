@@ -119,7 +119,6 @@ final class Version20260522063620 extends AbstractMigration
         ['name' => 'timeout',                 'type' => 'number',          'display' => 0, 'config' => null],
         ['name' => 'dynamic_replacement',     'type' => 'json',            'display' => 0, 'config' => null],
         ['name' => 'own_entries_only',        'type' => 'checkbox',        'display' => 0, 'config' => null],
-        ['name' => 'data_config',             'type' => 'json',            'display' => 0, 'config' => null],
         ['name' => 'allow_anonymous',         'type' => 'checkbox',        'display' => 0, 'config' => null],
         ['name' => 'sample_points',           'type' => 'json',            'display' => 0, 'config' => null],
     ];
@@ -232,11 +231,6 @@ final class Version20260522063620 extends AbstractMigration
             'style' => 'surveyjs', 'field' => 'own_entries_only', 'default' => '0',
             'help'  => 'When enabled, only the participant who originally submitted a response can resume / edit it.',
             'hidden' => 0, 'title' => 'Own Entries Only',
-        ],
-        [
-            'style' => 'surveyjs', 'field' => 'data_config', 'default' => null,
-            'help'  => 'JSON configuration used to source dynamic data (e.g. CMS data tables) referenced by `{{var}}` tokens inside the survey definition.',
-            'hidden' => 0, 'title' => 'Data Config',
         ],
         [
             'style' => 'surveyjs', 'field' => 'allow_anonymous', 'default' => '1',
