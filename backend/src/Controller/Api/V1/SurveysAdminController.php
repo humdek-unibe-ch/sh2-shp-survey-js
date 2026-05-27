@@ -197,6 +197,29 @@ final class SurveysAdminController
         return new JsonResponse(['data' => $this->detail($survey)]);
     }
 
+    /**
+     * Fetch one published version including its definition. Used by
+     * the admin Versions tab to load two revisions side-by-side and
+     * compute a structural diff in the browser. Kept out of the list
+     * endpoint so the index stays cheap when a survey has dozens of
+     * revisions.
+     */
+    public function getVersion(int $id, int $versionId): JsonResponse
+    {
+        $survey = $this->surveys->find($id);
+        $version = $this->versions->find($versionId);
+        if (!$survey instanceof Survey || !$version instanceof SurveyVersion) {
+            return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if ($version->getSurvey()->getId() !== $survey->getId()) {
+            return new JsonResponse(['error' => 'Version does not belong to this survey.'], 400);
+        }
+        return new JsonResponse(['data' => [
+            ...$this->versionSummary($version),
+            'definition' => $version->getDefinition(),
+        ]]);
+    }
+
     public function presence(int $id, Request $request): JsonResponse
     {
         $survey = $this->surveys->find($id);

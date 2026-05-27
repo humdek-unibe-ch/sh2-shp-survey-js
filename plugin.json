@@ -366,6 +366,19 @@
             "permission": "surveyjs.surveys.manage"
         },
         {
+            "name": "surveyjs_admin_versions_get",
+            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/versions/{versionId}",
+            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::getVersion",
+            "methods": [
+                "GET"
+            ],
+            "requirements": {
+                "id": "\\d+",
+                "versionId": "\\d+"
+            },
+            "permission": "surveyjs.surveys.manage"
+        },
+        {
             "name": "surveyjs_admin_presence",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/presence",
             "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::presence",

@@ -39,6 +39,10 @@ export interface IAdminSurveyVersion {
     definitionSha256: string;
 }
 
+export interface IAdminSurveyVersionDetail extends IAdminSurveyVersion {
+    definition: Record<string, unknown>;
+}
+
 // Browser-side admin calls go through the host's Next.js BFF proxy
 // (`src/app/api/[...path]/route.ts`), which:
 //   - validates the CSRF double-submit cookie for unsafe methods,
@@ -151,6 +155,14 @@ export async function listVersions(id: number): Promise<IAdminSurveyVersion[]> {
         headers: { Accept: 'application/json' },
     });
     return asJson<IAdminSurveyVersion[]>(res);
+}
+
+export async function getVersion(id: number, versionId: number): Promise<IAdminSurveyVersionDetail> {
+    const res = await fetch(`${BASE}/surveys/${id}/versions/${versionId}`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+    });
+    return asJson<IAdminSurveyVersionDetail>(res);
 }
 
 export async function restoreVersion(id: number, versionId: number): Promise<IAdminSurveyDetail> {
