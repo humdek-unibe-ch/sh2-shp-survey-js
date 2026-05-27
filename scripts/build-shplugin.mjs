@@ -28,9 +28,9 @@ SPDX-License-Identifier: MPL-2.0
  *   2. Otherwise read `plugin.json#archive.mode`.
  *   3. Fall back to `connected` when no mode is declared anywhere.
  *
- * This plugin's `plugin.json#archive.mode` is `"standalone"`, so a bare
- * `node scripts/build-shplugin.mjs` produces a standalone archive that
- * carries the plugin's PHP bundle under `backend/package/`.
+ * This plugin's `plugin.json#archive.mode` is `"connected"`, so a bare
+ * `node scripts/build-shplugin.mjs` produces a connected archive unless
+ * `--mode standalone` overrides it.
  *
  * Layout produced under `dist/shplugin/<id>-<version>/`:
  *
@@ -69,7 +69,7 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Steps:
  *   1. Build the frontend runtime via `npm --prefix frontend run build:runtime`.
- *   2. (--mode standalone) Validate publisher contract: backend/
+ *   2. (--mode standalone) Validate publisher contract: the repo-root
  *      composer.json#{name,version} must equal plugin.json#backend.
  *      composer.package + plugin.json#version. Stage backend/package/.
  *   3. Stage every emitted runtime file under `dist/shplugin/<id>-<version>/`
@@ -267,6 +267,7 @@ async function main() {
         composer: {
             package: manifest.backend.composer.package,
             version: manifest.backend.composer.version,
+            ...(manifest.backend.composer.repository ? { repository: manifest.backend.composer.repository } : {}),
         },
         runtime: {
             entrypointUrl: `artifacts/plugin.esm.js`,
@@ -378,8 +379,9 @@ function buildArchivedManifest(manifest, mode) {
 
 /**
  * Copies the plugin's backend/ tree into <stage>/backend/package using
- * an explicit include-list. Hard-rejects the publisher contract
- * violations (composer name + version mismatch) before staging anything.
+ * the repo-root Composer package metadata plus an explicit include-list.
+ * Hard-rejects the publisher contract violations (composer name +
+ * version mismatch) before staging anything.
  *
  * Include-list:
  *   composer.json (required)
@@ -391,11 +393,11 @@ function buildArchivedManifest(manifest, mode) {
  */
 function stageBackendPackage(pluginRoot, backendStageDir, pluginVersion, expectedComposerName) {
     const backendSrc = path.join(pluginRoot, 'backend');
-    const composerJsonPath = path.join(backendSrc, 'composer.json');
+    const composerJsonPath = path.join(pluginRoot, 'composer.json');
     if (!existsSync(composerJsonPath)) {
         throw new Error(
-            `--mode standalone requires backend/composer.json at ${composerJsonPath}. ` +
-                `Add the plugin's Symfony bundle composer.json before building a standalone archive.`,
+            `--mode standalone requires repo-root composer.json at ${composerJsonPath}. ` +
+                `Add the plugin's Composer package manifest at the plugin root before building a standalone archive.`,
         );
     }
 
@@ -403,29 +405,29 @@ function stageBackendPackage(pluginRoot, backendStageDir, pluginVersion, expecte
     try {
         composerJson = JSON.parse(readFileSync(composerJsonPath, 'utf8'));
     } catch (err) {
-        throw new Error(`backend/composer.json is not valid JSON: ${err.message}`);
+        throw new Error(`repo-root composer.json is not valid JSON: ${err.message}`);
     }
 
     if (typeof composerJson.name !== 'string' || composerJson.name === '') {
-        throw new Error('backend/composer.json is missing the required "name" field.');
+        throw new Error('repo-root composer.json is missing the required "name" field.');
     }
     if (composerJson.name !== expectedComposerName) {
         throw new Error(
-            `Publisher contract violated: backend/composer.json#name "${composerJson.name}" ` +
+            `Publisher contract violated: composer.json#name "${composerJson.name}" ` +
                 `does not match plugin.json#backend.composer.package "${expectedComposerName}". ` +
                 `Keep these two values in sync.`,
         );
     }
     if (typeof composerJson.version !== 'string' || composerJson.version === '') {
         throw new Error(
-            `backend/composer.json is missing the required "version" field. ` +
+            `composer.json is missing the required "version" field. ` +
                 `For standalone archives the publisher MUST pin the version explicitly so the host's ` +
                 `composer require constraint resolves uniformly. Add "version": "${pluginVersion}".`,
         );
     }
     if (composerJson.version !== pluginVersion) {
         throw new Error(
-            `Publisher contract violated: backend/composer.json#version "${composerJson.version}" ` +
+            `Publisher contract violated: composer.json#version "${composerJson.version}" ` +
                 `does not match plugin.json#version "${pluginVersion}". Keep these two values in sync.`,
         );
     }
@@ -440,7 +442,13 @@ function stageBackendPackage(pluginRoot, backendStageDir, pluginVersion, expecte
     mkdirSync(backendStageDir, { recursive: true });
 
     // composer.json — always.
-    cpSync(composerJsonPath, path.join(backendStageDir, 'composer.json'));
+    const stagedComposerJson = JSON.parse(JSON.stringify(composerJson));
+    rewriteComposerPathsForStandalone(stagedComposerJson);
+    writeFileSync(
+        path.join(backendStageDir, 'composer.json'),
+        JSON.stringify(stagedComposerJson, null, 4) + '\n',
+        'utf8',
+    );
 
     // Optional directories — keep the include-list explicit so a stray
     // dir under backend/ (e.g. .idea/) is never staged by accident.
@@ -505,6 +513,48 @@ function copyRuntimeArtifacts(srcDir, destDir, { includeSourceMaps }) {
     }
     walk(srcDir, destDir, '');
     return copied;
+}
+
+function rewriteComposerPathsForStandalone(composerJson) {
+    rewriteComposerAutoloadBlock(composerJson.autoload);
+    rewriteComposerAutoloadBlock(composerJson['autoload-dev']);
+}
+
+function rewriteComposerAutoloadBlock(autoloadBlock) {
+    if (!autoloadBlock || typeof autoloadBlock !== 'object') return;
+
+    for (const strategy of ['psr-4', 'psr-0']) {
+        const mapping = autoloadBlock[strategy];
+        if (!mapping || typeof mapping !== 'object') continue;
+        for (const [ns, relPath] of Object.entries(mapping)) {
+            if (typeof relPath === 'string') {
+                mapping[ns] = stripBackendPrefix(relPath);
+                continue;
+            }
+            if (Array.isArray(relPath)) {
+                mapping[ns] = relPath.map((entry) => (
+                    typeof entry === 'string' ? stripBackendPrefix(entry) : entry
+                ));
+            }
+        }
+    }
+
+    for (const key of ['classmap', 'files', 'exclude-from-classmap']) {
+        const value = autoloadBlock[key];
+        if (typeof value === 'string') {
+            autoloadBlock[key] = stripBackendPrefix(value);
+            continue;
+        }
+        if (Array.isArray(value)) {
+            autoloadBlock[key] = value.map((entry) => (
+                typeof entry === 'string' ? stripBackendPrefix(entry) : entry
+            ));
+        }
+    }
+}
+
+function stripBackendPrefix(relPath) {
+    return relPath.startsWith('backend/') ? relPath.slice('backend/'.length) : relPath;
 }
 
 /**
@@ -739,7 +789,7 @@ function syncPluginVersionMetadata(manifestPath) {
         writeJsonFile(manifestPath, manifest);
     }
 
-    syncJsonVersionField(path.join(PLUGIN_ROOT, 'backend', 'composer.json'), version);
+    syncJsonVersionField(path.join(PLUGIN_ROOT, 'composer.json'), version);
     syncJsonVersionField(path.join(PLUGIN_ROOT, 'frontend', 'package.json'), version);
     syncJsonVersionField(path.join(PLUGIN_ROOT, 'mobile', 'package.json'), version);
     syncPackageLockVersion(path.join(PLUGIN_ROOT, 'frontend', 'package-lock.json'), version);

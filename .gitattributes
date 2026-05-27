@@ -1,0 +1,14 @@
+/.github export-ignore
+/backend/.phpunit.cache export-ignore
+/backend/stubs export-ignore
+/backend/tests export-ignore
+/backend/vendor export-ignore
+/dist export-ignore
+/docs export-ignore
+/frontend export-ignore
+/mobile export-ignore
+/.env.example export-ignore
+/AGENTS.md export-ignore
+/plugin.json export-ignore
+/scripts export-ignore
+/validate-plugin.log export-ignore

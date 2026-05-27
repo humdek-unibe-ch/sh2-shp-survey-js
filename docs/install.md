@@ -146,8 +146,8 @@ By default (`.shplugin` upload mode):
 With `--symlink` (dev fast-path):
 
 1. Writes a temporary development `plugin.json` whose
-   `backend.composer.repository` points at this checkout's `backend/`
-   folder.
+   `backend.composer.repository` points at this checkout's repo root,
+   where the Composer package manifest now lives.
 2. Calls `php bin/console selfhelp:plugin:install <temp>/plugin.json`
    or `selfhelp:plugin:update` if the plugin is already installed.
 3. Drains the Messenger queue. The host worker installs the backend

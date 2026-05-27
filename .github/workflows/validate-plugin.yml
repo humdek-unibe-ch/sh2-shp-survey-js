@@ -180,21 +180,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.json') }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.json') }}
 
       - name: Composer install
-        working-directory: backend
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: PHPStan
-        working-directory: backend
-        run: composer phpstan
+        run: vendor/bin/phpstan analyse --no-progress -c backend/phpstan.neon.dist --memory-limit=1G
 
       - name: PHPUnit (if tests exist)
-        working-directory: backend
         run: |
-          if [ -d tests ] && [ -n "$(find tests -name '*.php' -print -quit)" ]; then
-            composer test
+          if [ -d backend/tests ] && [ -n "$(find backend/tests -name '*.php' -print -quit)" ]; then
+            vendor/bin/phpunit --configuration backend/phpunit.xml.dist --bootstrap vendor/autoload.php
           else
             echo "No backend tests yet; skipping."
           fi

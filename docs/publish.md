@@ -65,6 +65,10 @@ Trigger by passing `--mode <connected|standalone>` to
 `scripts/publish-to-registry.mjs`, which forwards the flag). The CLI
 flag wins over `plugin.json#archive.mode`.
 
+For this plugin repo, `connected` mode resolves the Symfony bundle
+from the repo-root `composer.json`; the PHP source itself still lives
+under `backend/` and is autoloaded from there.
+
 ### Publisher contract for standalone archives
 
 `scripts/build-shplugin.mjs --mode standalone` enforces three rules
@@ -73,13 +77,13 @@ before staging the backend slot. The host's
 publishing a non-conforming archive fails twice — once locally, once
 on every host.
 
-1. `backend/composer.json#name` MUST equal
+1. The repo-root `composer.json#name` MUST equal
    `plugin.json#backend.composer.package`.
-2. `backend/composer.json#version` MUST equal `plugin.json#version`.
-   You set this field explicitly in `backend/composer.json` rather
+2. The repo-root `composer.json#version` MUST equal `plugin.json#version`.
+   You set this field explicitly in the root `composer.json` rather
    than letting Composer derive it from a Git tag, because the
    archive may be built outside the Git working tree.
-3. `backend/composer.json#scripts` must be empty (or unset).
+3. The repo-root `composer.json#scripts` must be empty (or unset).
    Composer scripts can run arbitrary shell on `composer require` —
    the host validator rejects them unless the operator sets
    `SELFHELP_PLUGIN_ALLOW_COMPOSER_SCRIPTS=1` (advanced, not
@@ -196,7 +200,7 @@ validates but skips the publish step and emits a CI warning.
    agree — the publish script reads from `plugin.json` and the host
    verifies the published npm packages match.
 2. Update `CHANGELOG.md`.
-3. Run the local tests (`composer test`, `npm run typecheck`).
+3. Run the local checks (`vendor/bin/phpstan analyse -c backend/phpstan.neon.dist --memory-limit=1G`, `npm run typecheck`).
 4. Commit, tag (`git tag vX.Y.Z`), and push the tag.
 5. CI takes over from there.
 
@@ -285,7 +289,7 @@ Commit to git:
 
 - `plugin.json`, `CHANGELOG.md`, `README.md`, `docs/**`.
 - `frontend/src/**`, `frontend/package.json`, `frontend/tsconfig.json`.
-- `backend/src/**`, `backend/composer.json`.
+- `backend/src/**`, root `composer.json`.
 - `mobile/src/**`, `mobile/package.json`.
 - `scripts/build-shplugin.mjs`, `scripts/install-local.mjs`, `scripts/publish-to-registry.mjs`.
 - `.env.example` (template; never commit `.env`).

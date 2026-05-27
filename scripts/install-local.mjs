@@ -23,7 +23,7 @@ SPDX-License-Identifier: MPL-2.0
  *
  *   --symlink (dev fast-path)
  *     1. write a temporary plugin.json with backend.composer.repository
- *        pointing at <plugin>/backend
+ *        pointing at <plugin>
  *     2. php bin/console selfhelp:plugin:install|update <temp plugin.json>
  *     3. messenger:consume (unless --skip-consume)
  *
@@ -120,7 +120,7 @@ async function runSymlinkMode({ pluginId, version, manifestPath, backendPath, op
     if (!existsSync(backendDir)) throw new Error(`Plugin backend dir not found: ${backendDir}`);
 
     step('Preparing isolated plugin Composer path repository');
-    const installManifestPath = prepareSymlinkManifest(manifestPath, backendDir);
+    const installManifestPath = prepareSymlinkManifest(manifestPath, PLUGIN_ROOT);
     ok('Temporary development manifest prepared. Host root Composer files are untouched.');
 
     const installedVersion = getInstalledVersion(pluginId, backendPath);
@@ -222,13 +222,13 @@ function hasBinary(name) {
     return result.status === 0;
 }
 
-function prepareSymlinkManifest(manifestPath, backendDir) {
+function prepareSymlinkManifest(manifestPath, packageRoot) {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     manifest.backend = manifest.backend || {};
     manifest.backend.composer = manifest.backend.composer || {};
     manifest.backend.composer.repository = {
         type: 'path',
-        url: backendDir,
+        url: packageRoot,
     };
 
     const dir = mkdtempSync(path.join(tmpdir(), 'selfhelp-surveyjs-install-'));

@@ -22,6 +22,7 @@ backend/vendor/
 backend/.phpunit.cache/
 backend/.phpunit.result.cache
 backend/composer.lock
+/composer.lock
 
 # Frontend / Node
 frontend/node_modules/

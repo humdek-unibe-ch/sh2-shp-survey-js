@@ -54,12 +54,12 @@ The full chain is documented in the host repo: [`docs/plugins/installation.md` �
 ```
 sh2-shp-survey-js/
 ├── plugin.json                      Manifest (validated against the host schema)
+├── composer.json                    Composer package root for connected installs
 ├── AGENTS.md
 ├── README.md
 ├── CHANGELOG.md
 ├── docs/                            Plugin-specific docs
-├── backend/                         Symfony bundle (Composer package)
-│   ├── composer.json
+├── backend/                         Symfony bundle source tree
 │   ├── src/HumdekSurveyJsBundle.php
 │   ├── src/Entity/                  Doctrine entities (Survey, SurveyVersion, ...)
 │   ├── src/Controller/              Admin + public controllers
@@ -97,8 +97,10 @@ See [`docs/install.md`](docs/install.md) for the full guide. The TL;DR is:
 > `messenger:consume plugin_ops` inline.
 
 Option 4 also wires the local Composer / npm path repo (`--symlink`)
-so the host frontend resolves the plugin without restarting the dev
-server. See [`docs/install.md`](docs/install.md#option-4--one-shot-install-from-the-terminal)
+to this repo root, so the host resolves the backend package via the
+root `composer.json` while the frontend keeps hot-reloading from the
+runtime dev server. See
+[`docs/install.md`](docs/install.md#option-4--one-shot-install-from-the-terminal)
 for `--symlink` details.
 
 ## Build the `.shplugin`
@@ -129,6 +131,8 @@ cp .env.example .env
 
 # 3. Build the archive.
 node scripts/build-shplugin.mjs
+# Standalone version
+node scripts/build-shplugin.mjs --mode standalone
 # → dist/sh2-shp-survey-js-<version>.shplugin
 ```
 
@@ -229,6 +233,12 @@ Without `REGISTRY_PUSH_TOKEN` the workflow still builds the
 registry-side push is skipped (the workflow logs a warning summary).
 
 Full publish reference: [`docs/publish.md`](docs/publish.md).
+
+For `archive.mode="connected"` releases, the plugin registry still
+publishes only discovery metadata plus frontend artifacts. The PHP
+bundle is installed separately by Composer from this repo's root
+`composer.json` (or another Composer source declared in
+`plugin.json#backend.composer.repository`).
 
 ## Configuration
 
