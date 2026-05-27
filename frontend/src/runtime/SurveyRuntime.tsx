@@ -331,14 +331,26 @@ export function SurveyRuntime({
             void submitSurveyAnswers(published.surveyId, sender.data, enforce)
                 .then((result) => {
                     if (disposed) return;
-                    if (draftStoreRef.current && responseIdRef.current) {
-                        draftStoreRef.current.clear(responseIdRef.current);
+                    submittingRef.current = false;
+                    responseIdRef.current = result.responseId;
+                    if (draftStoreRef.current) {
+                        draftStoreRef.current.clearAll();
                     }
-                    setLifecycle({
-                        kind: 'submitted',
-                        responseId: result.responseId,
-                        submittedAt: result.submittedAt,
-                    });
+                    if (config.oncePerUser || config.oncePerSchedule) {
+                        setLifecycle({
+                            kind: 'locked',
+                            label: published.runtimeConfig.labelSurveyDone,
+                            reason: config.oncePerUser
+                                ? 'already_submitted_once'
+                                : 'already_submitted_in_window',
+                        });
+                    } else {
+                        setLifecycle({
+                            kind: 'submitted',
+                            responseId: result.responseId,
+                            submittedAt: result.submittedAt,
+                        });
+                    }
                     if (config.redirectAtEnd && typeof window !== 'undefined') {
                         window.location.assign(config.redirectAtEnd);
                     }
@@ -586,7 +598,7 @@ async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHy
         // ignore — we still attempt the local cache below.
     }
 
-    if (!restored && draftStore !== null) {
+    if (!restored && !published.state.completedResponseId && draftStore !== null) {
         const local = draftStore.loadLatest();
         if (local) {
             restored = { responseId: local.responseId, pageNo: local.pageNo, data: local.data };

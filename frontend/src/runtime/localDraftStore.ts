@@ -86,6 +86,26 @@ export class LocalDraftStore {
         }
     }
 
+    clearAll(): void {
+        if (!this.isAvailable()) return;
+        try {
+            const prefix = `${this.namespace}:`;
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i);
+                if (key && key.startsWith(prefix)) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.push(this.namespace + LATEST_SUFFIX);
+            for (const key of keysToRemove) {
+                window.localStorage.removeItem(key);
+            }
+        } catch {
+            // ignore
+        }
+    }
+
     private key(responseId: string): string {
         return `${this.namespace}:${responseId}`;
     }
