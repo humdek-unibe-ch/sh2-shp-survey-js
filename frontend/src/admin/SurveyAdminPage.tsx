@@ -31,7 +31,7 @@ SPDX-License-Identifier: MPL-2.0
  * respective sub-views, not here.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActionIcon,
     Alert,
@@ -57,10 +57,12 @@ import {
 import {
     IconArchive,
     IconChartBar,
+    IconCheck,
     IconChevronLeft,
     IconClipboardList,
     IconCopy,
     IconDots,
+    IconEdit,
     IconHistory,
     IconList,
     IconPencil,
@@ -69,6 +71,7 @@ import {
     IconSettings,
     IconTrash,
     IconUserCheck,
+    IconX,
 } from '@tabler/icons-react';
 
 import {
@@ -265,6 +268,9 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
     const [busy, setBusy] = useState<boolean>(false);
     const [showCreate, setShowCreate] = useState<boolean>(false);
     const [pendingDelete, setPendingDelete] = useState<IAdminSurveySummary | null>(null);
+    const [renamingId, setRenamingId] = useState<number | null>(null);
+    const [renameValue, setRenameValue] = useState<string>('');
+    const renameInputRef = useRef<HTMLInputElement>(null);
 
     const reload = useCallback(async (): Promise<void> => {
         setError(null);
@@ -279,6 +285,49 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
     useEffect(() => {
         void reload();
     }, [reload]);
+
+    useEffect(() => {
+        if (renamingId !== null && renameInputRef.current) {
+            renameInputRef.current.focus();
+            renameInputRef.current.select();
+        }
+    }, [renamingId]);
+
+    const startRename = useCallback((survey: IAdminSurveySummary): void => {
+        setRenamingId(survey.id);
+        setRenameValue(survey.name);
+        setError(null);
+    }, []);
+
+    const cancelRename = useCallback((): void => {
+        setRenamingId(null);
+        setRenameValue('');
+    }, []);
+
+    const commitRename = useCallback(async (): Promise<void> => {
+        if (renamingId === null) return;
+        const trimmed = renameValue.trim();
+        if (trimmed === '') {
+            cancelRename();
+            return;
+        }
+        const target = items?.find((s) => s.id === renamingId);
+        if (target && target.name === trimmed) {
+            cancelRename();
+            return;
+        }
+        setBusy(true);
+        try {
+            await updateSurvey(renamingId, { name: trimmed });
+            await reload();
+            setRenamingId(null);
+            setRenameValue('');
+        } catch (err) {
+            setError(`Rename failed: ${(err as Error).message}`);
+        } finally {
+            setBusy(false);
+        }
+    }, [cancelRename, items, reload, renameValue, renamingId]);
 
     const handleArchive = useCallback(
         async (survey: IAdminSurveySummary, archived: boolean): Promise<void> => {
@@ -382,87 +431,22 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                         </Table.Thead>
                         <Table.Tbody>
                             {items.map((survey) => (
-                                <Table.Tr key={survey.id}>
-                                    <Table.Td>
-                                        <Anchor onClick={() => onOpen(survey.id, 'designer')}>
-                                            {survey.name}
-                                        </Anchor>
-                                        <Text size="xs" c="dimmed">
-                                            Survey ID: <Code>{survey.surveyId}</Code>
-                                        </Text>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        {survey.currentRevision === null ? (
-                                            <Text c="dimmed">draft</Text>
-                                        ) : (
-                                            <Badge variant="light">v{survey.currentRevision}</Badge>
-                                        )}
-                                    </Table.Td>
-                                    <Table.Td>{survey.responseCount}</Table.Td>
-                                    <Table.Td>
-                                        <Text size="sm">{new Date(survey.updatedAt).toLocaleString()}</Text>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        {survey.archived ? (
-                                            <Badge color="gray" variant="light">archived</Badge>
-                                        ) : (
-                                            <Badge color="green" variant="light">active</Badge>
-                                        )}
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Menu shadow="md" position="bottom-end" withinPortal>
-                                            <Menu.Target>
-                                                <ActionIcon
-                                                    variant="subtle"
-                                                    aria-label="Survey actions"
-                                                    disabled={busy}
-                                                >
-                                                    <IconDots size={16} />
-                                                </ActionIcon>
-                                            </Menu.Target>
-                                            <Menu.Dropdown>
-                                                <Menu.Item
-                                                    leftSection={<IconPencil size={14} />}
-                                                    onClick={() => onOpen(survey.id, 'designer')}
-                                                >
-                                                    Open Designer
-                                                </Menu.Item>
-                                                <Menu.Item
-                                                    leftSection={<IconUserCheck size={14} />}
-                                                    onClick={() => onOpen(survey.id, 'responses')}
-                                                >
-                                                    Responses
-                                                </Menu.Item>
-                                                <Menu.Item
-                                                    leftSection={<IconChartBar size={14} />}
-                                                    onClick={() => onOpen(survey.id, 'dashboard')}
-                                                >
-                                                    Dashboard
-                                                </Menu.Item>
-                                                <Menu.Divider />
-                                                <Menu.Item
-                                                    leftSection={<IconCopy size={14} />}
-                                                    onClick={() => void handleDuplicate(survey)}
-                                                >
-                                                    Duplicate
-                                                </Menu.Item>
-                                                <Menu.Item
-                                                    leftSection={<IconArchive size={14} />}
-                                                    onClick={() => void handleArchive(survey, !survey.archived)}
-                                                >
-                                                    {survey.archived ? 'Unarchive' : 'Archive'}
-                                                </Menu.Item>
-                                                <Menu.Item
-                                                    color="red"
-                                                    leftSection={<IconTrash size={14} />}
-                                                    onClick={() => setPendingDelete(survey)}
-                                                >
-                                                    Delete…
-                                                </Menu.Item>
-                                            </Menu.Dropdown>
-                                        </Menu>
-                                    </Table.Td>
-                                </Table.Tr>
+                                <SurveyListRow
+                                    key={survey.id}
+                                    survey={survey}
+                                    busy={busy}
+                                    renaming={renamingId === survey.id}
+                                    renameValue={renameValue}
+                                    renameInputRef={renameInputRef}
+                                    onOpen={onOpen}
+                                    onStartRename={startRename}
+                                    onCancelRename={cancelRename}
+                                    onCommitRename={() => void commitRename()}
+                                    onRenameChange={setRenameValue}
+                                    onDuplicate={() => void handleDuplicate(survey)}
+                                    onArchive={() => void handleArchive(survey, !survey.archived)}
+                                    onDelete={() => setPendingDelete(survey)}
+                                />
                             ))}
                         </Table.Tbody>
                     </Table>
@@ -503,6 +487,348 @@ function SurveyListPanel({ onOpen }: ISurveyListPanelProps): React.ReactElement 
                 </Stack>
             </Modal>
         </Stack>
+    );
+}
+
+interface ISurveyListRowProps {
+    survey: IAdminSurveySummary;
+    busy: boolean;
+    renaming: boolean;
+    renameValue: string;
+    renameInputRef: React.RefObject<HTMLInputElement | null>;
+    onOpen: (id: number, target: TView) => void;
+    onStartRename: (survey: IAdminSurveySummary) => void;
+    onCancelRename: () => void;
+    onCommitRename: () => void;
+    onRenameChange: (value: string) => void;
+    onDuplicate: () => void;
+    onArchive: () => void;
+    onDelete: () => void;
+}
+
+function SurveyListRow({
+    survey,
+    busy,
+    renaming,
+    renameValue,
+    renameInputRef,
+    onOpen,
+    onStartRename,
+    onCancelRename,
+    onCommitRename,
+    onRenameChange,
+    onDuplicate,
+    onArchive,
+    onDelete,
+}: ISurveyListRowProps): React.ReactElement {
+    const [menuOpened, setMenuOpened] = useState<boolean>(false);
+    const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
+
+    const handleContextMenu = useCallback((event: React.MouseEvent): void => {
+        event.preventDefault();
+        setMenuPosition({ x: event.clientX, y: event.clientY });
+        setMenuOpened(true);
+    }, []);
+
+    return (
+        <Table.Tr onContextMenu={handleContextMenu} style={{ cursor: renaming ? 'text' : 'default' }}>
+            <Table.Td>
+                {renaming ? (
+                    <Group gap="xs" wrap="nowrap">
+                        <TextInput
+                            ref={renameInputRef}
+                            size="xs"
+                            value={renameValue}
+                            onChange={(e) => onRenameChange(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    onCommitRename();
+                                } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    onCancelRename();
+                                }
+                            }}
+                            disabled={busy}
+                            style={{ flex: 1 }}
+                            aria-label="Rename survey"
+                        />
+                        <Tooltip label="Save (Enter)">
+                            <ActionIcon
+                                size="sm"
+                                color="green"
+                                variant="filled"
+                                onClick={onCommitRename}
+                                loading={busy}
+                                aria-label="Save rename"
+                            >
+                                <IconCheck size={14} />
+                            </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="Cancel (Esc)">
+                            <ActionIcon
+                                size="sm"
+                                variant="subtle"
+                                onClick={onCancelRename}
+                                disabled={busy}
+                                aria-label="Cancel rename"
+                            >
+                                <IconX size={14} />
+                            </ActionIcon>
+                        </Tooltip>
+                    </Group>
+                ) : (
+                    <Group gap="xs" wrap="nowrap">
+                        <Anchor onClick={() => onOpen(survey.id, 'designer')} title="Open in Designer">
+                            {survey.name}
+                        </Anchor>
+                        <Tooltip label="Rename (or right-click)">
+                            <ActionIcon
+                                size="xs"
+                                variant="subtle"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onStartRename(survey);
+                                }}
+                                aria-label="Rename survey"
+                            >
+                                <IconEdit size={12} />
+                            </ActionIcon>
+                        </Tooltip>
+                    </Group>
+                )}
+                <Text size="xs" c="dimmed">
+                    Survey ID: <Code>{survey.surveyId}</Code>
+                </Text>
+            </Table.Td>
+            <Table.Td>
+                {survey.currentRevision === null ? (
+                    <Text c="dimmed">draft</Text>
+                ) : (
+                    <Badge variant="light">v{survey.currentRevision}</Badge>
+                )}
+            </Table.Td>
+            <Table.Td>{survey.responseCount}</Table.Td>
+            <Table.Td>
+                <Text size="sm">{new Date(survey.updatedAt).toLocaleString()}</Text>
+            </Table.Td>
+            <Table.Td>
+                {survey.archived ? (
+                    <Badge color="gray" variant="light">archived</Badge>
+                ) : (
+                    <Badge color="green" variant="light">active</Badge>
+                )}
+            </Table.Td>
+            <Table.Td>
+                <Menu shadow="md" position="bottom-end" withinPortal>
+                    <Menu.Target>
+                        <ActionIcon
+                            variant="subtle"
+                            aria-label="Survey actions"
+                            disabled={busy || renaming}
+                        >
+                            <IconDots size={16} />
+                        </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                        <Menu.Item
+                            leftSection={<IconPencil size={14} />}
+                            onClick={() => onOpen(survey.id, 'designer')}
+                        >
+                            Open Designer
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconEdit size={14} />}
+                            onClick={() => onStartRename(survey)}
+                        >
+                            Rename…
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconUserCheck size={14} />}
+                            onClick={() => onOpen(survey.id, 'responses')}
+                        >
+                            Responses
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconChartBar size={14} />}
+                            onClick={() => onOpen(survey.id, 'dashboard')}
+                        >
+                            Dashboard
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconHistory size={14} />}
+                            onClick={() => onOpen(survey.id, 'versions')}
+                        >
+                            Versions
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconSettings size={14} />}
+                            onClick={() => onOpen(survey.id, 'settings')}
+                        >
+                            Settings
+                        </Menu.Item>
+                        <Menu.Divider />
+                        <Menu.Item
+                            leftSection={<IconCopy size={14} />}
+                            onClick={onDuplicate}
+                        >
+                            Duplicate
+                        </Menu.Item>
+                        <Menu.Item
+                            leftSection={<IconArchive size={14} />}
+                            onClick={onArchive}
+                        >
+                            {survey.archived ? 'Unarchive' : 'Archive'}
+                        </Menu.Item>
+                        <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={onDelete}
+                        >
+                            Delete…
+                        </Menu.Item>
+                    </Menu.Dropdown>
+                </Menu>
+            </Table.Td>
+            {menuOpened && menuPosition && (
+                <ContextMenuPortal
+                    position={menuPosition}
+                    onClose={() => setMenuOpened(false)}
+                >
+                    <Menu.Item
+                        leftSection={<IconPencil size={14} />}
+                        onClick={() => {
+                            onOpen(survey.id, 'designer');
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Open Designer
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconEdit size={14} />}
+                        onClick={() => {
+                            onStartRename(survey);
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Rename
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconUserCheck size={14} />}
+                        onClick={() => {
+                            onOpen(survey.id, 'responses');
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Responses
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconChartBar size={14} />}
+                        onClick={() => {
+                            onOpen(survey.id, 'dashboard');
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Dashboard
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconHistory size={14} />}
+                        onClick={() => {
+                            onOpen(survey.id, 'versions');
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Versions
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconSettings size={14} />}
+                        onClick={() => {
+                            onOpen(survey.id, 'settings');
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Settings
+                    </Menu.Item>
+                    <Menu.Divider />
+                    <Menu.Item
+                        leftSection={<IconCopy size={14} />}
+                        onClick={() => {
+                            onDuplicate();
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Duplicate
+                    </Menu.Item>
+                    <Menu.Item
+                        leftSection={<IconArchive size={14} />}
+                        onClick={() => {
+                            onArchive();
+                            setMenuOpened(false);
+                        }}
+                    >
+                        {survey.archived ? 'Unarchive' : 'Archive'}
+                    </Menu.Item>
+                    <Menu.Item
+                        color="red"
+                        leftSection={<IconTrash size={14} />}
+                        onClick={() => {
+                            onDelete();
+                            setMenuOpened(false);
+                        }}
+                    >
+                        Delete…
+                    </Menu.Item>
+                </ContextMenuPortal>
+            )}
+        </Table.Tr>
+    );
+}
+
+interface IContextMenuPortalProps {
+    position: { x: number; y: number };
+    onClose: () => void;
+    children: React.ReactNode;
+}
+
+function ContextMenuPortal({ position, onClose, children }: IContextMenuPortalProps): React.ReactElement {
+    useEffect(() => {
+        const handleClick = (event: MouseEvent): void => {
+            const target = event.target as HTMLElement | null;
+            if (target && target.closest('[data-survey-context-menu]')) {
+                return;
+            }
+            onClose();
+        };
+        const handleEscape = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('mousedown', handleClick);
+        window.addEventListener('keydown', handleEscape);
+        return () => {
+            window.removeEventListener('mousedown', handleClick);
+            window.removeEventListener('keydown', handleEscape);
+        };
+    }, [onClose]);
+
+    return (
+        <Box
+            data-survey-context-menu
+            style={{
+                position: 'fixed',
+                left: position.x,
+                top: position.y,
+                zIndex: 1000,
+                minWidth: 180,
+                background: 'var(--mantine-color-body)',
+                border: '1px solid var(--mantine-color-default-border)',
+                borderRadius: 'var(--mantine-radius-sm)',
+                boxShadow: 'var(--mantine-shadow-md)',
+                padding: 4,
+            }}
+            role="menu"
+        >
+            {children}
+        </Box>
     );
 }
 
