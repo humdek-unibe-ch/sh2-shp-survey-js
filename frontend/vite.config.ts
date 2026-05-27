@@ -34,12 +34,19 @@ const EXTERNAL_PEERS = [
     '@mantine/notifications',
     '@selfhelp/shared',
     '@selfhelp/shared/plugin-sdk',
-    // Optional runtime dep. The GpxMap style does `await import('leaflet').catch(...)`
-    // and gracefully degrades when leaflet is not available at runtime.
-    // Externalising it keeps the plugin bundle small and avoids a hard
-    // build-time requirement for a peer that may not be installed.
     'leaflet',
 ];
+
+const HOST_RUNTIME_SHIMS: Record<string, string> = {
+    react: '/api/plugins/runtime-shim/react',
+    'react/jsx-runtime': '/api/plugins/runtime-shim/react/jsx-runtime',
+    'react-dom': '/api/plugins/runtime-shim/react-dom',
+    'react-dom/client': '/api/plugins/runtime-shim/react-dom/client',
+    '@mantine/core': '/api/plugins/runtime-shim/@mantine/core',
+    '@mantine/hooks': '/api/plugins/runtime-shim/@mantine/hooks',
+    '@selfhelp/shared': '/api/plugins/runtime-shim/@selfhelp/shared',
+    '@selfhelp/shared/plugin-sdk': '/api/plugins/runtime-shim/@selfhelp/shared/plugin-sdk',
+};
 
 export default defineConfig({
     plugins: [react()],
@@ -61,19 +68,11 @@ export default defineConfig({
             fileName: () => 'plugin.esm.js',
         },
         rollupOptions: {
-            external: (id) => EXTERNAL_PEERS.some((peer) => id === peer || id.startsWith(peer + '/')),
+            external: (id: string) => {
+                return EXTERNAL_PEERS.some((peer) => id === peer || id.startsWith(peer + '/'));
+            },
             output: {
-                // Rename the single merged CSS bundle to `plugin.css` so it
-                // matches `plugin.json#frontend.runtime.stylesheet`. With
-                // `cssCodeSplit: false` Vite emits exactly one .css asset,
-                // so a simple extension match is unambiguous.
-                //
-                // Vite ≤ 5 named that asset `style.css`; Vite 6+ derives the
-                // name from the lib name (e.g. `sh2-shp-survey-js.css`),
-                // so the prior `name === 'style.css'` check silently
-                // dropped the rename and parked the file under `assets/`,
-                // which broke the manifest contract. Match by extension to
-                // stay version-agnostic.
+                paths: (id) => HOST_RUNTIME_SHIMS[id] ?? id,
                 assetFileNames: (asset) =>
                     asset.name && asset.name.toLowerCase().endsWith('.css')
                         ? 'plugin.css'

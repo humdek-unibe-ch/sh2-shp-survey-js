@@ -44,7 +44,8 @@ This is the host runtime telling you it knows about the plugin (the database row
 
 1. **Is `npm --prefix frontend run dev:runtime` running in another terminal?** That command serves the URL above. If you closed the terminal, the import 404s.
 2. **Did the first Vite watch build finish?** Wait until you see `built in <Ns>` in the dev-runtime output before reloading the host page.
-3. **The "Expected v0.2.2" string is read from the host's database** (`plugins.version` column, set when you ran `install-local.mjs` from this plugin's `plugin.json`). The host returns it through `GET /cms-api/v1/plugins/manifest`; the host frontend then compares it against `registration.version` from the loaded ESM bundle. Bump `plugin.json#version` AND re-run `install-local.mjs --symlink` together, otherwise the two numbers go out of sync.
+3. **If the dev server was already running before you pulled changes, restart it once.** The runtime bundle imports the host's `/api/plugins/runtime-shim/*` modules; `scripts/dev-runtime.mjs` proxies those through `localhost:5174`, so an old process can still be serving the pre-fix behavior even while the URL itself returns `200`.
+4. **The "Expected v0.2.2" string is read from the host's database** (`plugins.version` column, set when you ran `install-local.mjs` from this plugin's `plugin.json`). The host returns it through `GET /cms-api/v1/plugins/manifest`; the host frontend then compares it against `registration.version` from the loaded ESM bundle. Bump `plugin.json#version` AND re-run `install-local.mjs --symlink` together, otherwise the two numbers go out of sync.
 
 The full chain is documented in the host repo: [`docs/plugins/installation.md` §6.2](../../sh-selfhelp_backend/docs/plugins/installation.md#62-troubleshooting-plugin-could-not-be-mounted).
 
