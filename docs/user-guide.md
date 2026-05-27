@@ -85,16 +85,41 @@ the survey's *Themes* tab to get the Mantine-bridged colors.
 ## 3. Publish a version
 
 A survey is *always* served from a **version**, never directly from
-the draft. To publish:
+the draft. The Designer header shows the publish state at a glance:
 
-1. In the Creator, click **Save & publish**.
-2. The plugin creates a new immutable `survey_versions` row,
-   computes a SHA-256 over the definition, and sets it as the
-   current version (`surveys.id_current_survey_versions`).
-3. A toast confirms the new revision number.
+- **Draft only** badge — never been published. The runtime style
+  cannot serve the survey yet.
+- **Published vN** badge — at least one revision exists; the public
+  renderer serves the latest one.
+- **N unpublished changes** orange badge — the draft differs from the
+  latest published revision. Counts pages, questions, and settings
+  that were added / removed / modified / moved.
+
+The **Publish** button (orange) is **only enabled when there are
+unpublished changes**. This prevents redundant revisions that contain
+no real difference. When the draft is identical to the published
+version, the button is disabled and the helper text reads "Publish
+is disabled until you make changes".
+
+To publish:
+
+1. Edit the survey in the Creator. The orange badge updates as you
+   work.
+2. Click **Publish (N)** in the Designer header. `N` is the live
+   change count.
+3. The plugin creates a new immutable `survey_versions` row, computes
+   a SHA-256 over the definition, and sets it as the current version
+   (`surveys.id_current_survey_versions`).
+4. The change badge resets to zero and the **Published vN+1** badge
+   updates immediately.
 
 Every published version is durable; you cannot delete a version that
 has even one response attached to it.
+
+> **Renaming**: hover the survey name in the Designer header and
+> click the pencil icon (or double-click the title) to rename inline
+> without leaving the Designer. The same shortcut is available in the
+> survey list (pencil icon next to each row, or **right-click → Rename**).
 
 ---
 
@@ -102,38 +127,60 @@ has even one response attached to it.
 
 The **Versions** tab on the survey detail page shows:
 
-| Column           | What it tells you                                  |
-|------------------|----------------------------------------------------|
-| Revision         | Auto-incremented integer.                          |
-| Published at     | UTC timestamp (rendered in the CMS timezone).      |
-| Author           | The admin who published.                           |
-| Response count   | How many responses landed on this version.         |
-| SHA-256          | Content hash; identical hashes = no real change.   |
-| **Compare**      | Side-by-side diff against any other version.       |
-| **Make current** | Promote that version back to the live one.         |
+| Column        | What it tells you                                  |
+|---------------|----------------------------------------------------|
+| Compare       | Two checkboxes per row to select base + target.    |
+| Revision      | Auto-incremented integer with `current` badge.     |
+| Published at  | Local timestamp (server stores UTC).               |
+| By            | User id that published this revision.              |
+| SHA-256       | Content hash; identical hashes = identical JSON.   |
+| Restore       | Promote that version back to the live one.        |
 
-The **Compare** modal renders a per-question diff:
+### Comparing two revisions
 
-- Green rows: questions added in the right-hand version.
-- Red rows: questions removed.
-- Yellow rows: questions whose JSON differs (with a unified-diff
-  view).
+1. Tick the **Compare** checkbox on a base revision (turns blue).
+2. Tick a second checkbox to set the target (turns orange).
+3. Click **Compare selected** in the toolbar.
+
+The diff modal renders a structural per-entry table:
+
+| Type      | Meaning                                                      |
+|-----------|--------------------------------------------------------------|
+| added     | Page or question present in target, missing in base.         |
+| removed   | Page or question removed in target.                          |
+| modified  | Same question name, but title / type / required / choices / other fields differ. |
+| moved     | Same question name, different position.                      |
+| setting   | Top-level survey setting changed (title, theme, locale, …). Old / new value shown inline. |
+
+Each row carries a stable path like `pages[0].elements[2]` for easy
+cross-referencing with the JSON editor in the Designer.
+
+### Change-count semantics
+
+The Designer's "N unpublished changes" badge and the comparison modal
+use the **same diff engine** (`frontend/src/admin/definitionDiff.ts`).
+A question reorder counts once as a `moved` entry — not once per
+position — so renumbering ten questions does not inflate the count
+to ten.
 
 ---
 
 ## 5. Restore a previous version
 
 1. Open the **Versions** tab.
-2. Click **Make current** on the target version.
-3. Confirm the modal.
+2. Click **Restore** on any non-current row.
+3. The confirmation modal explains that restore is **non-destructive**:
+   - The current published revision stays in the history.
+   - A new revision is created whose definition matches the one you
+     are restoring.
+   - Existing responses keep pointing to the revision they were
+     collected against, so already-collected answers are not lost.
+4. Click **Restore as new revision** (orange button) to confirm.
 
-The plugin flips `surveys.id_current_survey_versions` to that row;
-the live `surveyjs` style on every page starts serving the restored
-definition on the next request (Mercure invalidates the cache, so
-admins don't even need to refresh).
-
-Responses against the old version stay linked to that version — the
-diff between question changes is preserved in the response data.
+The plugin creates a new `survey_versions` row, flips
+`surveys.id_current_survey_versions` to point at it, and emits a
+Mercure invalidation so any live `surveyjs` style picks up the change
+on the next request.
 
 ---
 

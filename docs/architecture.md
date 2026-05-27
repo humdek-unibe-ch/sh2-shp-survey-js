@@ -71,6 +71,80 @@ SurveyJS modules (`survey-core`, `survey-react-ui`, `survey-creator-react`) are 
 
 The Mantine theme bridge (`src/theme/mantineBridge.ts`) translates the host's Mantine palette to the CSS variables SurveyJS v2 reads from `Model.applyTheme()`. The Creator and the runtime both consume the same bridge so the visual identity stays consistent.
 
+## Survey versioning workflow
+
+A survey definition is the SurveyJS JSON describing pages, questions,
+themes, and survey-level settings. The plugin keeps two parallel
+copies of that JSON per survey row:
+
+- **Draft** — `surveys.draft_definition` (nullable). Written by every
+  Designer `Save draft` call. Hashed with SHA-256 into
+  `draft_definition_sha256` so saves can detect concurrent edits
+  (`expectedDraftHash` request body field) without a row lock.
+- **Published versions** — immutable rows in `survey_versions`. The
+  `surveys.id_current_survey_versions` pointer is the public truth
+  source; the `surveyjs` style on every page renders that version.
+
+### Publish
+
+`SurveyService::publishVersion()` is transactional:
+
+1. Compute `revision = max(survey_versions.revision) + 1`.
+2. Insert a new `SurveyVersion` (SHA-256 captured at construction).
+3. Update `surveys.id_current_survey_versions`.
+4. Clear the draft + draft hash (the next edit starts fresh from the
+   freshly-published JSON).
+5. Publish a `version_published` event on
+   `surveys/{surveyId}/editing` so other editors refresh.
+
+### Restore
+
+`SurveyService::restoreVersion()` is non-destructive: it copies the
+target version's definition into a brand-new revision (revision =
+`max + 1`) and points `id_current_survey_versions` at that new row.
+Old responses still reference the revision they were collected
+against, so historical data stays intact and re-runnable. The diff
+between the restored revision and the previously current revision
+shows up as the change set in the next admin **Versions** comparison.
+
+### Change detection (Designer "N unpublished changes" badge)
+
+`frontend/src/admin/definitionDiff.ts` implements a structural diff
+between two SurveyJS definitions, used by:
+
+- The Designer header to enable/disable the `Publish` button and
+  render the change-count badge.
+- The Versions tab to render the structural diff modal when the
+  operator compares two revisions.
+
+Comparison rules:
+
+- Pages and questions are matched by `name` when present, otherwise
+  by array position.
+- A pure reorder reports one `moved` entry per element instead of
+  flagging every neighbour as `modified`.
+- Top-level survey settings (everything outside `pages`) are compared
+  with a stable JSON hash and reported once with old/new snapshots.
+
+The diff engine runs entirely client-side; the backend keeps the
+SHA-256 as the durable "did anything change" signal for audit purposes.
+
+### API endpoints
+
+| Method | Path                                                   | Purpose                          |
+|--------|--------------------------------------------------------|----------------------------------|
+| `GET`  | `/admin/.../surveys/{id}/versions`                     | List version summaries.          |
+| `GET`  | `/admin/.../surveys/{id}/versions/{versionId}`         | Single version with definition.  |
+| `POST` | `/admin/.../surveys/{id}/versions`                     | Publish a new version.           |
+| `POST` | `/admin/.../surveys/{id}/versions/{versionId}/restore` | Restore as a new revision.       |
+| `PUT`  | `/admin/.../surveys/{id}/draft`                        | Save a draft (with optimistic lock). |
+
+The single-version GET endpoint is used by the Versions comparison
+modal to load two definitions on demand without inflating the list
+response. A future enhancement (response count per revision) belongs
+on the list endpoint, since it would be expensive to compute every
+time the comparison modal opens.
+
 ## Mobile package (v1 readonly)
 
 The mobile package exports `registerMobile()` which contributes a read-only `surveyjs` style. It fetches the published JSON from the public endpoint, walks the question tree, and renders a static preview with a fall-back "Open on web" link. v1 does not support submissions; the host's `BasicStyle.tsx` routes anything that needs editing to `OpenOnWebFallback`. A native v2 powered by `survey-react-native` is on the roadmap.
@@ -130,7 +204,8 @@ sh2-shp-survey-js/
 │            api/{surveys, surveys-admin}.ts,
 │            styles/{SurveyJsStyle, GpxMapStyle}.tsx,
 │            admin/{SurveyAdminPage, SurveyDesignerPage, SurveyResponsesPage,
-│                   SurveyDashboardPage, SurveySettingsPage}.tsx,
+│                   SurveyDashboardPage, SurveySettingsPage,
+│                   SurveyVersionsPage, definitionDiff}.tsx,
 │            custom-questions/register.ts,
 │            theme/mantineBridge.ts}
 └── mobile/

@@ -4,6 +4,62 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
+## Unreleased
+
+### Added
+
+- **Inline survey rename**. The surveys list now exposes a pencil
+  icon next to each name plus a **right-click → Rename** context menu;
+  the Designer header lets you double-click the title (or click the
+  pencil icon) to rename without leaving the editor. Press `Enter` to
+  save and `Esc` to cancel. The Settings tab still works for renames
+  too — the inline shortcuts are an additive, friendlier path.
+- **Designer change detection + change counter**. The Designer header
+  now compares the live Creator JSON against the last published
+  revision after every Creator mutation and shows an orange
+  "N unpublished changes" badge with a structural change count. The
+  **Publish** button:
+  - is rendered in the warning (`orange`) color so it never looks like
+    a passive secondary action,
+  - is **disabled when there are no changes** (preventing redundant
+    revisions with identical SHA-256), and
+  - displays the change count inline (`Publish (3)`) so the admin
+    knows exactly how big the publish will be.
+- **Versions tab — side-by-side comparison**. The Versions tab now
+  carries a checkbox per row to pick a base + target version and a
+  **Compare selected** action that opens a structural diff modal.
+  Diffs categorise changes as `added` / `removed` / `modified` /
+  `moved` / `setting`, with old/new value snapshots for settings.
+  Both the Designer badge and the comparison modal share the new
+  `definitionDiff.ts` engine so semantics stay consistent across the
+  UI.
+- **Restore guidance**. The restore confirmation dialog now spells
+  out that restore is non-destructive (creates a new revision, leaves
+  historical responses attached to their original revision) so
+  operators understand what they are committing to.
+- **Single-version API endpoint**. `GET /admin/.../surveys/{id}/versions/{versionId}`
+  returns one version with its full definition. Used by the
+  comparison modal to fetch two definitions on demand without
+  inflating the list response.
+
+### Fixed
+
+- **Designer required a full page reload to switch surveys.** When
+  navigating between two surveys via `?id=` URL changes, the Designer
+  state (creator instance, draft cache, change count) carried over
+  from the previous survey, leaving the editor frozen on the wrong
+  JSON. The page now resets all state on `surveyId` change and rebuilds
+  the Creator on the new survey's draft.
+- **Plugin runtime import map was rendered inside React's tree.**
+  React 19 logged a dev-only warning ("Encountered a script tag while
+  rendering React component") and could strip the script during
+  client-side navigation, leaving subsequent plugin imports unable to
+  resolve bare specifiers like `@selfhelp/shared/plugin-sdk`. The host
+  layout now streams the import map through `useServerInsertedHTML`
+  (new `PluginImportMapInjector` client component) so the browser
+  parses it before any module script runs and React's reconciler
+  never touches it. *(Host frontend change — sh-selfhelp_frontend.)*
+
 ## 0.2.6 — 2026-05-26
 
 ### Changed
