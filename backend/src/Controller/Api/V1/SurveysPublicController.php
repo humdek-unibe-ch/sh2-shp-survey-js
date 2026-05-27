@@ -546,8 +546,14 @@ final class SurveysPublicController
         if (!$oncePerUser && !$oncePerSchedule) {
             return null;
         }
-        $windowStart = $this->scheduleBoundary($config['startTime'] ?? null);
-        $windowEnd = $this->scheduleBoundary($config['endTime'] ?? null);
+        $windowStart = $this->parseRuntimeTimestamp($config['windowStart'] ?? null);
+        $windowEnd = $this->parseRuntimeTimestamp($config['windowEnd'] ?? null);
+        if ($windowStart === null && $windowEnd === null) {
+            [$windowStart, $windowEnd] = $this->resolveScheduleWindow(
+                $config['startTime'] ?? null,
+                $config['endTime'] ?? null,
+            );
+        }
 
         $existing = null;
         if ($userId !== null) {
@@ -579,24 +585,73 @@ final class SurveysPublicController
     }
 
     /**
-     * Translate a clock time (HH:MM) coming from `start_time` /
-     * `end_time` into today's matching UTC timestamp. Honours the
-     * special "00:00 - 00:00" "always on" sentinel the legacy plugin
-     * accepts.
+     * Resolve the currently-active schedule window using the legacy
+     * SurveyJS anchoring logic:
+     *
+     * - start <= end: same-day window (`12:00 -> 13:00`)
+     * - start > end and now < end: start belongs to previous day
+     * - start > end and now >= end: end belongs to next day
+     *
+     * This is what makes "once per schedule" mean "once in the active
+     * window until the next window begins", including overnight
+     * windows like `22:00 -> 06:00`.
+     *
+     * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}
      */
-    private function scheduleBoundary(mixed $value): ?\DateTimeImmutable
+    private function resolveScheduleWindow(mixed $startRaw, mixed $endRaw): array
     {
-        if (!is_string($value) || $value === '' || $value === '00:00') {
+        $start = $this->parseClockTime($startRaw);
+        $end = $this->parseClockTime($endRaw);
+        if ($start === null || $end === null) {
+            return [null, null];
+        }
+
+        $tz = new \DateTimeZone('UTC');
+        $now = new \DateTimeImmutable('now', $tz);
+        $today = $now->setTime(0, 0, 0, 0);
+
+        $windowStart = $today->setTime($start['hour'], $start['minute']);
+        $windowEnd = $today->setTime($end['hour'], $end['minute']);
+
+        if ($windowStart > $windowEnd) {
+            if ($windowEnd > $now) {
+                $windowStart = $windowStart->modify('-1 day');
+            } else {
+                $windowEnd = $windowEnd->modify('+1 day');
+            }
+        }
+
+        return [$windowStart, $windowEnd];
+    }
+
+    /**
+     * @return array{hour:int, minute:int}|null
+     */
+    private function parseClockTime(mixed $value): ?array
+    {
+        if (!is_string($value) || $value === '') {
             return null;
         }
         if (!preg_match('/^\d{1,2}:\d{2}$/', $value)) {
             return null;
         }
-        $today = new \DateTimeImmutable('today', new \DateTimeZone('UTC'));
         $parts = explode(':', $value);
-        $hour = (int) $parts[0];
-        $minute = (int) $parts[1];
-        return $today->setTime($hour, $minute, 0);
+        return [
+            'hour' => (int) $parts[0],
+            'minute' => (int) $parts[1],
+        ];
+    }
+
+    private function parseRuntimeTimestamp(mixed $value): ?\DateTimeImmutable
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     /**

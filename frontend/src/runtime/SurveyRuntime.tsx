@@ -592,12 +592,15 @@ function buildEnforcePayload(
     responseId: string | null,
     progress: { pageNo: number; triggerType: string; meta: ISurveyMeta | null; editMode?: boolean },
 ): ISubmissionEnforcePayload {
+    const scheduleWindow = config.oncePerSchedule
+        ? resolveScheduleWindow(config.startTime, config.endTime)
+        : null;
     return {
         oncePerUser: config.oncePerUser,
         oncePerSchedule: config.oncePerSchedule,
         allowAnonymous: config.allowAnonymous,
-        windowStart: config.oncePerSchedule ? scheduleBoundaryIso(config.startTime) : null,
-        windowEnd: config.oncePerSchedule ? scheduleBoundaryIso(config.endTime) : null,
+        windowStart: scheduleWindow?.start ?? null,
+        windowEnd: scheduleWindow?.end ?? null,
         responseId: responseId ?? undefined,
         editMode: progress.editMode ?? false,
         progress: {
@@ -608,14 +611,42 @@ function buildEnforcePayload(
     };
 }
 
-function scheduleBoundaryIso(time: string | null): string | null {
-    if (!time || !/^\d{1,2}:\d{2}$/.test(time) || time === '00:00') return null;
+function resolveScheduleWindow(
+    startTime: string | null,
+    endTime: string | null,
+): { start: string; end: string } | null {
+    const start = parseClockTimeParts(startTime);
+    const end = parseClockTimeParts(endTime);
+    if (!start || !end) return null;
+
+    const now = new Date();
+    const windowStart = new Date(now);
+    windowStart.setHours(start.hour, start.minute, 0, 0);
+
+    const windowEnd = new Date(now);
+    windowEnd.setHours(end.hour, end.minute, 0, 0);
+
+    if (windowStart.getTime() > windowEnd.getTime()) {
+        if (windowEnd.getTime() > now.getTime()) {
+            windowStart.setDate(windowStart.getDate() - 1);
+        } else {
+            windowEnd.setDate(windowEnd.getDate() + 1);
+        }
+    }
+
+    return {
+        start: windowStart.toISOString(),
+        end: windowEnd.toISOString(),
+    };
+}
+
+function parseClockTimeParts(time: string | null): { hour: number; minute: number } | null {
+    if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return null;
     const parts = time.split(':').map((part) => Number.parseInt(part, 10));
-    const hh = parts[0] ?? 0;
-    const mm = parts[1] ?? 0;
-    const today = new Date();
-    today.setHours(hh, mm, 0, 0);
-    return today.toISOString();
+    return {
+        hour: parts[0] ?? 0,
+        minute: parts[1] ?? 0,
+    };
 }
 
 function isOutsideSchedule(config: { startTime: string | null; endTime: string | null }): boolean {
@@ -657,6 +688,9 @@ function cryptoRandomHex(byteLength: number): string {
 }
 
 function configToServerConfig(config: IRuntimeSectionConfig): Record<string, unknown> {
+    const scheduleWindow = config.oncePerSchedule
+        ? resolveScheduleWindow(config.startTime, config.endTime)
+        : null;
     return {
         restartOnRefresh: config.restartOnRefresh,
         autoSaveIntervalSeconds: config.autoSaveIntervalSeconds,
@@ -671,6 +705,8 @@ function configToServerConfig(config: IRuntimeSectionConfig): Record<string, unk
         oncePerSchedule: config.oncePerSchedule,
         ownEntriesOnly: config.ownEntriesOnly,
         allowAnonymous: config.allowAnonymous,
+        windowStart: scheduleWindow?.start ?? null,
+        windowEnd: scheduleWindow?.end ?? null,
         labelSurveyDone: config.labelSurveyDone,
         labelSurveyNotActive: config.labelSurveyNotActive,
         dataConfig: config.dataConfig,
