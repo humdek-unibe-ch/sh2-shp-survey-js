@@ -304,12 +304,12 @@ It checks: lock-file parity, Composer/npm package presence, Mercure reachability
 
 When the install completes, the host writes the following:
 
-- **Database**: 4 plugin-owned tables (`surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`). `surveys.survey_id` and `survey_runs.response_id` are generated stable keys. Runtime submissions create plugin-owned host `data_tables` on demand with the `sh2_surveyjs_` prefix.
-- **Permissions**: `surveyjs.surveys.manage`, `surveyjs.surveys.view-responses`, `surveyjs.surveys.export-pdf` (assigned to admin role by default).
+- **Database**: 6 plugin-owned tables (`surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`, `survey_response_drafts`, `survey_files`). `surveys.survey_id` and `survey_runs.response_id` are generated stable keys. Runtime submissions create plugin-owned host `data_tables` on demand with the `sh2_surveyjs_` prefix.
+- **Permissions**: `surveyjs.surveys.{manage, view-responses, export-pdf, delete-responses, export-csv, export-xlsx, export-json, upload-files}` — all linked to the `admin` role by the plugin's migration so administrators get the full surface out of the box.
 - **Lookups**: `surveyJsTheme` (default / modern / high-contrast).
 - **Styles**: `surveyjs`, `gpxMap` (available in the page builder).
 - **Admin pages**: `Surveys`, `Survey Designer`, `Responses`, `Dashboard`, `Settings`.
-- **API routes**: 13 routes under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/*` and `/cms-api/v1/plugins/sh2-shp-survey-js/*`.
+- **API routes**: 31 routes under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/*` and `/cms-api/v1/plugins/sh2-shp-survey-js/*`. The host's `PluginApiRouteSynchronizer` reads `plugin.json#apiRoutes` and persists each entry as a row in `api_routes` (tagged with `id_plugins`) linked to its permissions through `rel_api_routes_permissions`.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.
 - **Symfony bundle**: `Humdek\SurveyJsBundle\HumdekSurveyJsBundle` (added to `config/selfhelp_plugin_bundles.php`).
 - **Lock file**: a new entry in `selfhelp.plugins.lock.json` so the install is reproducible.

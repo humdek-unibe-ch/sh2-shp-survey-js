@@ -150,7 +150,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 run: async () => {
                     try {
                         const res = await fetch(
-                            `/cms-api/v1/admin/plugins/${PLUGIN_ID}/license-key`,
+                            `/api/admin/plugins/${PLUGIN_ID}/license-key`,
                             {
                                 credentials: 'include',
                                 headers: { Accept: 'application/json' },

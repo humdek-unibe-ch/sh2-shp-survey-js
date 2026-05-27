@@ -5,9 +5,11 @@ SPDX-License-Identifier: MPL-2.0
 /**
  * Public SurveyJS plugin API client.
  *
- * Wraps every route in `SurveyJsApiRouteSubscriber::onApiRouteRegistry`
- * that the public runtime needs: survey hydration, draft autosave,
- * submission, edit-mode rehydration, file pipeline + dynamic choices.
+ * Wraps every public route declared in `plugin.json#apiRoutes` (the
+ * host's `PluginApiRouteSynchronizer` persists those rows into
+ * `api_routes` at install/update time): survey hydration, draft
+ * autosave, submission, edit-mode rehydration, file pipeline +
+ * dynamic choices.
  *
  * The client is intentionally framework-agnostic (plain fetch) so it
  * is easy to call from the runtime style component, custom-question
@@ -111,12 +113,15 @@ export interface ISubmissionError extends Error {
     body?: unknown;
 }
 
-// Matches the host's ApiRouteLoader prefix
-// (`/cms-api/<version>` + the contributed path). Keep this in sync
-// with backend/src/EventSubscriber/SurveyJsApiRouteSubscriber.php
-// and plugin.json#apiRoutes — those declare paths starting at
-// `/plugins/...`, the host prepends `/cms-api/v1`.
-const BASE = '/cms-api/v1/plugins/sh2-shp-survey-js';
+// Browser-side public-runtime calls go through the host's Next.js
+// BFF proxy (`src/app/api/[...path]/route.ts`). The proxy validates
+// CSRF, attaches the httpOnly JWT and forwards to Symfony with the
+// `/cms-api/v1` prefix prepended. Calling `/cms-api/v1/...` directly
+// from the browser would skip the proxy and 404 against the Next.js
+// dev server. Keep paths after `/api/` in sync with the public
+// entries in `plugin.json#apiRoutes` — those are the single source
+// of truth the host installer persists into `api_routes`.
+const BASE = '/api/plugins/sh2-shp-survey-js';
 
 function csrfHeaders(): Record<string, string> {
     if (typeof document === 'undefined') {

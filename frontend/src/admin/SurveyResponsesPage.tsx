@@ -297,7 +297,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                                                     variant="subtle"
                                                     aria-label="Open response PDF"
                                                     component="a"
-                                                    href={`/cms-api/v1/admin/plugins/sh2-shp-survey-js/surveys/${surveyId}/responses/${encodeURIComponent(row.responseId)}/pdf`}
+                                                    href={`/api/admin/plugins/sh2-shp-survey-js/surveys/${surveyId}/responses/${encodeURIComponent(row.responseId)}/pdf`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     onClick={(e) => e.stopPropagation()}

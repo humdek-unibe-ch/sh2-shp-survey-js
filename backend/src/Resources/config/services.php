@@ -10,7 +10,6 @@ use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysAdminController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysHealthController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysLicenseController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysPublicController;
-use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsApiRouteSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsLookupRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsRealtimeTopicSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsStyleRegistrySubscriber;
@@ -72,28 +71,36 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyPdfService::class)->autowire();
 
     // Anonymous-user identity for once-per-user enforcement.
+    // `kernel.secret` is the host parameter that mirrors `APP_SECRET`;
+    // referencing `APP_SECRET` directly as a parameter would fail because
+    // env names are not parameters.
     $services->set(VisitorIdResolver::class)
-        ->arg('$secret', '%env(default:APP_SECRET:SURVEYJS_VISITOR_SECRET)%');
+        ->arg('$secret', '%env(default:kernel.secret:SURVEYJS_VISITOR_SECRET)%');
+
+    // Defaults for the env-driven knobs below. Symfony's `default:`
+    // env processor requires the fallback to be a **parameter name**,
+    // not a literal — so we materialise the literals here. Operators
+    // still override via env (`SURVEYJS_UPLOAD_MAX_BYTES`, etc.).
+    $configurator->parameters()
+        ->set('surveyjs_default_upload_dir', '%kernel.project_dir%/var/plugin-data/sh2-shp-survey-js/uploads')
+        ->set('surveyjs_default_upload_max_bytes', 25000000)
+        ->set('surveyjs_default_file_url_ttl_seconds', 300);
 
     // Private file storage (outside web root). Defaults resolve to
     // `<project>/var/plugin-data/sh2-shp-survey-js/uploads` when the
     // env override is missing.
     $services->set(SurveyFileStorage::class)
         ->arg('$uploadDir', '%env(default:surveyjs_default_upload_dir:SURVEYJS_UPLOAD_DIR)%')
-        ->arg('$maxBytes', '%env(default:25000000:int:SURVEYJS_UPLOAD_MAX_BYTES)%');
+        ->arg('$maxBytes', '%env(int:default:surveyjs_default_upload_max_bytes:SURVEYJS_UPLOAD_MAX_BYTES)%');
 
     $services->set(SignedFileUrlService::class)
-        ->arg('$secret', '%env(default:APP_SECRET:SURVEYJS_FILE_URL_SECRET)%')
-        ->arg('$defaultTtlSeconds', '%env(default:300:int:SURVEYJS_FILE_URL_TTL_SECONDS)%');
+        ->arg('$secret', '%env(default:kernel.secret:SURVEYJS_FILE_URL_SECRET)%')
+        ->arg('$defaultTtlSeconds', '%env(int:default:surveyjs_default_file_url_ttl_seconds:SURVEYJS_FILE_URL_TTL_SECONDS)%');
 
     // SurveyJS answers should land in the host's legacy form-data
     // tables immediately, matching the old plugin's data flow.
     $services->set(CoreDataTableWriter::class)->autowire();
     $services->set(DataTableWriterInterface::class, CoreDataTableWriter::class);
-
-    // Default upload directory: `<project_dir>/var/plugin-data/sh2-shp-survey-js/uploads`.
-    $configurator->parameters()
-        ->set('surveyjs_default_upload_dir', '%kernel.project_dir%/var/plugin-data/sh2-shp-survey-js/uploads');
 
     // SurveyJsRealtimePublisher is autowired against the host
     // `App\Plugin\Realtime\PluginRealtimePublisherInterface` which the
@@ -116,5 +123,4 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsStyleRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsLookupRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsRealtimeTopicSubscriber::class)->tag('kernel.event_subscriber');
-    $services->set(SurveyJsApiRouteSubscriber::class)->tag('kernel.event_subscriber');
 };

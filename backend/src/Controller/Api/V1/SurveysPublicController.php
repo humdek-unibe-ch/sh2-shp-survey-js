@@ -625,7 +625,12 @@ final class SurveysPublicController
             'sizeBytes' => $file->getSizeBytes(),
             'sha256' => $file->getSha256(),
             'uploadedAt' => $file->getUploadedAt()->format(DATE_ATOM),
-            'downloadUrl' => '/cms-api/v1/plugins/sh2-shp-survey-js/files/' . $file->getId() . '?' . $query,
+            // Browser-side URL: goes through the host Next.js BFF
+            // proxy at `/api/[...path]`, which validates CSRF (for
+            // unsafe methods), attaches the httpOnly JWT and rewrites
+            // the prefix to `/cms-api/v1/...` before hitting Symfony.
+            // The HMAC-signed query string is forwarded verbatim.
+            'downloadUrl' => '/api/plugins/sh2-shp-survey-js/files/' . $file->getId() . '?' . $query,
         ];
     }
 

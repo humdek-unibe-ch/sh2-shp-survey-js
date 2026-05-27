@@ -39,12 +39,22 @@ export interface IAdminSurveyVersion {
     definitionSha256: string;
 }
 
-// Matches the host's ApiRouteLoader prefix
-// (`/cms-api/<version>` + the contributed path). Keep this in sync
-// with backend/src/EventSubscriber/SurveyJsApiRouteSubscriber.php
-// and plugin.json#apiRoutes — those declare paths starting at
-// `/admin/plugins/...`, the host prepends `/cms-api/v1`.
-const BASE = '/cms-api/v1/admin/plugins/sh2-shp-survey-js';
+// Browser-side admin calls go through the host's Next.js BFF proxy
+// (`src/app/api/[...path]/route.ts`), which:
+//   - validates the CSRF double-submit cookie for unsafe methods,
+//   - attaches the httpOnly `sh_auth` (or `sh_impersonate`) JWT as
+//     `Authorization: Bearer ...` before forwarding,
+//   - prepends `/cms-api/v1` and points the request at the Symfony
+//     backend (`SYMFONY_INTERNAL_URL`).
+//
+// Calling `/cms-api/v1/...` directly from the browser would bypass
+// the proxy entirely — the browser would hit the Next.js dev server
+// (which has no such route) and 404. The plugin therefore uses the
+// BFF-relative `/api/...` form here. Keep paths after `/api/` in
+// sync with the admin entries in `plugin.json#apiRoutes` — those
+// are the single source of truth the host installer persists into
+// `api_routes`.
+const BASE = '/api/admin/plugins/sh2-shp-survey-js';
 
 function csrfHeaders(): Record<string, string> {
     if (typeof document === 'undefined') {
