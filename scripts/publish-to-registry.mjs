@@ -57,6 +57,11 @@ async function main(opts) {
         return;
     }
 
+    const mode = opts.mode || null;
+    if (mode !== null && mode !== 'connected' && mode !== 'standalone') {
+        throw new Error(`--mode must be "connected" or "standalone" (got ${mode}).`);
+    }
+
     const channel = opts.channel || 'stable';
     const allowedChannels = new Set(['stable', 'beta', 'alpha', 'nightly']);
     if (!allowedChannels.has(channel)) {
@@ -78,10 +83,14 @@ async function main(opts) {
     step(`Plugin version:  ${version}`);
     step(`Registry path:   ${registryPath}`);
     step(`Channel:         ${channel}`);
+    if (mode !== null) {
+        step(`Archive mode:    ${mode}`);
+    }
 
     step('Building .shplugin archive');
     const buildArgs = [path.join(SCRIPT_DIR, 'build-shplugin.mjs')];
     if (opts['skip-build']) buildArgs.push('--skip-build');
+    if (mode !== null) buildArgs.push('--mode', mode);
     runStreaming('node', buildArgs);
     if (!existsSync(archive)) throw new Error(`Expected archive missing: ${archive}`);
     ok(`Built ${archive}`);

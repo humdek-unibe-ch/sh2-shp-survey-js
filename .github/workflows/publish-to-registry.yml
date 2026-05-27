@@ -160,6 +160,7 @@ jobs:
                   node scripts/publish-to-registry.mjs \
                       --registry "$GITHUB_WORKSPACE/sh2-plugin-registry" \
                       --channel  "$CHANNEL" \
+                      --mode connected \
                       --skip-build \
                       --push
 
