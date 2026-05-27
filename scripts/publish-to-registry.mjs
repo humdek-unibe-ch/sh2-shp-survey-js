@@ -65,7 +65,7 @@ async function main(opts) {
 
     const manifestPath = path.join(PLUGIN_ROOT, 'plugin.json');
     if (!existsSync(manifestPath)) throw new Error(`plugin.json not found at ${manifestPath}`);
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const manifest = parseJsonFile(manifestPath);
     const pluginId = manifest.id;
     const version = manifest.version;
     if (!pluginId || !version) throw new Error('plugin.json missing id or version.');
@@ -177,7 +177,7 @@ function spliceRegistryJson(registryJsonPath, entry, pluginId) {
     if (!existsSync(registryJsonPath)) {
         throw new Error(`registry.json not found at ${registryJsonPath}`);
     }
-    const registry = JSON.parse(readFileSync(registryJsonPath, 'utf8'));
+    const registry = parseJsonFile(registryJsonPath);
     const others = (registry.plugins || []).filter((p) => p.id !== pluginId);
     const updated = [...others, entry].sort((a, b) => String(a.id).localeCompare(String(b.id)));
     registry.publishedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -208,6 +208,14 @@ function captureNode(argv) {
         throw new Error(`node ${argv.join(' ')} failed (exit ${result.status}). Stderr:\n${result.stderr}`);
     }
     return result.stdout;
+}
+
+function parseJsonFile(filePath) {
+    return JSON.parse(stripUtf8Bom(readFileSync(filePath, 'utf8')));
+}
+
+function stripUtf8Bom(text) {
+    return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 function hasBinary(name) {
