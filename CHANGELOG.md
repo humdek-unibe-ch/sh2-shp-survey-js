@@ -4,7 +4,7 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
-## Unreleased
+## 0.2.7 — 2026-05-27
 
 ### Added
 
