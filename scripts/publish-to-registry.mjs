@@ -34,7 +34,8 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -152,9 +153,31 @@ async function main(opts) {
     mkdirSync(path.dirname(destManifest), { recursive: true });
     mkdirSync(destArtifacts, { recursive: true });
     copyFileSync(manifestPath, destManifest);
-    copyFileSync(esmFile, path.join(destArtifacts, 'plugin.esm.js'));
-    if (hasCss) copyFileSync(cssFile, path.join(destArtifacts, 'plugin.css'));
-    ok('Copied manifest + artifacts.');
+
+    // Copy EVERY file produced by the build (plugin.esm.js + plugin.css +
+    // every Vite code-split chunk like survey-creator-react-<hash>.js).
+    // The host frontend imports the entry via dynamic `import(<url>)`;
+    // Vite then loads chunks via `import('./chunk-<hash>.js')` calls
+    // that resolve relative to the entry's URL, so every chunk must
+    // live in the same dir as the entry on the host. We also write a
+    // fresh SHA256SUMS manifest (bare filenames) so the host's
+    // PluginRuntimeArtifactFetcher can enumerate + verify each chunk.
+    const stagedFileNames = readdirSync(stageArtifacts).filter((name) => name !== 'SHA256SUMS');
+    const chunkFileNames = [];
+    const sha256Lines = [];
+    for (const name of stagedFileNames) {
+        const src = path.join(stageArtifacts, name);
+        const stat = statSync(src);
+        if (!stat.isFile()) continue;
+        copyFileSync(src, path.join(destArtifacts, name));
+        const hash = sha256OfFile(src);
+        sha256Lines.push(`${hash}  ${name}`);
+        if (name !== 'plugin.esm.js' && name !== 'plugin.css') {
+            chunkFileNames.push(name);
+        }
+    }
+    writeFileSync(path.join(destArtifacts, 'SHA256SUMS'), sha256Lines.join('\n') + '\n');
+    ok(`Copied manifest + ${stagedFileNames.length} artifact file(s) + SHA256SUMS (${chunkFileNames.length} chunk(s)).`);
 
     spliceRegistryJson(registryJson, entry, pluginId);
     ok(`Updated ${registryJson}`);
@@ -265,6 +288,11 @@ function joinAbsoluteUrl(baseUrl, relativePath) {
     const trimmedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
     const trimmedPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
     return `${trimmedBase}${trimmedPath}`;
+}
+
+function sha256OfFile(filePath) {
+    const buf = readFileSync(filePath);
+    return createHash('sha256').update(buf).digest('hex');
 }
 
 function captureNode(argv) {
