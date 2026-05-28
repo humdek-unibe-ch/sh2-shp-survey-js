@@ -1,6 +1,6 @@
 {
     "name": "@humdek/sh2-shp-survey-js",
-    "version": "0.2.19",
+    "version": "0.2.20",
     "description": "SurveyJS v2 frontend integration for the SelfHelp CMS plugin ecosystem.",
     "license": "MPL-2.0",
     "private": true,
@@ -24,7 +24,7 @@
         "react-dom": "^19.2.0",
         "@mantine/core": "^9.0.0",
         "@mantine/hooks": "^9.0.0",
-        "@selfhelp/shared": "^1.2.0",
+        "@selfhelp/shared": "^1.2.1",
         "@tabler/icons-react": "^3.0.0",
         "survey-core": "2.5.25",
         "survey-creator-core": "2.5.25",
@@ -34,7 +34,7 @@
     "devDependencies": {
         "@mantine/core": "^9.0.2",
         "@mantine/hooks": "^9.0.2",
-        "@selfhelp/shared": "^1.2.0",
+        "@selfhelp/shared": "^1.2.1",
         "@tabler/icons-react": "^3.0.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
