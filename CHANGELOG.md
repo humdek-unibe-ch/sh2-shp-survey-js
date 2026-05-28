@@ -5,6 +5,48 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## 0.2.19 — 2026-05-28
+
+### Fixed
+- **SurveyJS Creator still showed the "developer license required"
+  watermark even when `SURVEYJS_LICENSE_KEY` was configured.** The
+  Designer page used to pass the license string through the
+  `licenseKey` SurveyCreator constructor option, which `survey-
+  creator-core` 2.5.x silently ignores (the symbol is no longer in
+  its source). The supported v2.x path is the global
+  `setLicenseKey()` exported from `survey-core`, called BEFORE
+  constructing the Creator. `SurveyDesignerPage` now dynamically
+  imports `survey-core` and invokes `setLicenseKey(license.licenseKey)`
+  whenever `fetchLicenseKey()` returns a non-null key, then
+  constructs the Creator without the unsupported option. The
+  watermark disappears as soon as a valid key is provided. The
+  public survey runtime (`SurveyRuntime.tsx`) was already using
+  this API path correctly for the SavePDF feature and was not
+  affected by this bug.
+
+- **"Developer live reload" admin panel was shown to all admins on
+  the SurveyJS plugin page.** The panel documents the dev-server
+  install workflow (`install-local.mjs --symlink` +
+  `npm run dev:runtime`) and is only useful to plugin developers
+  iterating locally. It now renders only when the plugin runtime
+  was loaded from a cross-origin location relative to the host
+  page (i.e. an external Vite dev server like
+  `http://localhost:5174`). Regular installs from the registry,
+  archives, or connected sources resolve their entry through the
+  host's own `/plugin-artifacts/...` origin, so the panel stays
+  hidden. The check lives in the new
+  `frontend/src/runtime-mode.ts` module and uses
+  `import.meta.url` so it stays correct across every dev
+  live-reload cycle (each re-import gets a fresh URL) without
+  requiring a new field on the `IPluginApi` SDK contract.
+
+### Internal
+- New small helper module `frontend/src/runtime-mode.ts` exporting
+  `IS_DEV_RUNTIME` (computed once at module load). Used by
+  `SurveyAdminPage` for now; available to any other admin/runtime
+  module that needs the same signal in the future.
+
+
 ## 0.2.18 — 2026-05-28
 
 ### Fixed

@@ -85,6 +85,7 @@ import {
     type IAdminSurveyDetail,
     type IAdminSurveySummary,
 } from '../api/surveys-admin';
+import { IS_DEV_RUNTIME } from '../runtime-mode';
 import { SurveyDesignerPage } from './SurveyDesignerPage';
 import { SurveyResponsesPage } from './SurveyResponsesPage';
 import { SurveyDashboardPage } from './SurveyDashboardPage';
@@ -867,23 +868,25 @@ function PluginOperationsPanel(): React.ReactElement {
                     </Alert>
                 )}
 
-                <Paper withBorder p="md">
-                    <Stack gap={4}>
-                        <Text fw={600}>Developer live reload</Text>
-                        <Text size="sm" c="dimmed">
-                            One-time backend attach registers routes, tables, permissions, and the bundle. Keep
-                            the runtime server open while editing plugin UI code.
-                        </Text>
-                        <Code block>
-                            node scripts/install-local.mjs --symlink{'\n'}
-                            npm --prefix frontend run dev:runtime
-                        </Code>
-                        <Text size="xs" c="dimmed">
-                            Full docs: <Code>plugins/sh2-shp-survey-js/docs/install.md</Code> and{' '}
-                            <Code>sh-selfhelp_backend/docs/plugins/runtime-frontend-loading.md</Code>
-                        </Text>
-                    </Stack>
-                </Paper>
+                {IS_DEV_RUNTIME && (
+                    <Paper withBorder p="md">
+                        <Stack gap={4}>
+                            <Text fw={600}>Developer live reload</Text>
+                            <Text size="sm" c="dimmed">
+                                One-time backend attach registers routes, tables, permissions, and the bundle. Keep
+                                the runtime server open while editing plugin UI code.
+                            </Text>
+                            <Code block>
+                                node scripts/install-local.mjs --symlink{'\n'}
+                                npm --prefix frontend run dev:runtime
+                            </Code>
+                            <Text size="xs" c="dimmed">
+                                Full docs: <Code>plugins/sh2-shp-survey-js/docs/install.md</Code> and{' '}
+                                <Code>sh-selfhelp_backend/docs/plugins/runtime-frontend-loading.md</Code>
+                            </Text>
+                        </Stack>
+                    </Paper>
+                )}
             </Stack>
         </Card>
     );

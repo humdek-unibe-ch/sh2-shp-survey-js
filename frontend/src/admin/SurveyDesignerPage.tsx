@@ -305,15 +305,29 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             const license = await fetchLicenseKey().catch(() => ({ licenseKey: null, configured: false }));
             if (cancelled) return;
             setLicenseConfigured(Boolean(license.configured));
+            // SurveyJS v2.x stopped accepting `licenseKey` as a
+            // SurveyCreator constructor option (the value is silently
+            // ignored — `survey-creator-core` 2.5.x has no `licenseKey`
+            // string anywhere in its source). The supported path is
+            // the global `setLicenseKey()` exported from `survey-core`,
+            // which must be called BEFORE constructing the Creator so
+            // the watermark check the Creator runs at boot sees the
+            // active license. Without this call the Designer always
+            // renders the "developer license required" banner even
+            // when the SURVEYJS_LICENSE_KEY backend env var is set and
+            // `fetchLicenseKey()` correctly returns a non-null key.
+            if (license.licenseKey) {
+                const surveyCore = await import('survey-core');
+                if (typeof surveyCore.setLicenseKey === 'function') {
+                    surveyCore.setLicenseKey(license.licenseKey);
+                }
+            }
             const options: Record<string, unknown> = {
                 showLogicTab: true,
                 isAutoSave: false,
                 showThemeTab: true,
                 showJSONEditorTab: true,
             };
-            if (license.licenseKey) {
-                options.licenseKey = license.licenseKey;
-            }
             const instance = new bridge.SurveyCreator(options);
             applyDesignerThemes(instance);
 
