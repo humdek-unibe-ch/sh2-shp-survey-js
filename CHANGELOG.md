@@ -5,6 +5,189 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## 0.2.18 — 2026-05-28
+
+### Fixed
+- **Dev live reload re-imported the entry but the browser served stale
+  inner modules — visible changes required a hard reload.** After
+  0.2.16 hardened the SSE pipeline and the host's URL handling, the
+  full chain (`watcher → SSE → host re-import → registerOne`) ran
+  end-to-end on every edit, the plugin re-registered correctly,
+  yet the rendered UI kept showing the previous code until the
+  user pressed F5 / Ctrl-R.
+
+  Root cause (traced against Vite 7's source): Vite tracks two
+  separate timestamps on every module in its graph,
+  `lastInvalidationTimestamp` (server-side transform-cache
+  invalidation) and `lastHMRTimestamp` (set only when invalidation
+  is triggered through the HMR path). Vite's import-analysis
+  plugin gates the `?t=<ts>` cache-bust on child import URLs on
+  `lastHMRTimestamp > 0`, not on `lastInvalidationTimestamp`. With
+  `hmr: false` (which middleware mode forces because the host page
+  doesn't run Vite's HMR client) Vite's own watcher → moduleGraph
+  chain only updates `lastInvalidationTimestamp`. The result was:
+  1. We broadcast SSE → host re-imports
+     `plugin.esm.js?_shDevReload=<newToken>`.
+  2. Vite re-transformed the entry because its URL changed.
+  3. The entry's inner imports kept their previous Vite-generated
+     URLs (e.g. `/src/admin/SurveyAdminPage.ts?import` with NO
+     `?t=` query) because `lastHMRTimestamp` had never been bumped.
+  4. The browser saw the same inner-module URLs and returned the
+     cached transforms from before the edit.
+  5. The "fresh" plugin module imported the OLD inner exports.
+     React's diff saw the same component types as before, nothing
+     remounted, and no visual change appeared.
+  6. Hard reload bypassed the browser module cache and worked.
+
+  `scripts/dev-runtime.mjs` now calls
+  `viteServer.moduleGraph.invalidateModule(mod, seen, Date.now(), true)`
+  — with `isHmr = true` — for every Vite module mapped to the
+  changed file before broadcasting the SSE reload. That's exactly
+  what stamps `lastHMRTimestamp`, so the next entry transform
+  emits fresh `?t=<timestamp>` queries on every importer of the
+  changed file. The browser refetches them, the host receives
+  genuinely new function references, React sees a new component
+  type, unmounts the old subtree, and mounts the new code without
+  a hard reload.
+
+  The fix also normalises Windows-style chokidar paths
+  (`D:\...\Foo.tsx`) to forward slashes before the moduleGraph
+  lookup, because Vite's `fileToModulesMap` is keyed by normalised
+  paths and a raw-path lookup silently returned `undefined` on
+  Windows — the cascade was triggering correctly on Linux/macOS
+  but no-op'ing on Windows, so the symptom looked identical to
+  the un-fixed version on Windows hosts. Both the
+  invalidate-hit and the no-modules-found cases now log a single
+  `[dev-runtime] HMR-invalidated N module(s) for <path>` or
+  `[dev-runtime] WARNING: no Vite modules tracked for <path> …`
+  line on dev-server stdout regardless of `SELFHELP_DEV_RUNTIME_DEBUG`,
+  so a quick glance at the terminal confirms whether each edit
+  reached the moduleGraph.
+
+### Internal
+- Bumped to v0.2.18 to unblock validation; no schema or behaviour
+  change beyond the dev-only invalidation fix above.
+
+
+## 0.2.16 — 2026-05-28
+
+### Fixed
+- **Dev runtime live reload silently no-op'd after the first transform.**
+  The 0.2.14 / 0.2.15 fixes restored singleton identity between the
+  dev bundle and the host, but on top of that, Vite 7's middleware
+  mode chokidar watcher only registers the files Vite has already
+  added to its module graph through prior transforms. After the
+  browser loaded `plugin.esm.js`, the entry file plus its direct
+  imports WERE tracked, but the watcher could silently skip emitting
+  the `change` event to user listeners attached on
+  `viteServer.watcher` in some edit cycles — particularly when an
+  editor saves via atomic-replace (which chokidar surfaces as
+  `unlink` + `add` rather than `change`). The dev runtime now:
+  - explicitly tells chokidar to watch `frontend/src/` from boot, so
+    the very first edit fires an event regardless of which Vite
+    transforms have already happened,
+  - listens for `add` / `change` / `unlink` (not just `change`),
+  - skips events that originate outside the plugin tree (e.g. files
+    chokidar surfaces inside `node_modules/.vite/deps/`),
+  - applies a 1.5 s startup grace window so the chokidar catch-up
+    scan triggered by the explicit `.add(srcDir)` call cannot
+    broadcast a spurious reload to an EventSource that connects in
+    those first few ms.
+- **EventSource reload stream could be silently buffered.** The
+  `/__selfhelp_plugin_reload` SSE response now sends a 2 KB padding
+  byte burst and `retry: 1000` directive immediately on connect,
+  flushes a `: ping\n\n` keep-alive every 25 s, and sets
+  `X-Accel-Buffering: no`. This guarantees `EventSource.readyState`
+  reaches `OPEN` and that idle connections cannot be torn down by
+  upstream proxies / Windows TCP keep-alive policies during long
+  edit-free intervals.
+
+### Added
+- **`scripts/dev-runtime.mjs` is now self-diagnosing.**
+  - Every SSE client connect / disconnect is logged unconditionally,
+    including the `Origin` header, so it is obvious from the
+    terminal whether the host EventSource actually reached the dev
+    runtime.
+  - Every reload broadcast prints
+    `[dev-runtime] reload broadcast → N client(s) (M connected)`
+    so you can see at a glance whether an edit produced an SSE
+    fan-out (and whether the browser was attached at the moment).
+  - Setting `SELFHELP_DEV_RUNTIME_DEBUG=1` (or passing `--debug`)
+    additionally logs every watcher event with its file path and
+    every filter decision (`suppressed (within startup grace
+    window)`, `ignored: path outside …`, `client write failed: …`),
+    making it straightforward to localise a stuck reload chain
+    without rebuilding the host.
+
+### Changed
+- Bumped `plugin.json#version`, `backend.composer.version`,
+  `mobile.version`, `frontend/package.json#version`, and
+  `frontend/src/index.ts#PLUGIN_VERSION` from `0.2.15` to `0.2.16`.
+
+## 0.2.15 — 2026-05-28
+
+### Fixed
+- **`npm --prefix frontend run dev:runtime` crashed on startup with**
+  `X [ERROR] The entry point "react" cannot be marked as external` /
+  `X [ERROR] The entry point "react-dom" cannot be marked as external`.
+  The 0.2.14 `vite.config.ts` set
+  `optimizeDeps.exclude = [...PLUGIN_RUNTIME_SHIM_SPECIFIERS]` as a
+  cold-start optimisation, but Vite's dep scanner already adds
+  `react`/`react-dom` to esbuild's entry-points list when it walks
+  `src/index.ts`. `exclude` then also adds them to esbuild's
+  `external` list, and esbuild refuses to be told to bundle and
+  externalize the same id, which aborts the dev server. The fix is
+  to drop `optimizeDeps.exclude`: the shim plugin's `enforce: 'pre'`
+  `resolveId` hook still intercepts every shimmed specifier BEFORE
+  Vite's pre-bundled-dep redirect runs, so the pre-bundle sitting
+  in `node_modules/.vite/deps/` is never actually loaded by the dev
+  bundle. Production build path is unchanged.
+- **Runtime self-reported version was stale.**
+  `src/index.ts`'s `PLUGIN_VERSION` constant (passed to
+  `definePlugin({ version })`) still read `'0.2.13'` after the 0.2.14
+  manifest bump. The host's `PluginRuntime.registerOne()` refuses to
+  apply a registration whose `version` mismatches the manifest entry,
+  so once the dev server actually started serving the bundle the
+  plugin would have been silently dropped with a
+  `registrationMismatch` warning. The constant is now bumped to
+  `'0.2.15'` alongside `plugin.json`, `backend.composer.version`,
+  `mobile.version`, and `frontend/package.json#version`.
+
+## 0.2.14 — 2026-05-28
+
+### Fixed
+- **Dev runtime live reload broke after the first edit cycle.** When
+  `npm --prefix frontend run dev:runtime` served the plugin through
+  Vite middleware mode, the `selfhelp-runtime-shim` Vite plugin was
+  gated to `command === 'build'` and therefore never ran in dev.
+  Vite's default resolver then pointed bare specifiers (`react`,
+  `@mantine/core`, `@tanstack/react-query`, …) at the plugin's own
+  `node_modules`, so the dev bundle ran against a SECOND React copy
+  and the host's hooks could not see the plugin's components after
+  the SSE reload re-imported the entrypoint. The shim plugin now
+  runs in BOTH build and dev: in dev it inlines the host's shim
+  payload, so the dev bundle reads from the host's
+  `globalThis.__SELFHELP_RUNTIME__` and shares singletons with the
+  host shell just like the production build does. Live reload now
+  works end-to-end through the SSE stream + cache-busted re-import.
+
+### Changed
+- The plugin's `frontend/vite.config.ts` and `scripts/dev-runtime.mjs`
+  now read the canonical singleton list, the host import map, and
+  the runtime-shim base path from `@selfhelp/shared/plugin-sdk`
+  (`PLUGIN_RUNTIME_SHIM_SPECIFIERS`, `PLUGIN_RUNTIME_IMPORT_MAP`,
+  `PLUGIN_RUNTIME_SHIM_BASE_PATH`). The previous hand-maintained
+  arrays/maps duplicated the host's list and drifted whenever the
+  host added a new singleton. Removing the duplication fixes the
+  long-standing problem where `react/jsx-dev-runtime` and other
+  dev-only specifiers were missing from the externalisation set.
+- Bumped `@selfhelp/shared` peer/dev dep from `^1.1.0` to `^1.2.0`
+  for the new runtime-shim contract export.
+- `frontend/package.json` version + `plugin.json#version` +
+  `plugin.json#backend.composer.version` +
+  `plugin.json#mobile.version` bumped to `0.2.14` (patch — pure
+  build + dev fix, no schema change, no migration).
+
 ## 0.2.13 — 2026-05-27
  - new build
 

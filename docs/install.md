@@ -149,7 +149,9 @@ With `--symlink` (dev fast-path):
    `backend.composer.repository` points at this checkout's repo root,
    where the Composer package manifest now lives.
 2. Calls `php bin/console selfhelp:plugin:install <temp>/plugin.json`
-   or `selfhelp:plugin:update` if the plugin is already installed.
+   or `selfhelp:plugin:update` if a different version is already installed.
+   If the same version is already installed, it now does an
+   `uninstall -> install` reattach so the local checkout always wins.
 3. Drains the Messenger queue. The host worker installs the backend
    package into `var/plugin-composer/`, not the host root Composer
    project.
@@ -178,9 +180,17 @@ node scripts/install-local.mjs
 # Or, the dev fast-path that uses the isolated plugin Composer root:
 node scripts/install-local.mjs --symlink
 
+# Safe to run again later: if the same plugin version is already installed
+# (for example from the registry), this relinks the local checkout by
+# uninstalling and reinstalling that same version against the local path repo.
+
 # Keep this running while editing the plugin UI:
 npm --prefix frontend run dev:runtime
 ```
+
+`dev:runtime` now uses Vite's on-demand dev pipeline instead of
+`vite build --watch`, so normal edits no longer wait for a full plugin
+library rebuild before the browser can request updated modules.
 
 `SELFHELP_ADMIN_TOKEN` can also be passed via `--token <jwt>`; real
 process-env values always override `.env`.
@@ -206,7 +216,7 @@ SELFHELP_API_BASE=http://localhost:8000
 | --------------------- | -------------------------------------------------------------------------- |
 | `--symlink`           | Skip the upload, attach the local backend through the isolated plugin Composer root, and invoke the CLI installer/updater. |
 | `--skip-build`        | Skip the `npm run build:runtime` step inside `build-shplugin.mjs`.         |
-| `--skip-consume`      | Skip `messenger:consume`. Useful if a long-running worker is already up.   |
+| `--skip-consume`      | Skip `messenger:consume`. Useful if a long-running worker is already up. Not supported when `--symlink` must relink an already-installed same version. |
 | `--token <jwt>`       | Admin JWT (overrides `SELFHELP_ADMIN_TOKEN`).                              |
 | `--api-base <url>`    | Local host base URL (default `http://localhost:8000`).                     |
 | `--backend <path>`    | Path to the `sh-selfhelp_backend` checkout.                                |

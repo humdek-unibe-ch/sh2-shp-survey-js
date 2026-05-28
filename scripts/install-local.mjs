@@ -118,14 +118,34 @@ async function main(opts) {
 async function runSymlinkMode({ pluginId, version, manifestPath, backendPath, opts }) {
     const backendDir = path.join(PLUGIN_ROOT, 'backend');
     if (!existsSync(backendDir)) throw new Error(`Plugin backend dir not found: ${backendDir}`);
+    const targetVersion = normaliseVersion(version);
 
     step('Preparing isolated plugin Composer path repository');
     const installManifestPath = prepareSymlinkManifest(manifestPath, PLUGIN_ROOT);
     ok('Temporary development manifest prepared. Host root Composer files are untouched.');
 
-    const installedVersion = getInstalledVersion(pluginId, backendPath);
-    if (installedVersion === version) {
-        ok(`Plugin already installed at ${version}; backend attach is current.`);
+    const installedVersion = normaliseVersion(getInstalledVersion(pluginId, backendPath));
+    step(`Host plugin state: installed=${installedVersion ?? 'none'} target=${targetVersion}`);
+
+    if (installedVersion === targetVersion) {
+        step(`Plugin already installed at ${targetVersion}; reattaching local checkout`);
+        runStreaming('php', ['bin/console', 'selfhelp:plugin:uninstall', pluginId], { cwd: backendPath });
+        ok('selfhelp:plugin:uninstall dispatched.');
+
+        if (opts['skip-consume']) {
+            throw new Error(
+                '--skip-consume cannot be used when --symlink needs to relink an already-installed plugin. ' +
+                    'The uninstall must finish before the local install can be dispatched.',
+            );
+        }
+
+        drainPluginOpsQueue(backendPath, 'Plugin uninstalled from the current host state.');
+
+        step('Invoking host CLI installer for local reattach');
+        runStreaming('php', ['bin/console', 'selfhelp:plugin:install', installManifestPath], { cwd: backendPath });
+        ok('selfhelp:plugin:install dispatched.');
+
+        drainPluginOpsQueue(backendPath, 'Plugin reinstalled from the local checkout.');
     } else {
         const installed = installedVersion !== null;
         step(installed ? 'Invoking host CLI updater' : 'Invoking host CLI installer');
@@ -135,11 +155,7 @@ async function runSymlinkMode({ pluginId, version, manifestPath, backendPath, op
         if (opts['skip-consume']) {
             warn('Skipped messenger:consume (--skip-consume). Run it manually to finalise the install.');
         } else {
-            step('Draining plugin_ops Messenger queue');
-            runStreaming('php', ['bin/console', 'messenger:consume', 'plugin_ops', '--limit=1', '--time-limit=120'], {
-                cwd: backendPath,
-            });
-            ok('Plugin installed + finalised.');
+            drainPluginOpsQueue(backendPath, 'Plugin installed + finalised.');
         }
     }
 
@@ -238,16 +254,25 @@ function prepareSymlinkManifest(manifestPath, packageRoot) {
 }
 
 function getInstalledVersion(pluginId, backendPath) {
-    const result = spawnSync('php', ['bin/console', 'selfhelp:plugin:status', pluginId], {
+    const result = spawnSync('php', ['bin/console', 'selfhelp:plugin:status', pluginId, '--no-ansi'], {
         cwd: backendPath,
         encoding: 'utf8',
-        shell: process.platform === 'win32',
+        shell: false,
     });
     if (result.status !== 0) {
         return null;
     }
-    const match = String(result.stdout).match(/Version\s+([^\s]+)/);
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.replace(/\u001b\[[0-9;]*m/g, '');
+    const match = String(output).match(/Version\s+([^\s]+)/);
     return match ? match[1] : null;
+}
+
+function normaliseVersion(value) {
+    if (typeof value !== 'string') {
+        return null;
+    }
+    const trimmed = value.trim().replace(/^\uFEFF/, '');
+    return trimmed === '' ? null : trimmed;
 }
 
 function runStreaming(cmd, argv, opts = {}) {
@@ -259,6 +284,14 @@ function runStreaming(cmd, argv, opts = {}) {
     if (result.status !== 0) {
         throw new Error(`${cmd} ${argv.join(' ')} failed (exit ${result.status}).`);
     }
+}
+
+function drainPluginOpsQueue(backendPath, successMessage) {
+    step('Draining plugin_ops Messenger queue');
+    runStreaming('php', ['bin/console', 'messenger:consume', 'plugin_ops', '--limit=1', '--time-limit=120'], {
+        cwd: backendPath,
+    });
+    ok(successMessage);
 }
 
 function parseArgs(rest) {
@@ -302,7 +335,9 @@ Default mode (.shplugin upload):
 Symlink mode (dev fast-path):
   --symlink            Skip the .shplugin build + upload. Pass a temporary
                        path-repo manifest to the CLI installer/updater.
-                       Host root Composer files are not modified.
+                       Host root Composer files are not modified. If the
+                       same version is already installed, the script
+                       reattaches the local checkout via uninstall+install.
 
 Common options:
   --backend <path>     Path to the sh-selfhelp_backend checkout
