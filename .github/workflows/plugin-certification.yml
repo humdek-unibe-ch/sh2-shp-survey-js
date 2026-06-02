@@ -1,0 +1,143 @@
+# SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+# SPDX-License-Identifier: MPL-2.0
+#
+# Plugin certification pipeline — RELEASE TIER (testing strategy §18.2,
+# §20, §22; plan Slice 8D).
+#
+# `validate-plugin.yml` is the PR-tier gate (fast: schema, naming,
+# typecheck, build, unit tests). THIS workflow is the heavier, release-tier
+# certification that is too slow to run on every PR. It runs on release
+# branches / version tags (and on demand) and is the check `release/*`
+# branch protection requires (Slice 10):
+#
+#   1. Backend certification — PHPStan + the full backend PHPUnit suite,
+#      including `PluginManifestCertificationTest` (the manifest /
+#      compatibility-matrix / capability-vs-trust contract) and the
+#      SurveyResponse/SurveyDashboard service tests.
+#   2. Frontend Creator E2E — Playwright drives the real SurveyJS Creator
+#      admin page against a running QA stack. The spec self-skips when the
+#      QA env is absent, so this job stays green where no stack/secret is
+#      configured (canonical Testing Rule: tests never fail for missing
+#      infra; release wiring supplies the env where it exists).
+#   3. Mobile renderer parity — the registration parity + snapshot test.
+#
+# Host-side certification of the REAL manifest against the host validators
+# lives in the host repo as
+# `App\Tests\Certification\Plugin\SurveyJsPluginCertificationTest`.
+
+name: plugin-certification
+
+on:
+  push:
+    branches: [release/**]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-certification:
+    name: Backend certification (PHPStan + PHPUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ctype, iconv, intl, mbstring, json, pdo, pdo_mysql, sodium
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.json') }}
+
+      - name: Composer install
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse --no-progress -c backend/phpstan.neon.dist --memory-limit=1G
+
+      - name: PHPUnit certification suite (manifest cert + service tests)
+        run: vendor/bin/phpunit --configuration backend/phpunit.xml.dist --bootstrap vendor/autoload.php --testdox
+
+  frontend-creator-e2e:
+    name: Frontend Creator E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install Playwright browser (chromium)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Creator E2E (self-skips without a QA stack)
+        working-directory: frontend
+        run: npm run test:e2e
+        env:
+          # Supplied by the release environment when a QA stack exists. When
+          # any of these is empty the spec calls test.skip() and the job is
+          # still green (see tests/e2e/utils/env.ts#isCreatorE2eConfigured).
+          BASE_URL: ${{ vars.QA_BASE_URL }}
+          QA_LOGIN_KEYWORD: ${{ vars.QA_LOGIN_KEYWORD }}
+          QA_ADMIN_EMAIL: ${{ secrets.QA_ADMIN_EMAIL }}
+          QA_ADMIN_PASSWORD: ${{ secrets.QA_ADMIN_PASSWORD }}
+          QA_SURVEYJS_ADMIN_PATH: ${{ vars.QA_SURVEYJS_ADMIN_PATH }}
+          QA_SURVEY_ID: ${{ vars.QA_SURVEY_ID }}
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surveyjs-creator-playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  mobile-parity:
+    name: Mobile renderer parity (release tier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Renderer parity + registration snapshot
+        working-directory: mobile
+        run: npm run test
+
+  certification-summary:
+    name: Certification summary
+    needs: [backend-certification, frontend-creator-e2e, mobile-parity]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize
+        run: |
+          {
+            echo "## SurveyJS plugin certification — release tier"
+            echo ""
+            echo "| Gate | Result |"
+            echo "| --- | --- |"
+            echo "| Backend certification (PHPStan + PHPUnit) | ${{ needs.backend-certification.result }} |"
+            echo "| Frontend Creator E2E (Playwright) | ${{ needs.frontend-creator-e2e.result }} |"
+            echo "| Mobile renderer parity | ${{ needs.mobile-parity.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
