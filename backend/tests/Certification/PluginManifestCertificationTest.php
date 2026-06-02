@@ -58,12 +58,23 @@ final class PluginManifestCertificationTest extends TestCase
         $compat = self::$manifest['compatibility'];
         self::assertIsArray($compat);
 
+        // Adopted shape (host + ecosystem): each surface maps to a single
+        // SemVer RANGE STRING. The §31 per-surface object shape
+        // (compatibility.selfhelp.backend / .shared / .frontend / .mobile)
+        // was NOT adopted; asserting the string type makes this test FAIL if
+        // a future edit reintroduces the nested-object shape. This mirrors the
+        // shared cert kit's `checkCompatibilityShape` and the host's
+        // PluginManifestValidator schema.
         // The host range + the backend language floor are mandatory; the
         // frontend/mobile ranges are required because this plugin ships
         // those surfaces.
         foreach (['selfhelp', 'php', 'node', 'react', 'reactNative', 'expoSdk'] as $key) {
             self::assertArrayHasKey($key, $compat, "compatibility.$key must be declared");
-            self::assertNotSame('', trim((string) $compat[$key]), "compatibility.$key must be a non-empty constraint");
+            self::assertIsString(
+                $compat[$key],
+                "compatibility.$key must be a single SemVer range string, not a per-surface object",
+            );
+            self::assertNotSame('', trim($compat[$key]), "compatibility.$key must be a non-empty constraint");
         }
         self::assertStringContainsString('8', (string) $compat['selfhelp'], 'selfhelp range must target the 8.x host line');
     }
