@@ -21,6 +21,9 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+        // Playwright owns `tests/e2e/**/*.spec.ts` (Slice 8D Creator E2E).
+        // Keep it out of Vitest so the two runners never collide.
+        exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
         globals: false,
     },
 });

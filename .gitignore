@@ -33,6 +33,12 @@ frontend/.vite/
 frontend/coverage/
 frontend/*.tsbuildinfo
 
+# Frontend Playwright artifacts (never committed)
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/.last-run.json
+
 # Mobile / Node / Expo / React Native
 mobile/node_modules/
 mobile/dist/
