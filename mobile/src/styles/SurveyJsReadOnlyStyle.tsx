@@ -141,7 +141,7 @@ interface IQuestionShape {
     type: string;
 }
 
-function extractQuestions(definition: Record<string, unknown>): IQuestionShape[] {
+export function extractQuestions(definition: Record<string, unknown>): IQuestionShape[] {
     const out: IQuestionShape[] = [];
     const pages = Array.isArray(definition['pages']) ? (definition['pages'] as unknown[]) : [];
     for (const page of pages) {
@@ -163,7 +163,7 @@ function extractQuestions(definition: Record<string, unknown>): IQuestionShape[]
     return out;
 }
 
-function extractSurveyId(section: ISurveyJsReadOnlyStyleProps['section']): string | null {
+export function extractSurveyId(section: ISurveyJsReadOnlyStyleProps['section']): string | null {
     const fields = section.fields ?? {};
     const value = fields['survey-js'];
     if (typeof value === 'string' && value.trim() !== '') return value.trim();
