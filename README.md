@@ -10,13 +10,15 @@ SurveyJS v2 plugin for the SelfHelp CMS. Provides:
 - A response dashboard, response list, PDF export, and collaborative-edit notifications via Mercure.
 
 > **Looking for end-user documentation?**
-> - **[Install guide](docs/install.md) — start here.** Three ways to install (two UI flows + one terminal one-liner).
-> - [Publish guide](docs/publish.md) — how to publish the plugin so others can install it from the UI.
-> - [User guide](docs/user-guide.md) — create surveys, publish, restore versions, embed, configure.
-> - [Mobile guide](docs/mobile-guide.md) — what the mobile renderer does and does not support today.
-> - [Architecture](docs/architecture.md) — internals, services, schema, security.
+> - **[Install guide](./docs/operations/install.md) — start here.** Three ways to install (two UI flows + one terminal one-liner).
+> - [Publish guide](./docs/operations/publish.md) — how to publish the plugin so others can install it from the UI.
+> - [User guide](./docs/user/user-guide.md) — create surveys, publish, restore versions, embed, configure.
+> - [Mobile guide](./docs/user/mobile-guide.md) — what the mobile renderer does and does not support today.
+> - [Architecture](./docs/developer/architecture.md) — internals, services, schema, security.
+> - [Manifest reference](./docs/reference/manifest.md) — the exact `plugin.json` contract.
+> - [Docs index](./docs/README.md) — the full audience-based documentation map.
 
-Submissions land in the existing `data_tables` / `data_rows` / `data_cols` / `data_cells` tables, normalized by `SurveyAnswerNormalizer`. HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns four entities — `surveys`, `survey_versions`, `survey_runs`, `survey_answer_links` — for surveys, version snapshots, response metadata, and per-question links into form storage. Surveys and responses also get generated stable keys (`survey_id` / `response_id`) for external references.
+Submissions land in the existing `data_tables` / `data_rows` / `data_cols` / `data_cells` tables, normalized by `SurveyAnswerNormalizer`. HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns six entities — `surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`, `survey_files`, `survey_response_drafts` — for surveys, version snapshots, response metadata, per-question links into form storage, uploaded files, and in-progress drafts. Surveys and responses also get generated stable keys (`survey_id` / `response_id`) for external references.
 
 ## Develop locally in 60 seconds
 
@@ -36,7 +38,7 @@ node scripts/install-local.mjs --symlink
 npm --prefix frontend run dev:runtime
 ```
 
-Then open `http://localhost:3000/admin/plugins` and `http://localhost:3000/admin/surveys`. Plugin UI edits hot-reload through the dev server's SSE channel; backend edits require restarting the Symfony dev server. See [`docs/install.md`](docs/install.md#option-3--one-shot-install-from-the-terminal) for the full reference (every flag, every mode, every troubleshooting hint).
+Then open `http://localhost:3000/admin/plugins` and `http://localhost:3000/admin/surveys`. Plugin UI edits hot-reload through the dev server's SSE channel; backend edits require restarting the Symfony dev server. See [`docs/install.md`](./docs/operations/install.md#option-3--one-shot-install-from-the-terminal) for the full reference (every flag, every mode, every troubleshooting hint).
 
 ### "Plugin could not be mounted — Expected v0.2.2"
 
@@ -81,7 +83,7 @@ sh2-shp-survey-js/
 
 ## Installation — pick one
 
-See [`docs/install.md`](docs/install.md) for the full guide. The TL;DR is:
+See [`docs/install.md`](./docs/operations/install.md) for the full guide. The TL;DR is:
 
 | Option | Where    | Command                                                                                |
 | ------ | -------- | -------------------------------------------------------------------------------------- |
@@ -100,7 +102,7 @@ Option 4 also wires the local Composer / npm path repo (`--symlink`)
 to this repo root, so the host resolves the backend package via the
 root `composer.json` while the frontend keeps hot-reloading from the
 runtime dev server. See
-[`docs/install.md`](docs/install.md#option-4--one-shot-install-from-the-terminal)
+[`docs/install.md`](./docs/operations/install.md#option-4--one-shot-install-from-the-terminal)
 for `--symlink` details.
 
 ## Build the `.shplugin`
@@ -138,7 +140,7 @@ node scripts/build-shplugin.mjs --mode standalone
 
 `SELFHELP_PLUGIN_*_SIGNING_KEY` can also be set as a normal shell env
 variable; real `process.env` values always win over `.env`. CI just
-injects them as Actions secrets — see [`docs/secrets-setup.md`](docs/secrets-setup.md).
+injects them as Actions secrets — see [`docs/secrets-setup.md`](./docs/operations/secrets-setup.md).
 
 The script:
 
@@ -175,8 +177,8 @@ Production hosts (`APP_ENV=prod`) refuse `keyId="dev"` outright for
 `official`/`reviewed` trust levels regardless of trusted-keys —
 use a real CI keypair via `SELFHELP_PLUGIN_SIGNING_KEY` +
 `SELFHELP_PLUGIN_SIGNING_KEY_ID`. See
-[`docs/secrets-setup.md`](docs/secrets-setup.md) and
-[`docs/publish.md`](docs/publish.md).
+[`docs/secrets-setup.md`](./docs/operations/secrets-setup.md) and
+[`docs/publish.md`](./docs/operations/publish.md).
 
 ## Publish a new version (automated)
 
@@ -226,13 +228,13 @@ Actions):
 
 Step-by-step walkthrough including key generation, GitHub UI
 clicks, and where to paste the public key on the host:
-**[`docs/secrets-setup.md`](docs/secrets-setup.md)**.
+**[`docs/secrets-setup.md`](./docs/operations/secrets-setup.md)**.
 
 Without `REGISTRY_PUSH_TOKEN` the workflow still builds the
 `.shplugin` and attaches it to the GitHub Release; only the
 registry-side push is skipped (the workflow logs a warning summary).
 
-Full publish reference: [`docs/publish.md`](docs/publish.md).
+Full publish reference: [`docs/publish.md`](./docs/operations/publish.md).
 
 For `archive.mode="connected"` releases, the plugin registry still
 publishes only discovery metadata plus frontend artifacts. The PHP

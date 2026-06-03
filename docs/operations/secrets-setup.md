@@ -5,13 +5,19 @@ SPDX-License-Identifier: MPL-2.0
 
 # GitHub Actions secrets setup
 
+Audience: Operators and deployers.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Runtime configuration, environment variables, scripts, and deployment services.
+
 Walk-through for configuring the three secrets that
 `.github/workflows/publish-to-registry.yml` consumes on every `v*`
 tag push. The same recipe works for every SelfHelp plugin repo.
 
 > **Local-only?** Skip this whole page. Drop
 > `SELFHELP_PLUGIN_DEV_SIGNING_KEY=<base64>` into a gitignored
-> `<plugin>/.env` (copy [`.env.example`](../.env.example) and edit),
+> `<plugin>/.env` (copy [`.env.example`](../../.env.example) and edit),
 > then run `node scripts/build-shplugin.mjs`. The dev key produces a
 > `.shplugin` with `keyId="dev"`. For an `official` / `reviewed`
 > plugin the host accepts that **only when `APP_ENV=dev`** and the
@@ -43,7 +49,7 @@ For local development drop the `privateKey` into the gitignored
 `<plugin>/.env`:
 
 ```dotenv
-# <plugin>/.env  (copy from .env.example, never commit)
+# <plugin>/.env (copy from .env.example, never commit)
 SELFHELP_PLUGIN_DEV_SIGNING_KEY=<privateKey>
 ```
 
@@ -148,16 +154,16 @@ worker so Symfony picks up the new env var.
 
 ```bash
 # In the plugin repo, locally:
-#  - drop the production keypair into <plugin>/.env (gitignored), OR
-#  - export them inline like below.
+# - drop the production keypair into <plugin>/.env (gitignored), OR
+# - export them inline like below.
 
 SELFHELP_PLUGIN_SIGNING_KEY=<your-secret> \
 SELFHELP_PLUGIN_SIGNING_KEY_ID=humdek-2026-01 \
 node scripts/build-shplugin.mjs
 
 # → dist/sh2-shp-survey-js-<version>.shplugin signed with the
-#   production key. Upload it to a staging host and confirm it
-#   installs without "signature key not trusted".
+# production key. Upload it to a staging host and confirm it
+# installs without "signature key not trusted".
 ```
 
 Then push a tag and watch the **Actions** tab:
@@ -205,7 +211,7 @@ longer appears in the trusted-keys env.
 
 ## See also
 
-- [`docs/publish.md`](publish.md) — full publish guide.
+- [`docs/publish.md`](./publish.md) — full publish guide.
 - [Host backend `signing.md`](https://github.com/humdek-unibe-ch/sh-selfhelp_backend/blob/main/docs/plugins/signing.md) — cryptographic contract.
 - [Host backend `trusted-keys.md`](https://github.com/humdek-unibe-ch/sh-selfhelp_backend/blob/main/docs/plugins/trusted-keys.md) — `SELFHELP_PLUGIN_TRUSTED_KEYS` env reference.
 - [Host backend `publishing-workflow.md`](https://github.com/humdek-unibe-ch/sh-selfhelp_backend/blob/main/docs/plugins/publishing-workflow.md) — author lifecycle reference.

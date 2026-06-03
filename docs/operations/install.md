@@ -5,6 +5,12 @@ SPDX-License-Identifier: MPL-2.0
 
 # Installing the SurveyJS plugin (`sh2-shp-survey-js`)
 
+Audience: Operators and deployers.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Runtime configuration, environment variables, scripts, and deployment services.
+
 This is the **simplest possible** guide. Pick **one** of the three options below.
 
 You **don't** need to restart the backend or rebuild the frontend by hand — every option does that for you automatically once the plugin lands in the database.
@@ -37,7 +43,7 @@ Make sure these are running locally **once**:
 1. The host backend dev server (`composer dev` from `sh-selfhelp_backend`).
 2. The host frontend dev server (`npm run dev` from `sh-selfhelp_frontend`).
 3. You are logged in as an **admin** in the frontend at `http://localhost:3000/admin`.
-4. The plugin checkout exists somewhere on your machine, e.g. `D:\TPF\SelfHelp\plugins\sh2-shp-survey-js`.
+4. The plugin checkout exists somewhere on your machine (the directory that contains this repo's `plugin.json`).
 
 That's it. The three options below assume this baseline.
 
@@ -70,7 +76,7 @@ That's it. The host:
   required.
 
 You can now create surveys at `Admin → Surveys` (see
-[`docs/user-guide.md`](user-guide.md)).
+[`docs/user-guide.md`](../user/user-guide.md)).
 
 ### Optional — adding additional plugin sources
 
@@ -85,9 +91,9 @@ from every enabled source in the **Available** tab.
 | Public registry       | `https://<your-org>.github.io/<your-registry>/`                    | leave empty                                   |
 | Private registry      | `https://registry.<your-org>.<tld>/`                               | header name + env var name (token in env var) |
 | Git                   | `https://github.com/<owner>/<repo>.git`                            | leave empty (use SSH keys server-side)        |
-| Local                 | `D:\plugins\my-staging-registry`                                   | leave empty                                   |
+| Local                 | a filesystem path to a local registry checkout                     | leave empty                                   |
 
-See [`publish.md`](publish.md) for the details of how the registry
+See [`publish.md`](./publish.md) for the details of how the registry
 files are laid out and how to publish to the official Humdek
 registry.
 
@@ -171,8 +177,8 @@ cd plugins/sh2-shp-survey-js
 # 1. Copy the env defaults (admin token, signing key, paths).
 cp .env.example .env
 # Edit .env and set at least:
-#   SELFHELP_ADMIN_TOKEN=<paste an admin JWT>
-#   SELFHELP_PLUGIN_DEV_SIGNING_KEY=<base64 from sign.mjs keygen>
+# SELFHELP_ADMIN_TOKEN=<paste an admin JWT>
+# SELFHELP_PLUGIN_DEV_SIGNING_KEY=<base64 from sign.mjs keygen>
 
 # 2. Default flow — .shplugin upload + queue drain:
 node scripts/install-local.mjs
@@ -344,7 +350,7 @@ If you uninstall the plugin from the same UI, every item above is reversed clean
 
 ## Next steps
 
-- [User guide for survey authors](user-guide.md)
-- [Mobile experience guide](mobile-guide.md)
-- [How to publish this plugin so others can install via Option 1](publish.md)
-- [Plugin architecture overview (host repo)](../../sh-selfhelp_backend/docs/plugins/architecture.md) — only if you want to understand what the host runs under the hood.
+- [User guide for survey authors](../user/user-guide.md)
+- [Mobile experience guide](../user/mobile-guide.md)
+- [How to publish this plugin so others can install via Option 1](./publish.md)
+- [Plugin architecture overview (host repo)](../../../../sh-selfhelp_backend/docs/plugins/architecture.md) — only if you want to understand what the host runs under the hood.

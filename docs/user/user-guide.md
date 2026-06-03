@@ -1,5 +1,11 @@
 # SurveyJS Plugin — User Guide
 
+Audience: Non-technical users, admins, and operators.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Observable product behavior of the current build.
+
 This guide walks an admin through everything they can do with the
 SurveyJS plugin once it's installed in their SelfHelp CMS:
 
@@ -355,8 +361,8 @@ mobile clients submit via the web client at `/surveys/<slug>/run`.
 
 ## Related
 
-- [Plugin architecture](./architecture.md)
-- [Validate-plugin CI workflow](../.github/workflows/validate-plugin.yml)
-- [Manifest schema](./plugins/plugin-manifest.schema.json)
+- [Plugin architecture](../developer/architecture.md)
+- [Validate-plugin CI workflow](../../.github/workflows/validate-plugin.yml)
+- [Manifest schema](../plugins/plugin-manifest.schema.json)
 - [SurveyJS Creator docs](https://surveyjs.io/survey-creator/documentation)
 - [SurveyJS runtime API](https://surveyjs.io/form-library/documentation/api-reference/survey-data-model)

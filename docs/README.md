@@ -1,44 +1,39 @@
+<!--
+SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+SPDX-License-Identifier: MPL-2.0
+-->
 # SurveyJS Plugin Documentation
 
-Audience: plugin developers, SelfHelp technical operators, survey authors, and AI coding agents.
-Status: active documentation index.
-Applies to: `sh2-shp-survey-js` plugin docs in this repository.
+Audience: Plugin developers, SelfHelp technical operators, survey authors, and AI coding agents.
+Status: active.
+Applies to: `sh2-shp-survey-js` plugin documentation.
 Last verified: 2026-06-03.
-Source of truth: plugin source code, `plugin.json`, host plugin docs, and this repository's `AGENTS.md`.
+Source of truth: Plugin source code, `plugin.json`, host plugin docs, and this repository's `AGENTS.md`.
 
-Use this page as the navigation entrypoint for SurveyJS plugin documentation. The current docs already separate technical and user-facing concerns; new or substantially rewritten docs should follow the audience-based placement rules in `AGENTS.md`.
+Navigation entrypoint for the SurveyJS plugin documentation, organized by audience and purpose per the Documentation Rules in `AGENTS.md`. The root [../README.md](../README.md) is the short overview and local-dev quick start.
 
-## Start Here
+## Start here
 
 | Need | Read |
 | --- | --- |
-| Create, publish, restore, embed, and configure surveys | [user-guide.md](user-guide.md) |
-| Install the plugin into a SelfHelp host | [install.md](install.md) |
-| Understand plugin internals | [architecture.md](architecture.md) |
-| Publish a plugin release | [publish.md](publish.md) |
-| Validate behavior manually | [qa-scenarios.md](qa-scenarios.md) |
+| Create, publish, restore, embed, and configure surveys | [user/user-guide.md](user/user-guide.md) |
+| Install the plugin into a SelfHelp host | [operations/install.md](operations/install.md) |
+| Publish a plugin release | [operations/publish.md](operations/publish.md) |
+| Understand plugin internals | [developer/architecture.md](developer/architecture.md) |
+| The exact `plugin.json` contract | [reference/manifest.md](reference/manifest.md) |
 
-## Current Documentation Map
-
-| Current doc | Purpose | Future placement rule |
-| --- | --- | --- |
-| [architecture.md](architecture.md) | Developer architecture and data flow. | Move to `docs/developer/` only after links are updated. |
-| [qa-scenarios.md](qa-scenarios.md) | Developer/manual QA scenarios. | Move to `docs/developer/` or `docs/reference/` only after links are updated. |
-| [install.md](install.md) | Host installation and enablement. | Move to `docs/operations/` only after links are updated. |
-| [publish.md](publish.md) | Release and registry publishing workflow. | Move to `docs/operations/` only after links are updated. |
-| [secrets-setup.md](secrets-setup.md) | GitHub Actions signing/registry secret setup. | Move to `docs/operations/` only after links are updated. |
-| [user-guide.md](user-guide.md) | Non-technical survey author workflow. | Move to `docs/user/` only after links are updated. |
-| [mobile-guide.md](mobile-guide.md) | Mobile behavior for end users/operators. | Move to `docs/user/` only after links are updated. |
-
-## New Documentation Placement
+## Documentation map
 
 | Folder | Use for |
 | --- | --- |
-| `docs/developer/` | Plugin backend/frontend/mobile architecture, tests, QA, and implementation tradeoffs. |
-| `docs/user/` | Non-technical survey author, CMS admin, and operator feature walkthroughs. |
-| `docs/reference/` | Exact API routes, manifest fields, permissions, realtime topics, schemas, and compatibility tables. |
-| `docs/cookbook/` | Step-by-step recipes for adding question types, admin pages, mobile renderers, tests, or release changes. |
-| `docs/operations/` | Install, publish, signing, CI secrets, registry, and recovery runbooks. |
-| `docs/archive/` | Historical notes and superseded implementation summaries. |
+| [developer/](developer/index.md) | Plugin architecture, data flow, security, and manual QA scenarios. |
+| [operations/](operations/index.md) | Install, publish, and CI signing/secrets runbooks. |
+| [reference/](reference/index.md) | The `plugin.json` manifest contract: capabilities, permissions, routes, owned tables, realtime topics, feature flags, styles, and config. |
+| [user/](user/index.md) | Non-technical survey author and mobile end-user walkthroughs. |
 
-When moving existing docs, update all repository-relative links in the same change and prefer small batches over broad rewrites.
+## Conventions
+
+- Every active doc starts with the metadata block (`Audience`, `Status`, `Applies to`, `Last verified`, `Source of truth`).
+- Filenames use lowercase kebab-case; this file (`README.md`) is the only uppercase docs entrypoint, and subfolder indexes are `index.md`.
+- The plugin source code, `plugin.json`, scripts, and workflows are the source of truth. When a doc conflicts with them, the code wins and the doc is corrected.
+- `docs/plugins/plugin-manifest.schema.json` is a vendored copy of the host's canonical schema and is kept for offline validation.
