@@ -5,6 +5,42 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [Unreleased]
+
+### Added
+- **Backend certification tests (ecosystem testing strategy, Slice 8C).**
+  - `backend/tests/Service/SurveyResponseServiceTest.php` — unit coverage
+    for the normal (non-edit) submission path: a finished submit creates a
+    completed `SurveyRun`, writes one `SurveyAnswerLink` per normalized
+    answer, records the data-table row id, publishes the realtime event,
+    and enforces the once-per-user guard. Complements the existing
+    edit-mode regression test.
+  - `backend/tests/Service/SurveyDashboardServiceTest.php` — unit coverage
+    for the dashboard summary + flattened results aggregations, including
+    JSON answer decoding and the version/progress fallbacks.
+  - `backend/tests/Certification/PluginManifestCertificationTest.php` —
+    standalone certification that `plugin.json` declares a complete,
+    self-consistent compatibility matrix + deny-by-default capability /
+    trust-level contract (runs in plugin CI without the host checkout).
+  - The runtime install-lifecycle certification lives in the host repo as
+    `App\Tests\Certification\Plugin\SurveyJsPluginCertificationTest`, which
+    runs this plugin's real manifest through the host's manifest,
+    compatibility, and capability validators.
+- **Frontend + mobile certification (ecosystem testing strategy, Slice 8D).**
+  - `frontend/tests/e2e/creator.spec.ts` + `frontend/playwright.config.ts` —
+    a release-tier Playwright golden that logs in as a manage-capable admin,
+    opens the consolidated SurveyJS admin page, and reaches the Survey
+    Creator (`.svc-creator` when a QA survey id is supplied). Self-skips
+    when no QA stack env is configured, with login/list/creator perf budgets.
+  - `mobile/__tests__/parity/registration.test.ts` +
+    `mobile/vitest.config.ts` — the first mobile test: renderer-parity +
+    registration snapshot for the read-only `surveyjs` style. Guards the
+    "keep `PLUGIN_VERSION` in sync with `plugin.json`" footgun and the
+    declared style/feature-flag contract.
+  - CI: `validate-plugin.yml` now runs Vitest in the frontend and mobile
+    jobs; new `plugin-certification.yml` runs the release-tier certification
+    (backend PHPStan + PHPUnit, Playwright Creator E2E, mobile parity).
+
 ## 0.2.20 — 2026-05-28
  - update `@selfhelp/shared` to `v1.2.1`
 
