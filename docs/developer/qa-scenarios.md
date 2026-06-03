@@ -1,5 +1,11 @@
 # SurveyJS plugin — Manual QA Scenarios
 
+Audience: Developers and technical operators.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Runtime code, configuration, and tests in this repository.
+
 This document captures the manual QA scenarios that the legacy
 `sh-shp-survey_js` plugin was validated against and that the new
 `sh2-shp-survey-js` plugin must continue to pass. Each scenario

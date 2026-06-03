@@ -1,5 +1,11 @@
 # sh2-shp-survey-js — Architecture
 
+Audience: Developers and technical operators.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Runtime code, configuration, and tests in this repository.
+
 This document describes the moving parts of the SurveyJS v2 plugin and how they connect to the SelfHelp host. The plugin is split into three packages: a Symfony bundle (`backend/`), a React/Mantine npm package (`frontend/`), and a read-only React Native package (`mobile/`).
 
 ## High-level layout

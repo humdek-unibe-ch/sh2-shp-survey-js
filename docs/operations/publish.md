@@ -5,9 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Publishing the SurveyJS plugin
 
+Audience: Operators and deployers.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Runtime configuration, environment variables, scripts, and deployment services.
+
 This guide explains how to **publish** the plugin so it shows up in
 the host admin UI under **Plugins → Available** (Option 1 of
-[`install.md`](install.md)).
+[`install.md`](./install.md)).
 
 > **You only need to publish once per version.** After that, every
 > SelfHelp instance that has the official registry as a source can
@@ -115,7 +121,7 @@ plugins/
 ```
 
 Drop your signing key + paths into `<plugin>/.env` (gitignored, see
-[`.env.example`](../.env.example)) so you don't have to export them in
+[`.env.example`](../../.env.example)) so you don't have to export them in
 every shell — every script in `scripts/` auto-loads `.env` via Node 22's
 `process.loadEnvFile`. Then run from the plugin root:
 
@@ -212,7 +218,7 @@ compatibility range.
 ## Publishing the npm packages (optional)
 
 The `.shplugin` carries the runtime ESM bundle directly (see
-[`shplugin-archive.md`](../../sh-selfhelp_backend/docs/plugins/shplugin-archive.md)),
+[`shplugin-archive.md`](../../../../sh-selfhelp_backend/docs/plugins/shplugin-archive.md)),
 so a registry-only release does not need an npm publish. If you want
 the frontend / mobile packages on the public npm registry too, run
 `npm publish --access public` from `frontend/` and `mobile/` after the
@@ -257,7 +263,7 @@ The host enforces the `security.trustLevel` field at install time:
 Plugins published from `humdek-unibe-ch/sh2-plugin-registry` should
 use `official`. To use any other trust level on your own private
 registry, sign the manifest with Ed25519 keys (see
-[`trust-levels.md`](../../sh-selfhelp_backend/docs/plugins/trust-levels.md)
+[`trust-levels.md`](../../../../sh-selfhelp_backend/docs/plugins/trust-levels.md)
 in the host repo).
 
 ## Adding additional plugin sources (optional)
@@ -312,5 +318,5 @@ Do **not** commit:
 git tag v0.1.0
 git push origin v0.1.0
 # 4. CI publishes to the official registry; hosts see the new version
-#    next time they open Admin → Plugins → Available.
+# next time they open Admin → Plugins → Available.
 ```

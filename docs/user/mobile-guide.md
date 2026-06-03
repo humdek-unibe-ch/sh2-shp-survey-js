@@ -1,5 +1,11 @@
 # SurveyJS Plugin — Mobile Guide
 
+Audience: Non-technical users, admins, and operators.
+Status: active.
+Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
+Last verified: 2026-06-03.
+Source of truth: Observable product behavior of the current build.
+
 This guide covers what end-users and operators can expect from the
 SurveyJS plugin on the SelfHelp mobile app, plus the rough roadmap
 for the missing pieces.
@@ -112,6 +118,6 @@ remain mechanical.
 ## Related
 
 - [User guide](./user-guide.md)
-- [Plugin architecture](./architecture.md)
-- [Host realtime + no-polling policy](../../../sh-selfhelp_backend/docs/plugins/realtime-and-no-polling.md)
+- [Plugin architecture](../developer/architecture.md)
+- [Host realtime + no-polling policy](../../../../sh-selfhelp_backend/docs/plugins/realtime-and-no-polling.md)
 - [HeroUI mobile migration plan](https://github.com/humdek-unibe-ch/sh-selfhelp_mobile/issues) (when filed)
