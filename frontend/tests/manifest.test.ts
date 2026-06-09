@@ -7,9 +7,10 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Asserts the SurveyJS `plugin.json` is internally consistent and that its
  * SelfHelp compatibility range resolves against the CURRENT core version scheme
- * (8.x), not the legacy 1.x scheme. This is the official-plugin guardrail: if a
- * core/version-scheme change ever breaks resolution, this test fails before a
- * broken manifest is published to the unified registry.
+ * (pre-release 0.1.x), not the legacy 8.x/1.x schemes. This is the
+ * official-plugin guardrail: if a core/version-scheme change ever breaks
+ * resolution, this test fails before a broken manifest is published to the
+ * unified registry.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -30,8 +31,8 @@ const manifest = JSON.parse(
     dataAccess: { ownedTables: string[]; ownedDataTablePrefix: string };
 };
 
-/** The core version the current SelfHelp dev branch ships (CRITICAL 5). */
-const CURRENT_CORE = '8.0.0';
+/** The core version the current SelfHelp pre-release ships (CRITICAL 5). */
+const CURRENT_CORE = '0.1.0';
 
 interface Semver { major: number; minor: number; patch: number; pre?: string }
 
@@ -79,15 +80,17 @@ describe('SurveyJS plugin.json release contract', () => {
         expect(manifest.mobile.version).toBe(manifest.version);
     });
 
-    it('resolves against the current 8.x core version scheme (not legacy 1.x)', () => {
+    it('resolves against the current 0.1.x core version scheme (not legacy 8.x/1.x)', () => {
         expect(satisfies(CURRENT_CORE, manifest.compatibility.selfhelp)).toBe(true);
-        // The dev tag the core advertises as minimumDirectUpgradeFrom also resolves.
-        expect(satisfies('8.0.0-dev', manifest.compatibility.selfhelp)).toBe(true);
+        // A later 0.1.x core patch still resolves within the same pre-1.0 minor.
+        expect(satisfies('0.1.9', manifest.compatibility.selfhelp)).toBe(true);
     });
 
-    it('rejects the next incompatible major and any legacy 1.x core', () => {
-        expect(satisfies('9.0.0', manifest.compatibility.selfhelp)).toBe(false);
-        expect(satisfies('1.5.0', manifest.compatibility.selfhelp)).toBe(false);
+    it('rejects the next breaking minor (0.2.0), the first stable (1.0.0), and legacy 8.x', () => {
+        // Pre-1.0 SemVer: every minor bump is breaking, so 0.2.0 is out of range.
+        expect(satisfies('0.2.0', manifest.compatibility.selfhelp)).toBe(false);
+        expect(satisfies('1.0.0', manifest.compatibility.selfhelp)).toBe(false);
+        expect(satisfies('8.0.0', manifest.compatibility.selfhelp)).toBe(false);
     });
 
     it('declares owned tables under its reserved data-table prefix', () => {

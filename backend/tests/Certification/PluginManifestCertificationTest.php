@@ -46,9 +46,9 @@ final class PluginManifestCertificationTest extends TestCase
             'version must be semver',
         );
         self::assertMatchesRegularExpression(
-            '/^\d+\.\d+$/',
+            '/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/',
             (string) self::$manifest['pluginApiVersion'],
-            'pluginApiVersion must be a major.minor SDK version',
+            'pluginApiVersion must be a SemVer SDK version (ecosystem 0.1.0 scheme)',
         );
     }
 
