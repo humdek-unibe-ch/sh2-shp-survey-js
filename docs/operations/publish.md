@@ -136,17 +136,18 @@ What the script does:
 1. Reads `plugin.json` for `id`, `version`, `name`, `description`,
    `homepage`, and `security.trustLevel`.
 2. Calls `node scripts/build-shplugin.mjs` to build + sign the
-   `.shplugin`. The same canonical signed payload is then reused for
-   the registry entry, so the archive and the entry are signed
-   exactly once with one keypair.
-3. Calls the registry repo's `scripts/build-registry-entry.mjs` to
-   emit the signed `pluginEntry` JSON object.
+   `.shplugin` install artifact (the backend downloads + extracts it
+   and self-hosts the runtime).
+3. Computes the `.shplugin` SHA-256, then calls the registry repo's
+   `scripts/build-plugin-release.mjs` + `scripts/sign-release.mjs` to
+   emit a signed `releases/plugins/<id>-<version>.json` document.
 4. Copies `plugin.json` to
    `<registry>/manifests/<plugin-id>-<version>.json`.
-5. Copies `dist/shplugin/<id>-<ver>/artifacts/*` to
-   `<registry>/artifacts/<id>-<ver>/`.
-6. Inserts / updates the plugin entry in `<registry>/registry.json`,
-   sorted by id, with refreshed `publishedAt`.
+5. Copies `dist/<id>-<ver>.shplugin` to
+   `<registry>/artifacts/<id>-<ver>.shplugin`.
+6. Adds / updates the release **ref** in `<registry>/registry.json`
+   `plugins[]` (multi-version: other versions kept, same id+version
+   replaced), with refreshed `publishedAt`.
 7. Commits in the registry repo with message
    `publish: <id>@<version> (<channel>)`.
 8. With `--push`, pushes to `origin`. The registry repo's
@@ -158,7 +159,7 @@ Available flags:
 | Flag                | Description                                                                |
 | ------------------- | -------------------------------------------------------------------------- |
 | `--registry <path>` | Override the registry repo location (or set `SELFHELP_REGISTRY_PATH`).     |
-| `--channel <name>`  | `stable` (default), `beta`, `alpha`, or `nightly`.                         |
+| `--channel <name>`  | `stable` (default), `beta`, `nightly`, or `test`.                          |
 | `--mode <name>`     | Archive mode: `connected` (default) or `standalone`. Forwarded to `build-shplugin.mjs`. See the table above. |
 | `--dry-run`         | Print planned changes without writing or committing.                       |
 | `--push`            | `git push` the registry commit to origin.                                  |
@@ -175,7 +176,7 @@ Trigger:
 
 - `push: tags: ["v*"]` — automatic on release tags.
 - `workflow_dispatch` — manual run from the **Actions** tab with a
-  `channel` input (`stable` / `beta` / `alpha` / `nightly`).
+  `channel` input (`stable` / `beta` / `nightly`).
 
 Setup once:
 

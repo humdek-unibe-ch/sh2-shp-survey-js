@@ -51,7 +51,7 @@ on:
                 required: true
                 default: "stable"
                 type: choice
-                options: ["stable", "beta", "alpha", "nightly"]
+                options: ["stable", "beta", "nightly"]
 
 permissions:
     contents: write
