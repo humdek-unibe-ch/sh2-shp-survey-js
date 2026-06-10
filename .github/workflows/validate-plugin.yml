@@ -51,13 +51,35 @@ jobs:
       # which is refreshed by `npm run sync-host-schemas`. The plugin's
       # tagged release of that schema is the authoritative copy the
       # plugin was built against.
+      #
+      # Same-branch-or-main: coordinated cross-repo work happens on equally
+      # named feature branches; validate against the host branch matching
+      # this build's branch name when it exists, else against main. See
+      # sh-selfhelp_backend/docs/developer/branch-merge-order.md.
+      - name: Resolve host ref (same branch as this build, else main)
+        id: host-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          REF="main"
+          if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ] && \
+             git ls-remote --exit-code --heads \
+               "https://x-access-token:${GH_TOKEN}@github.com/humdek-unibe-ch/sh-selfhelp_backend.git" \
+               "refs/heads/${BRANCH}" > /dev/null 2>&1; then
+            REF="$BRANCH"
+          fi
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Resolved sh-selfhelp_backend ref: ${REF} (build branch: ${BRANCH})"
+
       - name: Checkout host (for JSON Schemas)
         id: host-checkout
         uses: actions/checkout@v4
         continue-on-error: true
         with:
           repository: humdek-unibe-ch/sh-selfhelp_backend
-          ref: main
+          ref: ${{ steps.host-ref.outputs.ref }}
           path: .host
 
       - name: Set up Node 22
@@ -205,6 +227,45 @@ jobs:
         with:
           node-version: '22'
 
+      # The plugin must compile against the @selfhelp/shared contract it
+      # will actually run with. The npm-published SDK can lag behind
+      # coordinated branch work (e.g. the PLUGIN_API_VERSION 0.1.0
+      # reconciliation), so build the SDK from the shared branch matching
+      # this build's branch name (else main) and override the npm-resolved
+      # copy with that tarball (same-branch-or-main; see
+      # sh-selfhelp_backend/docs/developer/branch-merge-order.md).
+      - name: Resolve shared ref (same branch as this build, else main)
+        id: shared-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          REF="main"
+          if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ] && \
+             git ls-remote --exit-code --heads \
+               "https://x-access-token:${GH_TOKEN}@github.com/humdek-unibe-ch/sh-selfhelp_shared.git" \
+               "refs/heads/${BRANCH}" > /dev/null 2>&1; then
+            REF="$BRANCH"
+          fi
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Resolved sh-selfhelp_shared ref: ${REF} (build branch: ${BRANCH})"
+
+      - name: Checkout shared (for the branch-matched SDK build)
+        uses: actions/checkout@v4
+        with:
+          repository: humdek-unibe-ch/sh-selfhelp_shared
+          ref: ${{ steps.shared-ref.outputs.ref }}
+          path: .shared
+
+      - name: Build shared + pack a local tarball
+        working-directory: .shared
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm pack --pack-destination "$GITHUB_WORKSPACE"
+
       # Plugins do not (and must not) ship a lock file: the host
       # provides the resolved versions of React / Mantine /
       # @selfhelp/shared via its own root lock. `npm install` re-runs
@@ -213,6 +274,14 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Override @selfhelp/shared with the branch-built tarball
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          SHARED_TGZ="$(ls "$GITHUB_WORKSPACE"/selfhelp-shared-*.tgz | head -1)"
+          echo "Overriding @selfhelp/shared with $SHARED_TGZ"
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps "$SHARED_TGZ"
 
       - name: Type-check
         working-directory: frontend
@@ -255,9 +324,54 @@ jobs:
         with:
           node-version: '22'
 
+      # Same rationale as the frontend job: the mobile registration test
+      # calls defineMobilePlugin(), which asserts the plugin's
+      # pluginApiVersion against the SDK's PLUGIN_API_VERSION at import
+      # time. Test against the branch-matched SDK build, not a stale npm
+      # publish (same-branch-or-main).
+      - name: Resolve shared ref (same branch as this build, else main)
+        id: shared-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          REF="main"
+          if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ] && \
+             git ls-remote --exit-code --heads \
+               "https://x-access-token:${GH_TOKEN}@github.com/humdek-unibe-ch/sh-selfhelp_shared.git" \
+               "refs/heads/${BRANCH}" > /dev/null 2>&1; then
+            REF="$BRANCH"
+          fi
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Resolved sh-selfhelp_shared ref: ${REF} (build branch: ${BRANCH})"
+
+      - name: Checkout shared (for the branch-matched SDK build)
+        uses: actions/checkout@v4
+        with:
+          repository: humdek-unibe-ch/sh-selfhelp_shared
+          ref: ${{ steps.shared-ref.outputs.ref }}
+          path: .shared
+
+      - name: Build shared + pack a local tarball
+        working-directory: .shared
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm pack --pack-destination "$GITHUB_WORKSPACE"
+
       - name: Install dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Override @selfhelp/shared with the branch-built tarball
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          SHARED_TGZ="$(ls "$GITHUB_WORKSPACE"/selfhelp-shared-*.tgz | head -1)"
+          echo "Overriding @selfhelp/shared with $SHARED_TGZ"
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps "$SHARED_TGZ"
 
       - name: Type-check
         working-directory: mobile

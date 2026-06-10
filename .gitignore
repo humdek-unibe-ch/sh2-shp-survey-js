@@ -18,6 +18,7 @@ tmp/
 temp/
 
 # Backend / Composer
+/vendor/
 backend/vendor/
 backend/.phpunit.cache/
 backend/.phpunit.result.cache

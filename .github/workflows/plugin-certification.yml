@@ -117,9 +117,54 @@ jobs:
         with:
           node-version: '22'
 
+      # The registration test calls defineMobilePlugin(), which asserts the
+      # plugin's pluginApiVersion against the SDK's PLUGIN_API_VERSION. Test
+      # against the branch-matched @selfhelp/shared build (same-branch-or-
+      # main), not a potentially stale npm publish. See
+      # sh-selfhelp_backend/docs/developer/branch-merge-order.md.
+      - name: Resolve shared ref (same branch as this build, else main)
+        id: shared-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          REF="main"
+          if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ] && \
+             git ls-remote --exit-code --heads \
+               "https://x-access-token:${GH_TOKEN}@github.com/humdek-unibe-ch/sh-selfhelp_shared.git" \
+               "refs/heads/${BRANCH}" > /dev/null 2>&1; then
+            REF="$BRANCH"
+          fi
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Resolved sh-selfhelp_shared ref: ${REF} (build branch: ${BRANCH})"
+
+      - name: Checkout shared (for the branch-matched SDK build)
+        uses: actions/checkout@v4
+        with:
+          repository: humdek-unibe-ch/sh-selfhelp_shared
+          ref: ${{ steps.shared-ref.outputs.ref }}
+          path: .shared
+
+      - name: Build shared + pack a local tarball
+        working-directory: .shared
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm pack --pack-destination "$GITHUB_WORKSPACE"
+
       - name: Install dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Override @selfhelp/shared with the branch-built tarball
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          SHARED_TGZ="$(ls "$GITHUB_WORKSPACE"/selfhelp-shared-*.tgz | head -1)"
+          echo "Overriding @selfhelp/shared with $SHARED_TGZ"
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps "$SHARED_TGZ"
 
       - name: Renderer parity + registration snapshot
         working-directory: mobile
