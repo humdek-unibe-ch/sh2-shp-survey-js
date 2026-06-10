@@ -26,7 +26,7 @@ SPDX-License-Identifier: MPL-2.0
  *      --notes-file CHANGELOG.md`.
  *
  * Required env (one of):
- *   SELFHELP_PLUGIN_SIGNING_KEY        + SELFHELP_PLUGIN_SIGNING_KEY_ID
+ *   SELFHELP_SIGNING_KEY        + SELFHELP_SIGNING_KEY_ID
  *   SELFHELP_PLUGIN_DEV_SIGNING_KEY    (local dev — keyId=dev; rejected
  *                                       on `official`/`reviewed` plugins
  *                                       outside APP_ENV=dev).
@@ -153,7 +153,7 @@ async function main(opts) {
         '--manifest-url', manifestUrl,
         '--out', destRelease,
     ]);
-    // 2. sign it in place (SELFHELP_PLUGIN_SIGNING_KEY/_ID from env, else dev key).
+    // 2. sign it in place (SELFHELP_SIGNING_KEY/_ID from env, else dev key).
     runStreaming('node', [signReleaseScript, '--input', destRelease]);
     ok(`Signed ${relReleaseUrl}`);
 
@@ -364,7 +364,7 @@ Options:
   -h, --help          Show this help.
 
 Required env (one of):
-  SELFHELP_PLUGIN_SIGNING_KEY        + SELFHELP_PLUGIN_SIGNING_KEY_ID
+  SELFHELP_SIGNING_KEY        + SELFHELP_SIGNING_KEY_ID
   SELFHELP_PLUGIN_DEV_SIGNING_KEY    (local dev; keyId=dev)
 
 Both values can live in <plugin>/.env (auto-loaded). See .env.example.

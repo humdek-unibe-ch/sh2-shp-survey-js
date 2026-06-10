@@ -28,8 +28,8 @@
 #      workflow artifacts and as GitHub Release assets.
 #
 # Required secrets:
-#   SELFHELP_PLUGIN_SIGNING_KEY      Ed25519 64-byte secret key (base64).
-#   SELFHELP_PLUGIN_SIGNING_KEY_ID   Publisher key id matching the
+#   SELFHELP_SIGNING_KEY      Ed25519 64-byte secret key (base64).
+#   SELFHELP_SIGNING_KEY_ID   Publisher key id matching the
 #                                    SELFHELP_PLUGIN_TRUSTED_KEYS entry
 #                                    seeded on every SelfHelp host.
 #   REGISTRY_PUSH_TOKEN              PAT with `contents:write` on
@@ -105,8 +105,8 @@ jobs:
             - name: Build connected .shplugin (registry publish)
               working-directory: plugin
               env:
-                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
-                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
+                  SELFHELP_SIGNING_KEY: ${{ secrets.SELFHELP_SIGNING_KEY }}
+                  SELFHELP_SIGNING_KEY_ID: ${{ secrets.SELFHELP_SIGNING_KEY_ID }}
               run: node scripts/build-shplugin.mjs --skip-build --mode connected
 
             - name: Extract plugin id + version
@@ -162,8 +162,8 @@ jobs:
               working-directory: plugin
               env:
                   CHANNEL: ${{ inputs.channel || 'stable' }}
-                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
-                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
+                  SELFHELP_SIGNING_KEY: ${{ secrets.SELFHELP_SIGNING_KEY }}
+                  SELFHELP_SIGNING_KEY_ID: ${{ secrets.SELFHELP_SIGNING_KEY_ID }}
               run: |
                   node scripts/publish-to-registry.mjs \
                       --registry "$GITHUB_WORKSPACE/sh2-plugin-registry" \
@@ -181,8 +181,8 @@ jobs:
             - name: Build standalone .shplugin (GitHub Release asset)
               working-directory: plugin
               env:
-                  SELFHELP_PLUGIN_SIGNING_KEY: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY }}
-                  SELFHELP_PLUGIN_SIGNING_KEY_ID: ${{ secrets.SELFHELP_PLUGIN_SIGNING_KEY_ID }}
+                  SELFHELP_SIGNING_KEY: ${{ secrets.SELFHELP_SIGNING_KEY }}
+                  SELFHELP_SIGNING_KEY_ID: ${{ secrets.SELFHELP_SIGNING_KEY_ID }}
               run: |
                   # build-shplugin.mjs always writes to dist/<id>-<ver>.shplugin.
                   # Move the connected archive out of the way so we keep both
