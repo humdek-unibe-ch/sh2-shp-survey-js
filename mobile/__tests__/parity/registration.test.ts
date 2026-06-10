@@ -21,11 +21,11 @@ SPDX-License-Identifier: MPL-2.0
  * `mobile/src/index.ts#PLUGIN_VERSION` and this test goes red on the
  * "mobile version must match the manifest" assertion.
  *
- * Note: the mobile entry intentionally declares the conservative
- * `pluginApiVersion: '1.0'` (a strict subset of the web entry's '1.1'),
- * which the shared SDK accepts (host SDK >= 1.0). We therefore *snapshot*
- * that value rather than asserting equality with the web entry — the
- * snapshot keeps any future drift visible in review.
+ * Note: after the ecosystem 0.1.0 reconciliation, the mobile and web
+ * entries both declare `pluginApiVersion: '0.1.0'` (the unified pre-release
+ * SDK version the shared package exports). We *snapshot* that value rather
+ * than asserting equality with the web entry — the snapshot keeps any future
+ * drift visible in review.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -127,7 +127,7 @@ describe('SurveyJS mobile registration parity', () => {
               },
             ],
             "id": "sh2-shp-survey-js",
-            "pluginApiVersion": "1.0",
+            "pluginApiVersion": "0.1.0",
             "styles": [
               {
                 "canHaveChildren": false,
@@ -136,7 +136,7 @@ describe('SurveyJS mobile registration parity', () => {
                 "name": "surveyjs",
               },
             ],
-            "version": "0.2.20",
+            "version": "0.1.0",
           }
         `);
     });

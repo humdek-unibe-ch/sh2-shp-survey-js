@@ -262,7 +262,7 @@ files. The host's `docs/plugins/` documentation enforces this
 convention.
 
 Every plugin MUST also ship a `.env.example` documenting the
-`SELFHELP_PLUGIN_*_SIGNING_KEY` / `SELFHELP_PLUGIN_*_SIGNING_KEY_ID` /
+`SELFHELP_SIGNING_KEY` / `SELFHELP_SIGNING_KEY_ID` /
 `SELFHELP_ADMIN_TOKEN` / `SELFHELP_API_BASE` / `SELFHELP_BACKEND_PATH`
 / `SELFHELP_REGISTRY_PATH` env variables the scripts consume. The
 scripts auto-load `<plugin-root>/.env` via Node 22's

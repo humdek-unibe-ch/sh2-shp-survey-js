@@ -74,22 +74,22 @@ Browse to your plugin repo on GitHub, e.g.
 
 Click **Settings → Secrets and variables → Actions**.
 
-## 2. Add `SELFHELP_PLUGIN_SIGNING_KEY`
+## 2. Add `SELFHELP_SIGNING_KEY`
 
 | Field  | Value                                                            |
 |--------|------------------------------------------------------------------|
-| Name   | `SELFHELP_PLUGIN_SIGNING_KEY`                                    |
+| Name   | `SELFHELP_SIGNING_KEY`                                    |
 | Secret | Base64 of the raw 64-byte Ed25519 secret key (output of step 0). |
 
 This is the private half of the signing keypair. Treat it like a
 production password: rotate when an author leaves, never echo to a
 chat or paste into another repo. The host never sees this value.
 
-## 3. Add `SELFHELP_PLUGIN_SIGNING_KEY_ID`
+## 3. Add `SELFHELP_SIGNING_KEY_ID`
 
 | Field  | Value                                                                                                |
 |--------|------------------------------------------------------------------------------------------------------|
-| Name   | `SELFHELP_PLUGIN_SIGNING_KEY_ID`                                                                     |
+| Name   | `SELFHELP_SIGNING_KEY_ID`                                                                     |
 | Secret | A short identifier the host recognises, e.g. `humdek-2026-01` (vendor + year + rotation generation). |
 
 The `keyId` is **not** a secret in the cryptographic sense — it is
@@ -157,8 +157,8 @@ worker so Symfony picks up the new env var.
 # - drop the production keypair into <plugin>/.env (gitignored), OR
 # - export them inline like below.
 
-SELFHELP_PLUGIN_SIGNING_KEY=<your-secret> \
-SELFHELP_PLUGIN_SIGNING_KEY_ID=humdek-2026-01 \
+SELFHELP_SIGNING_KEY=<your-secret> \
+SELFHELP_SIGNING_KEY_ID=humdek-2026-01 \
 node scripts/build-shplugin.mjs
 
 # → dist/sh2-shp-survey-js-<version>.shplugin signed with the
@@ -189,8 +189,8 @@ The workflow log should show:
 1. Generate a new keypair (step 0).
 2. Add the new keyId + public key to the host's
    `SELFHELP_PLUGIN_TRUSTED_KEYS` alongside the old one.
-3. Update the plugin's `SELFHELP_PLUGIN_SIGNING_KEY` +
-   `SELFHELP_PLUGIN_SIGNING_KEY_ID` secrets.
+3. Update the plugin's `SELFHELP_SIGNING_KEY` +
+   `SELFHELP_SIGNING_KEY_ID` secrets.
 4. Wait one release cycle for all hosts to pick up the new pub key.
 5. Remove the old keyId from `SELFHELP_PLUGIN_TRUSTED_KEYS`.
 
@@ -202,7 +202,7 @@ longer appears in the trusted-keys env.
 | Symptom                                                       | Fix                                                                                                 |
 |---------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | `signature key not trusted (keyId=<id>)`                      | Add the public key to the host's `SELFHELP_PLUGIN_TRUSTED_KEYS` and restart the host worker.        |
-| `signature verification failed`                               | The secret in `SELFHELP_PLUGIN_SIGNING_KEY` does not match the public key. Regenerate the pair.     |
+| `signature verification failed`                               | The secret in `SELFHELP_SIGNING_KEY` does not match the public key. Regenerate the pair.     |
 | `Signing key must be 64 bytes (got N)`                        | The key was generated with `randomBytes(64)` instead of `sign.mjs keygen`. Re-generate using keygen.|
 | Workflow exits with `REGISTRY_PUSH_TOKEN is not set` warning  | Expected when running without the token. Add the token to enable auto-publish to the registry repo. |
 | `vite: not found` during local build                          | Run `node scripts/build-shplugin.mjs` — it auto-installs `frontend/node_modules` if `vite` is missing.|

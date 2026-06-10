@@ -152,7 +152,7 @@ The script:
    CSS is optional; the canonical signed payload (and the host
    validator) mirror that.
 5. Builds the canonical signed payload via the shared `sign.mjs`.
-6. Signs with `SELFHELP_PLUGIN_SIGNING_KEY` (or
+6. Signs with `SELFHELP_SIGNING_KEY` (or
    `SELFHELP_PLUGIN_DEV_SIGNING_KEY` → keyId `dev`, dev-only).
 7. Writes SHA256SUMS with archive-root-relative paths
    (`<hash>  artifacts/<file>`) — the host's `PluginArchiveValidator`
@@ -175,8 +175,8 @@ SELFHELP_PLUGIN_TRUSTED_KEYS=dev=<base64-public-key>
 
 Production hosts (`APP_ENV=prod`) refuse `keyId="dev"` outright for
 `official`/`reviewed` trust levels regardless of trusted-keys —
-use a real CI keypair via `SELFHELP_PLUGIN_SIGNING_KEY` +
-`SELFHELP_PLUGIN_SIGNING_KEY_ID`. See
+use a real CI keypair via `SELFHELP_SIGNING_KEY` +
+`SELFHELP_SIGNING_KEY_ID`. See
 [`docs/secrets-setup.md`](./docs/operations/secrets-setup.md) and
 [`docs/publish.md`](./docs/operations/publish.md).
 
@@ -222,8 +222,8 @@ Actions):
 
 | Secret                            | Used for                                                                                        |
 | --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `SELFHELP_PLUGIN_SIGNING_KEY`     | Ed25519 base64 secret key. Used to sign the canonical payload.                                  |
-| `SELFHELP_PLUGIN_SIGNING_KEY_ID`  | Publisher key id. Must match an entry in the host's `SELFHELP_PLUGIN_TRUSTED_KEYS`.             |
+| `SELFHELP_SIGNING_KEY`     | Ed25519 base64 secret key. Used to sign the canonical payload.                                  |
+| `SELFHELP_SIGNING_KEY_ID`  | Publisher key id. Must match an entry in the host's `SELFHELP_PLUGIN_TRUSTED_KEYS`.             |
 | `REGISTRY_PUSH_TOKEN`             | PAT with `contents:write` on `humdek-unibe-ch/sh2-plugin-registry`. Missing → dry-run mode.     |
 
 Step-by-step walkthrough including key generation, GitHub UI

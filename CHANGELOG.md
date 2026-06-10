@@ -7,6 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Ecosystem 0.1.0 version reconciliation.** Re-baselined this plugin to the
+  pre-release `0.1.0` scheme shared by the whole SelfHelp ecosystem (nothing is
+  officially released yet, so no backward compatibility is kept):
+  - `plugin.json#version`, `backend.composer.version`, and `mobile.version`
+    `0.2.20` -> `0.1.0`; `frontend/package.json`, `mobile/package.json`, and the
+    `PLUGIN_VERSION` constants in `frontend/src/index.ts` + `mobile/src/index.ts`
+    follow.
+  - `plugin.json#pluginApiVersion` `1.1` -> `0.1.0` (the unified SDK version the
+    `@selfhelp/shared` package now exports); the web (`1.1`) and mobile (`1.0`)
+    runtime registrations both move to `0.1.0`.
+  - `plugin.json#compatibility.selfhelp` `>=8.0.0-dev <9.0.0` -> `>=0.1.0 <0.2.0`
+    (pre-1.0 SemVer: each minor is breaking, so the range tracks one core minor).
+  - Contract tests realigned: the frontend manifest guardrail, the mobile parity
+    snapshot, and the backend manifest certification now assert the `0.1.x`
+    scheme.
+
 ### Added
 - **Backend certification tests (ecosystem testing strategy, Slice 8C).**
   - `backend/tests/Service/SurveyResponseServiceTest.php` — unit coverage

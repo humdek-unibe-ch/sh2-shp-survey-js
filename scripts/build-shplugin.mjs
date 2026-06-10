@@ -90,7 +90,7 @@ SPDX-License-Identifier: MPL-2.0
  *  11. Print absolute path of the produced archive.
  *
  * Required env (one of):
- *   SELFHELP_PLUGIN_SIGNING_KEY      + SELFHELP_PLUGIN_SIGNING_KEY_ID  (CI)
+ *   SELFHELP_SIGNING_KEY      + SELFHELP_SIGNING_KEY_ID  (CI)
  *   SELFHELP_PLUGIN_DEV_SIGNING_KEY                                    (local; keyId=dev)
  *
  * The script auto-loads `<plugin-root>/.env` when present (via Node 22's
@@ -608,11 +608,17 @@ function computeBackendPackageHash(sums) {
 // ---------------------------------------------------------------------
 
 function resolveSignScript() {
-    const sibling = path.resolve(PLUGIN_ROOT, '..', 'sh2-plugin-registry', 'scripts', 'sign.mjs');
-    if (existsSync(sibling)) return sibling;
+    // Same resolution contract as publish-to-registry.mjs: explicit
+    // SELFHELP_REGISTRY_PATH wins, sibling checkout is the default.
+    const registryRoot = process.env.SELFHELP_REGISTRY_PATH
+        ? path.resolve(process.env.SELFHELP_REGISTRY_PATH)
+        : path.resolve(PLUGIN_ROOT, '..', 'sh2-plugin-registry');
+    const script = path.join(registryRoot, 'scripts', 'sign.mjs');
+    if (existsSync(script)) return script;
     throw new Error(
-        `Could not locate sign.mjs. Expected sibling checkout at ${sibling}. ` +
-            `Clone https://github.com/humdek-unibe-ch/sh2-plugin-registry beside this plugin.`,
+        `Could not locate sign.mjs (looked at ${script}). ` +
+            `Clone https://github.com/humdek-unibe-ch/sh2-plugin-registry beside this plugin ` +
+            `or set SELFHELP_REGISTRY_PATH to your registry checkout.`,
     );
 }
 

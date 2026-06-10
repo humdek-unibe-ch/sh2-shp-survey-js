@@ -46,9 +46,9 @@ final class PluginManifestCertificationTest extends TestCase
             'version must be semver',
         );
         self::assertMatchesRegularExpression(
-            '/^\d+\.\d+$/',
+            '/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/',
             (string) self::$manifest['pluginApiVersion'],
-            'pluginApiVersion must be a major.minor SDK version',
+            'pluginApiVersion must be a SemVer SDK version (ecosystem 0.1.0 scheme)',
         );
     }
 
@@ -76,7 +76,11 @@ final class PluginManifestCertificationTest extends TestCase
             );
             self::assertNotSame('', trim($compat[$key]), "compatibility.$key must be a non-empty constraint");
         }
-        self::assertStringContainsString('8', (string) $compat['selfhelp'], 'selfhelp range must target the 8.x host line');
+        // Ecosystem 0.1.0 reconciliation: the host core line is 0.1.x
+        // (backend `selfhelp.cms_version` default + the unified registry's
+        // selfhelp-core releases). Pinning the line here makes an accidental
+        // wildcard or wrong-line range fail certification.
+        self::assertStringContainsString('0.1', (string) $compat['selfhelp'], 'selfhelp range must target the 0.1.x host core line');
     }
 
     public function testTrustLevelAndCapabilityContractIsConsistent(): void
