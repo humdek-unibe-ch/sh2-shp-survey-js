@@ -63,6 +63,25 @@ jobs:
         env:
             REGISTRY_PUSH_TOKEN: ${{ secrets.REGISTRY_PUSH_TOKEN }}
         steps:
+            - name: Check signing secrets are configured
+              env:
+                  SIGNING_KEY: ${{ secrets.SELFHELP_SIGNING_KEY }}
+                  SIGNING_KEY_ID: ${{ secrets.SELFHELP_SIGNING_KEY_ID }}
+              run: |
+                  MISSING=""
+                  [ -z "$SIGNING_KEY" ]    && MISSING="$MISSING SELFHELP_SIGNING_KEY"
+                  [ -z "$SIGNING_KEY_ID" ] && MISSING="$MISSING SELFHELP_SIGNING_KEY_ID"
+                  if [ -n "$MISSING" ]; then
+                      echo "::error::Missing repository/organization secret(s):$MISSING"
+                      echo "Signing requires BOTH the Ed25519 secret key and its key id."
+                      echo "The key id names which trusted public key verifies the signature"
+                      echo "(hosts pin it in SELFHELP_PLUGIN_TRUSTED_KEYS; the official"
+                      echo "production key id is 'prod'). Set the secrets at org level so"
+                      echo "every plugin repo inherits them."
+                      exit 1
+                  fi
+                  echo "Signing secrets present (key id is set)."
+
             - name: Checkout plugin
               uses: actions/checkout@v4
               with:
