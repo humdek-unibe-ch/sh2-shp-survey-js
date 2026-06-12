@@ -21,8 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   no DB change, no migration, no code change beyond the manifest + version
   mirrors and their contract tests.
 
-## [Unreleased]
-
 ### Changed
 - **Ecosystem 0.1.0 version reconciliation.** Re-baselined this plugin to the
   pre-release `0.1.0` scheme shared by the whole SelfHelp ecosystem (nothing is
