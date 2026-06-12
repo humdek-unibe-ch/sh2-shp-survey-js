@@ -3,7 +3,7 @@
 Audience: Plugin developers and integrators.
 Status: active.
 Applies to: `sh2-shp-survey-js`.
-Last verified: 2026-06-09.
+Last verified: 2026-06-12.
 Source of truth: `plugin.json` (validated against the host `plugin-manifest.schema.json`), `backend/src/Entity/`, and `backend/src/Controller/`.
 
 This page summarizes the plugin's declared contract. `plugin.json` is authoritative; when this page and the manifest disagree, the manifest wins.
@@ -14,9 +14,9 @@ This page summarizes the plugin's declared contract. `plugin.json` is authoritat
 | --- | --- |
 | `id` | `sh2-shp-survey-js` |
 | `name` | SurveyJS |
-| `version` | 0.1.0 |
+| `version` | 0.2.1 |
 | `pluginApiVersion` | 0.1.0 |
-| `compatibility.selfhelp` | `>=0.1.0 <0.2.0` |
+| `compatibility.selfhelp` | `>=0.1.0` (open-ended minimum: the plugin-API axis, not the core axis, is the breakage contract) |
 | `compatibility` (runtime) | php `^8.4`, node `^22`, react `^19`, reactNative `^0.83`, expoSdk `^55` |
 | `archive.mode` | `connected` (PHP bundle installed by Composer from this repo; registry ships discovery metadata + frontend artifacts) |
 

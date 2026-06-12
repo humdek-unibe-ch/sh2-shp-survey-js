@@ -5,6 +5,22 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.2.1] - 2026-06-12
+
+### Changed
+- **Open-ended core compatibility (ecosystem compatibility policy).**
+  `plugin.json#compatibility.selfhelp` `>=0.1.0 <0.2.0` -> `>=0.1.0`. Plugins
+  now declare an open-ended minimum on the core axis; `pluginApiVersion` is
+  the breakage contract and the registry `blocked` flag / advisories handle
+  retroactive breakage. This stops every future core minor (0.2.x, 0.3.x, ...)
+  from being wrongly reported as incompatible by the backend update preflight
+  and the manager update plan. Policy reference:
+  `sh-selfhelp_backend/docs/developer/26-plugin-compatibility-rules.md`.
+- Version `0.2.1` supersedes the registry's `0.2.0` entry (which pinned
+  `>=0.2.0 <0.3.0` and could not install on 0.1.x hosts). Patch-only release:
+  no DB change, no migration, no code change beyond the manifest + version
+  mirrors and their contract tests.
+
 ## [Unreleased]
 
 ### Changed

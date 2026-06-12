@@ -86,11 +86,16 @@ describe('SurveyJS plugin.json release contract', () => {
         expect(satisfies('0.1.9', manifest.compatibility.selfhelp)).toBe(true);
     });
 
-    it('rejects the next breaking minor (0.2.0), the first stable (1.0.0), and legacy 8.x', () => {
-        // Pre-1.0 SemVer: every minor bump is breaking, so 0.2.0 is out of range.
-        expect(satisfies('0.2.0', manifest.compatibility.selfhelp)).toBe(false);
-        expect(satisfies('1.0.0', manifest.compatibility.selfhelp)).toBe(false);
-        expect(satisfies('8.0.0', manifest.compatibility.selfhelp)).toBe(false);
+    it('declares an OPEN-ENDED core range (ecosystem compatibility policy)', () => {
+        // Policy: the core axis is an open-ended minimum (">=0.1.0"); breaking
+        // plugin-facing changes are signalled via pluginApiVersion, and
+        // retroactive breakage via the registry blocked flag / advisories. A
+        // closed upper bound would wrongly block every future core minor.
+        expect(manifest.compatibility.selfhelp.trim()).toBe('>=0.1.0');
+        expect(satisfies('0.2.0', manifest.compatibility.selfhelp)).toBe(true);
+        expect(satisfies('1.0.0', manifest.compatibility.selfhelp)).toBe(true);
+        // Below the declared floor still fails.
+        expect(satisfies('0.0.9', manifest.compatibility.selfhelp)).toBe(false);
     });
 
     it('declares owned tables under its reserved data-table prefix', () => {

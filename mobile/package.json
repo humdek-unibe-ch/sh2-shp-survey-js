@@ -1,6 +1,6 @@
 {
     "name": "@humdek/sh2-shp-survey-js-mobile",
-    "version": "0.1.0",
+    "version": "0.2.1",
     "description": "SurveyJS v2 readonly mobile renderer for the SelfHelp plugin ecosystem.",
     "license": "MPL-2.0",
     "main": "dist/index.js",
@@ -26,10 +26,10 @@
     "peerDependencies": {
         "react": "^19.2.0",
         "react-native": "^0.83.0",
-        "@selfhelp/shared": "^1.1.0"
+        "@selfhelp/shared": "^1.6.0"
     },
     "devDependencies": {
-        "@selfhelp/shared": "^1.1.0",
+        "@selfhelp/shared": "^1.6.0",
         "@types/react": "^19.2.14",
         "react": "^19.2.0",
         "react-native": "^0.83.6",
