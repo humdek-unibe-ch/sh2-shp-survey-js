@@ -12,6 +12,8 @@ SPDX-License-Identifier: MPL-2.0
  * of HTTP boilerplate.
  */
 
+import { csrfHeaders } from './csrf';
+
 export interface IAdminSurveySummary {
     id: number;
     surveyId: string;
@@ -59,17 +61,6 @@ export interface IAdminSurveyVersionDetail extends IAdminSurveyVersion {
 // are the single source of truth the host installer persists into
 // `api_routes`.
 const BASE = '/api/admin/plugins/sh2-shp-survey-js';
-
-function csrfHeaders(): Record<string, string> {
-    if (typeof document === 'undefined') {
-        return {};
-    }
-    const token = document.cookie
-        .split('; ')
-        .find((part) => part.startsWith('sh_csrf='))
-        ?.slice('sh_csrf='.length);
-    return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
-}
 
 async function asJson<T>(res: Response): Promise<T> {
     const body = (await res.json().catch(() => ({}))) as { data?: T; error?: string };

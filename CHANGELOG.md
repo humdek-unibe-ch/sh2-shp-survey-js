@@ -5,6 +5,32 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.2.23] - 2026-06-16
+
+### Fixed
+- **Surveys could not be created or submitted on a deployed instance
+  (`403 "CSRF validation failed"`).** The admin and public browser API
+  clients echoed the CSRF double-submit token from a hardcoded `sh_csrf`
+  cookie, but the host namespaces every cookie per instance
+  (`sh_csrf_<instanceId>`, derived from `<html data-sh-instance>`; see the
+  frontend's `config/cookie-names.ts`). On any manager-installed instance the
+  real cookie is `sh_csrf_<id>`, so the hardcoded lookup found nothing, sent
+  no `X-CSRF-Token`, and the host BFF rejected every unsafe request — admin
+  create / update / save-draft / publish / presence / delete **and** public
+  submit / draft / file-upload — with `403 CSRF validation failed`. Both
+  clients now read the token through a shared `api/csrf.ts` helper that
+  derives the same per-instance cookie name the host uses (falling back to the
+  un-suffixed cookie for dev checkouts, then scanning the jar so a present
+  token is never missed). Covered by `frontend/src/api/csrf.test.ts`,
+  including a regression asserting a stale un-suffixed `sh_csrf` no longer
+  shadows the namespaced token.
+
+### Changed
+- Version bump to 0.2.23 across `plugin.json` (manifest + `backend.composer`
+  + `mobile` mirrors), `composer.json`, `frontend/package.json`,
+  `mobile/package.json`, and the `PLUGIN_VERSION` constants in
+  `frontend/src/index.ts` + `mobile/src/index.ts`.
+
 ## [0.2.22] - 2026-06-12
 
 ### Changed

@@ -16,6 +16,8 @@ SPDX-License-Identifier: MPL-2.0
  * widgets, and unit tests.
  */
 
+import { csrfHeaders } from './csrf';
+
 export interface IRuntimeConfig {
     restartOnRefresh: boolean;
     autoSaveIntervalSeconds: number;
@@ -123,17 +125,6 @@ export interface ISubmissionError extends Error {
 // of truth the host installer persists into `api_routes`.
 const BASE = '/api/plugins/sh2-shp-survey-js';
 export const RUNTIME_LICENSE_HEADER = 'X-SurveyJs-License-Key';
-
-function csrfHeaders(): Record<string, string> {
-    if (typeof document === 'undefined') {
-        return {};
-    }
-    const token = document.cookie
-        .split('; ')
-        .find((part) => part.startsWith('sh_csrf='))
-        ?.slice('sh_csrf='.length);
-    return token ? { 'X-CSRF-Token': decodeURIComponent(token) } : {};
-}
 
 function runtimeConfigHeader(config?: Record<string, unknown>): Record<string, string> {
     if (!config) return {};
