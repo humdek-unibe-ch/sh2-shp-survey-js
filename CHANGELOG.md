@@ -5,6 +5,14 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.3.1] - 2026-06-25
+
+### Fixed
+- **Frontend version alignment.** The `frontend/package.json` and `frontend/src/index.ts`
+  `PLUGIN_VERSION` were missed during the 0.3.0 release and remained at 0.2.25.
+  This caused a version mismatch that could break the plugin at runtime. All version
+  fields are now synchronized at 0.3.1.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added
