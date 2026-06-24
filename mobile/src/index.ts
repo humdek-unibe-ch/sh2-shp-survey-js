@@ -3,20 +3,24 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * `@humdek/sh2-shp-survey-js-mobile` — v1 readonly mobile entry.
+ * `@selfhelp/sh2-shp-survey-js-mobile` — mobile entry.
  *
  * Bundled into mobile builds by the host's `plugins:sync` script
  * (per EAS profile). Exports `registerMobile` which returns the
- * plugin's `IMobilePluginRegistration` — currently just the
- * `surveyjs` style implementation that renders a published survey
- * read-only and falls back to "Open on web" for question types not
- * supported on mobile yet.
+ * plugin's `IMobilePluginRegistration` — the `surveyjs` style.
+ *
+ * The style dispatches by platform (`styles/SurveyJsStyle`): the Expo
+ * web export (react-native-web) renders the survey INTERACTIVELY with
+ * the SurveyJS React library (`survey-core` + `survey-react-ui`) —
+ * fetch + render + per-page progress save + submit + redirect, mirroring
+ * the web frontend runtime. On native (no DOM) it falls back to the
+ * read-only viewer + "Open on web".
  */
 
 import { defineMobilePlugin } from '@selfhelp/shared/plugin-sdk';
 import type { IMobilePluginRegistration } from '@selfhelp/shared/plugin-sdk';
 
-import { SurveyJsReadOnlyStyle } from './styles/SurveyJsReadOnlyStyle';
+import { SurveyJsStyle } from './styles/SurveyJsStyle';
 
 export const PLUGIN_ID = 'sh2-shp-survey-js';
 /**
@@ -25,7 +29,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * compare these constants against the manifest version; a mismatch
  * silently breaks the plugin.
  */
-export const PLUGIN_VERSION = '0.2.24';
+export const PLUGIN_VERSION = '0.2.25';
 
 export const registerMobile = (): IMobilePluginRegistration =>
     defineMobilePlugin({
@@ -35,11 +39,10 @@ export const registerMobile = (): IMobilePluginRegistration =>
         styles: [
             {
                 name: 'surveyjs',
-                description: 'Read-only mobile renderer for a published SurveyJS survey.',
+                description: 'Mobile renderer for a published SurveyJS survey (interactive on web, read-only on native).',
                 category: 'forms',
-                frontendOnly: true,
                 canHaveChildren: false,
-                component: SurveyJsReadOnlyStyle as never,
+                component: SurveyJsStyle as never,
             },
         ],
         featureFlags: [

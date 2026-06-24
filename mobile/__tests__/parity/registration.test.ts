@@ -6,10 +6,11 @@ SPDX-License-Identifier: MPL-2.0
  * Renderer-parity + registration snapshot for the SurveyJS mobile entry
  * (plan Slice 8D; golden workflow §19.5 "Survey lifecycle").
  *
- * The mobile package ships a *read-only* renderer for the `surveyjs`
- * style. This test certifies that the mobile registration stays in
- * parity with the single source of truth — `plugin.json` — and with the
- * web registration's style contract, without rendering React Native.
+ * The mobile package ships an interactive web renderer (with a read-only
+ * native fallback) for the `surveyjs` style. This test certifies that the
+ * mobile registration stays in parity with the single source of truth —
+ * `plugin.json` — and with the web registration's style contract, without
+ * rendering React Native.
  *
  * Why parity matters: `mobile/src/index.ts` hard-codes `PLUGIN_ID` /
  * `PLUGIN_VERSION` and the host mobile sync script compares them against
@@ -37,7 +38,6 @@ interface IRegisteredStyle {
     name: string;
     description?: string;
     category?: string;
-    frontendOnly?: boolean;
     canHaveChildren?: boolean;
 }
 
@@ -64,13 +64,12 @@ describe('SurveyJS mobile registration parity', () => {
         expect(registration.version).toBe(manifest.mobile.version);
     });
 
-    it('is declared read-only in the manifest (mobile renders, never submits)', () => {
-        expect(manifest.mobile.readonly).toBe(true);
+    it('is declared interactive in the manifest (web export renders + submits)', () => {
+        expect(manifest.mobile.readonly).toBe(false);
     });
 
-    it('registers the read-only "surveyjs" style with the manifest style contract', () => {
+    it('registers the "surveyjs" style with the manifest style contract', () => {
         expect(surveyStyle, 'mobile must register a "surveyjs" style').toBeDefined();
-        expect(surveyStyle?.frontendOnly).toBe(true);
         expect(surveyStyle?.canHaveChildren).toBe(false);
         expect(surveyStyle?.category).toBe(manifest.labels.category);
 
@@ -105,7 +104,6 @@ describe('SurveyJS mobile registration parity', () => {
                 .map((s) => ({
                     name: s.name,
                     category: s.category,
-                    frontendOnly: s.frontendOnly ?? false,
                     canHaveChildren: s.canHaveChildren ?? false,
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name)),
@@ -136,7 +134,6 @@ describe('SurveyJS mobile registration parity', () => {
               {
                 "canHaveChildren": false,
                 "category": "forms",
-                "frontendOnly": true,
                 "name": "surveyjs",
               },
             ],

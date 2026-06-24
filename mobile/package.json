@@ -1,8 +1,17 @@
 {
-    "name": "@humdek/sh2-shp-survey-js-mobile",
-    "version": "0.2.24",
-    "description": "SurveyJS v2 readonly mobile renderer for the SelfHelp plugin ecosystem.",
+    "name": "@selfhelp/sh2-shp-survey-js-mobile",
+    "version": "0.2.25",
+    "description": "SurveyJS v2 mobile renderer for the SelfHelp plugin ecosystem (interactive on web export, read-only fallback on native).",
     "license": "MPL-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/humdek-unibe-ch/sh2-shp-survey-js.git",
+        "directory": "mobile"
+    },
+    "homepage": "https://github.com/humdek-unibe-ch/sh2-shp-survey-js#readme",
+    "bugs": {
+        "url": "https://github.com/humdek-unibe-ch/sh2-shp-survey-js/issues"
+    },
     "main": "dist/index.js",
     "module": "dist/index.mjs",
     "types": "dist/index.d.ts",
@@ -19,23 +28,38 @@
         "README.md"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react --external react-native --external @selfhelp/shared",
+        "build": "tsup",
         "typecheck": "tsc --noEmit",
         "test": "vitest run"
     },
+    "dependencies": {
+        "survey-core": "2.5.25",
+        "survey-react-ui": "2.5.25"
+    },
     "peerDependencies": {
         "react": "^19.2.0",
+        "react-dom": "^19.2.0",
         "react-native": "^0.83.0",
         "@selfhelp/shared": "^1.6.0"
+    },
+    "peerDependenciesMeta": {
+        "react-dom": {
+            "optional": true
+        }
     },
     "devDependencies": {
         "@selfhelp/shared": "^1.6.0",
         "@types/react": "^19.2.14",
         "react": "^19.2.0",
         "react-native": "^0.83.6",
+        "survey-core": "2.5.25",
+        "survey-react-ui": "2.5.25",
         "tsup": "^8.3.5",
         "typescript": "^5.9.3",
         "vitest": "^3.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
     },
     "sideEffects": false
 }

@@ -21,7 +21,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 
 interface ISurveyJsReadOnlyStyleProps {
     section: {
-        id: number;
+        id?: number;
         fields?: Record<string, unknown>;
         style_name?: string;
     };

@@ -22,8 +22,14 @@ const NoopComponent = (): null => null;
 export const Text = NoopComponent;
 export const View = NoopComponent;
 export const Pressable = NoopComponent;
+export const ActivityIndicator = NoopComponent;
 export const Linking = {
     openURL: (): Promise<void> => Promise.resolve(),
 };
+export const Platform = {
+    OS: 'web' as const,
+    select: <T,>(options: { web?: T; native?: T; default?: T }): T | undefined =>
+        options.web ?? options.default,
+};
 
-export default { Text, View, Pressable, Linking };
+export default { Text, View, Pressable, ActivityIndicator, Linking, Platform };
