@@ -95,7 +95,11 @@ describe('SurveyJS mobile registration parity', () => {
     it('matches the certified registration snapshot', () => {
         const normalized = {
             id: registration.id,
-            version: registration.version,
+            // `version` is asserted exactly by the "in sync with the manifest"
+            // test above. Snapshot a stable sentinel here (when it matches the
+            // manifest) so routine version bumps — every tag/release — don't
+            // churn this inline snapshot, while a real drift still surfaces.
+            version: registration.version === manifest.version ? '<in-sync-with-manifest>' : registration.version,
             pluginApiVersion: registration.pluginApiVersion,
             styles: styles
                 .map((s) => ({
@@ -136,7 +140,7 @@ describe('SurveyJS mobile registration parity', () => {
                 "name": "surveyjs",
               },
             ],
-            "version": "0.2.22",
+            "version": "<in-sync-with-manifest>",
           }
         `);
     });

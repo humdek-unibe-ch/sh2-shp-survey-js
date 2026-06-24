@@ -14,17 +14,22 @@
 #      because the registry serves manifest + raw artifacts and the
 #      host resolves the backend Composer package from the declared
 #      `backend.composer.repository`.
-#   4. If REGISTRY_PUSH_TOKEN is set, checkout the registry repo and
+#   4. If NPM_TOKEN is set, build + publish the read-only mobile
+#      renderer (`@humdek/sh2-shp-survey-js-mobile`) to the public npm
+#      registry. The host mobile build bundles it via plugins-sync, and
+#      the selfhelp-mobile-preview image installs it by version, so the
+#      mobile preview build only succeeds once this package is on npm.
+#   5. If REGISTRY_PUSH_TOKEN is set, checkout the registry repo and
 #      run `node scripts/publish-to-registry.mjs --skip-build --push`
 #      to copy the manifest + artifacts and splice the signed
 #      pluginEntry into registry.json.
-#   5. Build the STANDALONE .shplugin (`--mode standalone`). The
+#   6. Build the STANDALONE .shplugin (`--mode standalone`). The
 #      standalone layout carries `backend/package/` inside the archive
 #      so the host can install via a Composer path repository — no
 #      Packagist / git fetch required for the plugin's own code. This
 #      is the asset humans download from the GitHub Release for
 #      offline / drag-and-drop installs.
-#   6. Always: upload BOTH archives (connected + standalone) as
+#   7. Always: upload BOTH archives (connected + standalone) as
 #      workflow artifacts and as GitHub Release assets.
 #
 # Required secrets:
@@ -38,6 +43,11 @@
 #                                    builds the .shplugin and publishes
 #                                    the GH Release but skips the
 #                                    registry update.
+#   NPM_TOKEN                        npm automation token with publish
+#                                    rights on the @humdek scope. Without
+#                                    it the mobile renderer is NOT pushed
+#                                    to npm and the selfhelp-mobile-preview
+#                                    build cannot bundle this plugin.
 
 name: publish-to-registry
 
@@ -62,6 +72,7 @@ jobs:
         runs-on: ubuntu-latest
         env:
             REGISTRY_PUSH_TOKEN: ${{ secrets.REGISTRY_PUSH_TOKEN }}
+            NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         steps:
             - name: Check signing secrets are configured
               env:
@@ -120,6 +131,32 @@ jobs:
               run: |
                   npm install --legacy-peer-deps --no-audit --no-fund
                   npm run build:runtime
+
+            # Publish the read-only mobile renderer to the public npm registry.
+            # The host mobile build bundles it: `scripts/plugins-sync.mjs` adds
+            # `@humdek/sh2-shp-survey-js-mobile@<version>` to the mobile app's
+            # dependencies and `npm install` resolves it from npm (the
+            # selfhelp-mobile-preview image's web-preview/preview-plugins.json
+            # pins the same version). Gated on the NPM_TOKEN secret: without it
+            # the step is skipped with a notice and the .shplugin / registry
+            # release still completes (but the mobile preview build cannot
+            # install this package — set NPM_TOKEN at the org level to enable).
+            - name: Publish mobile renderer to npm
+              if: ${{ env.NPM_TOKEN != '' }}
+              working-directory: plugin/mobile
+              run: |
+                  set -euo pipefail
+                  npm install --legacy-peer-deps --no-audit --no-fund
+                  npm run build
+                  npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+                  PKG="$(node -p "require('./package.json').name")"
+                  VER="$(node -p "require('./package.json').version")"
+                  if npm view "${PKG}@${VER}" version > /dev/null 2>&1; then
+                      echo "::notice::${PKG}@${VER} is already on npm; skipping publish."
+                  else
+                      npm publish --access public
+                      echo "::notice::Published ${PKG}@${VER} to npm."
+                  fi
 
             - name: Build connected .shplugin (registry publish)
               working-directory: plugin
@@ -242,4 +279,13 @@ jobs:
                       echo "auto-publishing."
                   else
                       echo "Registry push token is set. Plugin published to sh2-plugin-registry."
+                  fi
+                  if [ -z "$NPM_TOKEN" ]; then
+                      echo "::warning::NPM_TOKEN secret is not set — the mobile renderer"
+                      echo "(@humdek/sh2-shp-survey-js-mobile) was NOT published to npm. The"
+                      echo "selfhelp-mobile-preview build (sh-selfhelp_mobile) will fail with an"
+                      echo "npm E404 until this package is on npm. Add an npm automation token"
+                      echo "with publish rights on the @humdek scope as NPM_TOKEN."
+                  else
+                      echo "NPM_TOKEN is set. Mobile renderer published/ensured on npm."
                   fi

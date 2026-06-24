@@ -216,29 +216,47 @@ that pin a specific range can still install them. The host's
 `VersionResolver` picks the highest version that matches the host's
 compatibility range.
 
-## Publishing the npm packages (optional)
+## Publishing the npm packages
 
 The `.shplugin` carries the runtime ESM bundle directly (see
 [`shplugin-archive.md`](../../../../sh-selfhelp_backend/docs/plugins/shplugin-archive.md)),
-so a registry-only release does not need an npm publish. If you want
-the frontend / mobile packages on the public npm registry too, run
-`npm publish --access public` from `frontend/` and `mobile/` after the
-registry push:
+so the **frontend** runtime does not need an npm publish.
+
+The **mobile** renderer is different: the host mobile build bundles it
+at build time. `sh-selfhelp_mobile/scripts/plugins-sync.mjs` adds
+`@humdek/sh2-shp-survey-js-mobile@<version>` to the mobile app's
+`dependencies` and `npm install` resolves it from the public npm
+registry (the `selfhelp-mobile-preview` image pins the same version in
+`web-preview/preview-plugins.json`). **The selfhelp-mobile-preview build
+fails with an npm `E404` until this package is on npm.**
+
+CI handles the mobile publish automatically: when the `NPM_TOKEN`
+secret is set, `publish-to-registry.yml` builds and runs
+`npm publish --access public` for `mobile/` on every `v*` tag (it is a
+no-op if that exact version is already on npm). Set `NPM_TOKEN` to an
+npm automation token with publish rights on the `@humdek` scope, at the
+org level so every plugin repo inherits it.
+
+To publish manually instead (or to also push the optional frontend
+package), run from the plugin root after the registry push:
 
 ```bash
-(cd frontend && npm publish --access public)
-(cd mobile   && npm publish --access public)
+(cd mobile   && npm install --legacy-peer-deps && npm run build && npm publish --access public)
+(cd frontend && npm publish --access public) # optional; not consumed by any build
 ```
 
 That gives consumers:
 
-- `@humdek/sh2-shp-survey-js@<version>` on the public npm registry
-- `@humdek/sh2-shp-survey-js-mobile@<version>` on the public npm registry
+- `@humdek/sh2-shp-survey-js-mobile@<version>` on the public npm registry (required by the mobile build)
+- `@humdek/sh2-shp-survey-js@<version>` on the public npm registry (optional)
 
-> **Where to keep credentials?** Run `npm login` once on the
-> developer machine, then `npm publish` picks up the existing session.
-> For CI, store an npm automation token as the workflow secret
-> `NPM_TOKEN` and add a dedicated `npm publish` step.
+> **Release order matters.** Tag the plugin (which publishes the mobile
+> npm package) **before** tagging `sh-selfhelp_mobile` (whose preview
+> image installs that exact version). `@selfhelp/shared` must already be
+> on npm at the version the mobile package builds against.
+>
+> **Where to keep credentials?** Run `npm login` once on the developer
+> machine for manual publishes; for CI use the `NPM_TOKEN` secret above.
 
 ## Publishing the backend Composer package (optional)
 
