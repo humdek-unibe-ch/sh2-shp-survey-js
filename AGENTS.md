@@ -250,8 +250,9 @@ Every plugin MUST ship the following files under `scripts/`:
   default, `--symlink` fast-path optional).
 - `scripts/publish-to-registry.mjs` — single cross-platform Node
   script that builds, signs, copies into the sibling
-  `sh2-plugin-registry`, splices `registry.json`, commits, and
-  optionally pushes / creates a GitHub Release.
+  `sh2-plugin-registry`, creates the signed per-version plugin release,
+  adds its multi-version ref to `registry.json`, commits, and optionally
+  pushes / creates a GitHub Release.
 - `.github/workflows/publish-to-registry.yml` — CI workflow that
   runs `node scripts/publish-to-registry.mjs` on `v*` tag pushes
   and on manual dispatch.
@@ -270,26 +271,22 @@ scripts auto-load `<plugin-root>/.env` via Node 22's
 
 ### What the publish script does
 
-1. Reads `plugin.json` for `id`, `version`, `name`, `description`,
-   `homepage`, and `security.trustLevel`.
-2. Validates the manifest against the vendored schema at
-   `docs/plugins/plugin-manifest.schema.json` (best-effort — passes
-   silently if `ajv-cli` is not installed).
-3. Builds the frontend + mobile npm packages (skippable with
-   `--skip-build`).
-4. Copies `plugin.json` to
-   `<registry>/manifests/<plugin-id>-<version>.json`.
-5. Updates `<registry>/registry.json`:
-   - Removes any pre-existing entry with the same `id`.
-   - Inserts a new entry with the current version + channel +
-     trust level + `manifestUrl`.
-   - Re-sorts entries by `id`.
-   - Updates `publishedAt` to the current UTC timestamp.
-6. Commits the change in the registry repo with a
-   `publish: <id>@<version> (<channel>/<trust>)` message.
-7. Optional `--push` flag pushes to the registry's `origin`.
-8. Optional `--publish-npm` flag also runs `npm publish` on the
-   frontend + mobile packages.
+1. Reads `plugin.json` and builds the signed connected `.shplugin`
+   (skippable with `--skip-build`).
+2. Resolves the registry base URL from the CLI/env or `registry.json`.
+3. Copies `plugin.json` to
+   `<registry>/manifests/<plugin-id>-<version>.json` and the archive to
+   `<registry>/artifacts/<plugin-id>-<version>.shplugin`.
+4. Calls the registry's `build-plugin-release.mjs` and
+   `sign-release.mjs` helpers to create
+   `releases/plugins/<plugin-id>-<version>.json`.
+5. Adds `{id, version, channel, releaseUrl}` to `registry.json`,
+   replacing only the same id+version while retaining all other
+   published versions; then refreshes `publishedAt` and sorts by id/version.
+6. Commits the registry changes with
+   `publish: <id>@<version> (<channel>)`.
+7. Optional `--push` pushes the registry commit; optional `--release`
+   creates the plugin GitHub Release. The script does not publish npm packages.
 
 ### Sibling-folder convention
 
@@ -325,8 +322,9 @@ When adding a new plugin to the registry, run
 `registry.json` or hand-copy manifests, because the script enforces:
 
 - Schema validation.
-- Consistent sorting.
+- Signed per-version release documents and archive checksums.
+- Multi-version ref replacement (same id+version only) and consistent sorting.
 - Atomic registry commits with a uniform message format.
 - Updated `publishedAt`.
 - Single canonical signed payload reused for both the `.shplugin`
-  and the registry entry.
+  and host verification.
