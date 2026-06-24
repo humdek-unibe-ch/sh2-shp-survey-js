@@ -122,6 +122,79 @@ final class SurveyResponseServiceTest extends TestCase
         self::assertCount(2, $persistedLinks, 'one SurveyAnswerLink per normalized answer');
     }
 
+    public function testMobileOriginSubmitStoresRealRunAndIgnoresPreviewHints(): void
+    {
+        // The mobile WebView renderer submits through the SAME public endpoint
+        // + service path as the web frontend (via the native host-services
+        // bridge). `submit()` has no origin/preview/test parameter, so a
+        // mobile-origin finished submission must store a REAL completed run
+        // identically to web — even when the client embeds preview-like hints
+        // in `enforce`. This guards against anyone adding a mobile/preview
+        // short-circuit that would make CMS mobile preview stop persisting.
+        [$survey] = $this->buildSurveyWithVersion();
+
+        $runs = $this->createMock(SurveyRunRepository::class);
+        $runs->method('findOneByResponseId')->willReturn(null);
+        // A mobile client may send a once-per-user enforce; with no prior run
+        // it must NOT block the first submission.
+        $runs->method('findLatestCompletedForUser')->willReturn(null);
+        $runs->method('findLatestCompletedForVisitor')->willReturn(null);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('wrapInTransaction')->willReturnCallback(
+            static fn (callable $cb) => $cb(),
+        );
+
+        $writerCalled = false;
+        $writerUserId = -1;
+        $writer = new class ($writerCalled, $writerUserId) implements DataTableWriterInterface {
+            public function __construct(
+                public bool &$called,
+                public ?int &$userIdSeen,
+            ) {
+            }
+
+            public function writeRow(
+                Survey $survey,
+                SurveyVersion $version,
+                array $cells,
+                ?int $userId,
+                string $responseId,
+                ?int $existingDataRowId = null,
+            ): DataTableWriteResult {
+                $this->called = true;
+                $this->userIdSeen = $userId;
+                return new DataTableWriteResult(8888);
+            }
+        };
+
+        $realtime = $this->createMock(SurveyJsRealtimePublisher::class);
+        $realtime->expects(self::once())->method('surveyResponseSubmitted');
+
+        $service = $this->buildService(em: $em, realtime: $realtime, writer: $writer, runs: $runs);
+
+        $enforce = [
+            'oncePerUser' => true,
+            'allowAnonymous' => true,
+            'redirectAtEnd' => 'thank-you',
+            // Unknown "preview-like" hints a client could embed — must be ignored.
+            'preview' => true,
+            'test' => true,
+            'clientType' => 'mobile',
+            'progress' => ['topic' => 'parity'],
+        ];
+
+        $run = $service->submit($survey, ['name' => 'Ada', 'agree' => true], 7, 'visitor-self', $enforce);
+
+        self::assertSame(SurveyRun::STATUS_COMPLETED, $run->getStatus(), 'a mobile-origin finished submission must complete a REAL run (no preview branch)');
+        self::assertSame(8888, $run->getIdDataRow(), 'a real data_tables row must be written for a mobile submit, exactly like web');
+        self::assertNotSame('', $run->getResponseId(), 'a real persisted response id must be generated');
+        self::assertTrue($writerCalled, 'the host data-table writer must run for a mobile submit');
+        self::assertSame(7, $writerUserId, 'the authenticated user id must reach the data-table writer');
+        self::assertSame(2, $run->getProgress()['answered'] ?? null, 'progress.answered reflects the normalized answers');
+        self::assertSame('parity', $run->getProgress()['topic'] ?? null, 'caller-supplied progress metadata is preserved');
+    }
+
     public function testOncePerUserBlocksASecondSubmission(): void
     {
         [$survey, $version] = $this->buildSurveyWithVersion();
