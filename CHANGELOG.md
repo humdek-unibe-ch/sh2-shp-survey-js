@@ -5,6 +5,38 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.2.25] - 2026-06-24
+
+### Added
+- **Interactive mobile SurveyJS renderer (web export) + automated npm
+  publishing.** The mobile package now ships a real runtime, not just a
+  read-only viewer: on the Expo **web** export (react-native-web, which is what
+  the `selfhelp-mobile-preview` image ships) the `surveyjs` style renders the
+  survey with the SurveyJS React library (`survey-core` + `survey-react-ui`) and
+  mirrors the frontend runtime — fetch the published definition, render, save
+  per-page progress, submit, and redirect at the end. On **native** (no DOM) it
+  falls back to the existing read-only viewer + "Open on web". A platform
+  dispatcher (`styles/SurveyJsStyle`) selects the renderer at runtime.
+
+### Changed
+- **Mobile package renamed `@humdek/sh2-shp-survey-js-mobile` →
+  `@selfhelp/sh2-shp-survey-js-mobile`** (the `@selfhelp` npm scope, matching
+  `@selfhelp/shared`) and `plugin.json#mobile.readonly` flipped to `false`.
+- **`plugin.json#mobile.package` / `version` updated** to the new scope/version;
+  the mobile package declares `survey-core` + `survey-react-ui` as runtime
+  dependencies and builds with `tsup` (externalizing react / react-native /
+  `@selfhelp/shared` / the SurveyJS libs).
+
+### Publish note
+- Code-only change (no DB change / migration), so per the SelfHelp plugin SemVer
+  rules this is a **patch** bump. The mobile package is published to npm by the
+  new `publish-mobile.yml` workflow via **npm Trusted Publishing (OIDC)** — the
+  same logic/structure as `@selfhelp/shared` (no stored `NPM_TOKEN`) — on the
+  `v0.2.25` tag. The old `NPM_TOKEN`-gated mobile-publish step in
+  `publish-to-registry.yml` was removed so the two workflows do not double
+  publish.
+
+
 ## [0.2.24] - 2026-06-24
 
 ### Added
