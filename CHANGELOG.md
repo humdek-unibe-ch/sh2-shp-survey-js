@@ -5,6 +5,57 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.3.0] - 2026-06-24
+
+### Added
+- **WebView SurveyJS mobile renderer with full web parity (native + web
+  export).** The mobile package now hosts the **official SurveyJS runtime**
+  (`survey-core` + `survey-react-ui`) inside an isolated, self-contained WebView
+  — `react-native-webview` on native, a sandboxed `<iframe srcDoc>` on the Expo
+  web export — driven by a typed `postMessage` bridge. Mobile renders the same
+  survey JSON as web: same question types, validation, conditional logic,
+  completion, and redirect. Submitting (including from the CMS mobile preview)
+  stores a **real** `SurveyRun` identically to web (the backend has no
+  preview/test branch).
+- **Native host-owned auth/network via `@selfhelp/shared` `MobileHostServices`.**
+  The WebView renders SurveyJS and owns the UI lifecycle but performs **no**
+  authenticated network calls: it emits typed intents (`LOAD_SURVEY` /
+  `SAVE_PROGRESS` / `SUBMIT_SURVEY`) and the native host calls `/published`,
+  `/progress`, `/submit` with the bearer token + single 401-refresh retry +
+  session-expiry handling. The WebView never sees the access token.
+- **Self-contained runtime (no CDN).** The SurveyJS JS + CSS are bundled into a
+  single HTML string (`build:webview` = Vite + `scripts/wrap-webview-html.mjs`),
+  inlined into the published package; the runtime HTML carries a strict CSP
+  (`connect-src 'none'`).
+- New developer doc `docs/developer/mobile-architecture.md` and a rewritten
+  `docs/user/mobile-guide.md` (WebView model + supported/unsupported question
+  matrix).
+
+### Changed
+- **`compatibility.mobile` raised `^0.1.0` → `^0.2.0`** — the mobile renderer
+  contract (`@selfhelp/shared` `MOBILE_RENDERER_VERSION` 0.2.0) now includes the
+  typed host-services bridge. This is the breaking-contract reason for the minor
+  bump (pre-1.0, a `0.x` minor is a breaking change).
+- **`react-native-webview` declared as a mobile `peerDependency`** (the host
+  provides the native module; a plugin npm package cannot autolink native code).
+- Version bumped to `0.3.0` across `plugin.json` (`version`, `mobile.version`,
+  `backend.composer.version`), `composer.json`, `mobile/package.json`, and
+  `mobile/src/index.ts` (`PLUGIN_VERSION`).
+
+### Removed
+- The obsolete native read-only renderer and "open on web" normal path. There
+  are no longer two competing SurveyJS renderers; "Open on web" remains only for
+  a missing/incompatible mobile package.
+
+### Publish note
+- No DB change / migration. The bump is **minor** because it raises the mobile
+  compatibility floor (a breaking contract change pre-1.0), not because of a
+  schema change. Tag the plugin (publishes `@selfhelp/sh2-shp-survey-js-mobile`)
+  **before** tagging `sh-selfhelp_mobile` (whose `selfhelp-mobile-preview` image
+  bundles that version and must also carry `react-native-webview`). `@selfhelp/shared`
+  must already be on npm at the version the mobile package builds against.
+
+
 ## [0.2.25] - 2026-06-24
 
 ### Added
