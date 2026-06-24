@@ -9,4 +9,4 @@ Source of truth: Observable behavior of the current plugin build (admin Survey C
 Feature walkthroughs for people who create and run surveys. See [../README.md](../README.md) for the full docs map.
 
 - [user-guide.md](user-guide.md) - Create surveys, publish, restore versions, embed, and configure.
-- [mobile-guide.md](mobile-guide.md) - What the mobile renderer supports today and the "Open on web" fallback.
+- [mobile-guide.md](mobile-guide.md) - The mobile WebView renderer (full submit/validation/redirect parity with web), supported/unsupported question matrix, and the "Open on web" fallback (only for a missing/incompatible package).

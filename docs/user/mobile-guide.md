@@ -1,123 +1,137 @@
+<!--
+SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # SurveyJS Plugin — Mobile Guide
 
 Audience: Non-technical users, admins, and operators.
 Status: active.
-Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-03.
-Source of truth: Observable product behavior of the current build.
+Applies to: SelfHelp2 SurveyJS plugin (`sh2-shp-survey-js`), mobile renderer `@selfhelp/sh2-shp-survey-js-mobile` >= 0.3.0.
+Last verified: 2026-06-24.
+Source of truth: Observable product behaviour of the current build (`mobile/src/`, the WebView runtime, and the host mobile shell).
 
-This guide covers what end-users and operators can expect from the
-SurveyJS plugin on the SelfHelp mobile app, plus the rough roadmap
-for the missing pieces.
+This guide explains what the SurveyJS plugin does on the SelfHelp
+mobile app and the CMS **mobile preview**, and how to configure it.
 
-## What ships today (v1)
+## What ships today
 
-| Capability                          | Web (Mantine) | Mobile (Expo) |
-|-------------------------------------|---------------|---------------|
-| View a published survey             | ✅            | ✅ (read-only)|
-| Submit answers                      | ✅            | ❌ (planned)  |
-| See your own previous answers       | ✅            | ✅            |
-| Live "new answer" notifications     | ✅ (Mercure)  | ✅ (Mercure)  |
-| Survey Creator (admin tool)         | ✅            | ❌ (web-only) |
-| Side-by-side version compare        | ✅            | ❌ (web-only) |
-| GDPR erasure UI                     | ✅            | ❌ (web-only) |
-| PDF export                          | ✅            | ❌ (web-only) |
+The mobile renderer hosts the **same official SurveyJS runtime the
+web frontend uses** (`survey-core` + `survey-react-ui`) inside a
+self-contained WebView. There is **no separate native survey UI** —
+mobile renders the exact same survey JSON, so behaviour matches web.
 
-The mobile package (`@humdek/sh2-shp-survey-js-mobile`) is
-intentionally small — it focuses on the read path. Authoring,
-publishing, and analytics stay on the web admin shell.
+| Capability                              | Web (Mantine) | Mobile (WebView) |
+|-----------------------------------------|---------------|------------------|
+| View a published survey                 | ✅            | ✅               |
+| Fill in answers (all question types)    | ✅            | ✅               |
+| Client-side validation                  | ✅            | ✅               |
+| Conditional logic / multi-page          | ✅            | ✅               |
+| **Submit answers** (real response)      | ✅            | ✅               |
+| Autosave / resume a draft               | ✅            | ✅               |
+| Completion screen + redirect            | ✅            | ✅               |
+| Once-per-user / scheduled windows       | ✅            | ✅               |
+| Submit from CMS **mobile preview**      | ✅            | ✅               |
+| Survey Creator (admin tool)             | ✅            | ❌ (web-only)    |
+| Side-by-side version compare            | ✅            | ❌ (web-only)    |
+| GDPR erasure UI                         | ✅            | ❌ (web-only)    |
 
-## How a survey ends up on a mobile screen
+The submit path is identical to web: a mobile submission stores a
+**real** survey response (the backend has no "preview" mode), so the
+CMS mobile preview persists answers exactly like the live app.
+
+## How a survey reaches a mobile screen
 
 ```text
-Admin (web) →   create + publish a survey   →  surveys / survey_versions
-                                                 │
-Frontend page hosts a `surveyjs` section  ───────┤
-                                                 │
-Mobile app pulls the same page               ←───┘
-   via the host's page API (Mercure-aware),
-   spots the `surveyjs` style, and asks the
-   plugin's mobile entry point to render it.
+Admin (web)  →  create + publish a survey  →  surveys / survey_versions
+                                                │
+Frontend page hosts a `surveyjs` section  ──────┤
+                                                │
+Mobile app pulls the same page              ←───┘
+   via the host page API, spots the `surveyjs`
+   style, and renders the plugin's mobile shell.
 ```
 
 The mobile renderer:
 
-1. Reads the section fields (`surveyKeySlug`, `themeCode`,
-   `cssVariables`, etc.) exactly the way the web renderer does.
-2. Fetches the current `survey_versions` JSON.
-3. Walks the definition top-down, projecting each question into a
-   plain React Native primitive. There is **no** SurveyJS JS bundle
-   loaded on mobile — the package ships a hand-rolled renderer so
-   the APK size stays tiny.
-4. Subscribes to `surveys/{surveyId}/responses` via Mercure (using
-   `react-native-sse` under the hood) so admins demoing the app see
-   responses light up in real time.
+1. Reads the same section field (`survey-js` = the published survey
+   key) the web renderer reads.
+2. Loads the self-contained WebView runtime (the official SurveyJS
+   library, bundled inside the package — **no CDN, no network for the
+   runtime itself**).
+3. The WebView asks the native app to load the survey definition,
+   save progress, and submit. **The native app performs every
+   authenticated request** (it owns the access token and token
+   refresh); the WebView never sees your token.
+4. Shows SurveyJS validation, completion, and the configured redirect
+   exactly as on the web.
 
-## Permissions
+## What the operator configures
 
-The mobile renderer honors the same permissions as the web one:
+Mobile reads the **same CMS style fields** as web — there is nothing
+mobile-specific to set. The runtime honours:
 
-- `surveyjs.surveys.view-responses` gates the "responses summary"
-  block; without it the mobile user only sees questions, not their
-  neighbour's answers.
-- `surveyjs.surveys.export-pdf` is web-only for now; the mobile UI
-  doesn't expose it.
+| Section field / runtime option | Mobile behaviour                                   |
+|--------------------------------|----------------------------------------------------|
+| `survey-js` (survey key)       | Selects which published survey to render.           |
+| Redirect at end                | Navigates to the CMS keyword after completion.      |
+| Autosave interval              | Saves a draft so a participant can resume.           |
+| Once per user / once per schedule | Server-enforced; mobile shows the locked state.  |
+| Start / end time (schedule)    | Server-enforced; mobile shows "not active" labels.  |
+| Completion / not-active labels | Shown by the WebView runtime.                       |
 
-## Mantine vs HeroUI
+## Supported / unsupported question types
 
-The web frontend uses **Mantine v7** to keep the Survey Creator
-visually integrated with the rest of the admin shell. The mobile
-side intentionally does **not** depend on a specific UI library —
-the package only uses React Native primitives (`<Text/>`, `<View/>`,
-`<Pressable/>`, `<ScrollView/>`).
+Because mobile runs the official SurveyJS library, **every standard
+SurveyJS question type works** (text, comment, radio/checkbox/dropdown,
+boolean, rating, ranking, matrix family, image picker, expression,
+HTML, panels, dynamic panels, conditional logic, etc.).
 
-When the host mobile shell adopts **HeroUI** (planned), the plugin
-will follow, and the renderer will be ported to HeroUI components.
-Until then, mobile styling is purposely sparse — the upgrade has to
-remain mechanical.
+The plugin's custom question types and a few platform features have
+documented limitations inside a WebView:
 
-> **TODO** (`todo-mobile-heroui`): port the readonly renderer to
-> HeroUI primitives once the host mobile shell announces the
-> migration. Track progress against this guide's section.
+| Question type / feature       | Mobile (WebView) status                                  |
+|-------------------------------|----------------------------------------------------------|
+| All standard SurveyJS types   | ✅ Full parity with web.                                  |
+| Rich text (custom)            | ✅ Renders; editing parity follows the web adapter.       |
+| File upload                   | ⚠️ Deferred — file/camera/microphone permission bridging is not wired yet; avoid required file questions on mobile for now. |
+| Microphone / audio capture    | ⚠️ Deferred — same permission limitation as file upload.  |
+| GPX / map tiles               | ⚠️ May be limited by the WebView content-security policy (tiles load over the network). |
+| PDF export of a response      | ❌ Web-only (admin/operator feature).                     |
 
-## Configuration the operator should know about
-
-| Section field        | Mobile behaviour                                     |
-|----------------------|------------------------------------------------------|
-| `mode`               | Always treated as `readonly` on mobile.              |
-| `themeCode`          | Ignored; the mobile renderer uses platform defaults. |
-| `richTextEditor`     | Ignored.                                              |
-| `cssVariables`       | Honoured for color overrides only (background, fg).  |
-| `analyticsTopicKey`  | Honoured; Mercure subscribes to the same topic.       |
-| `redirectOnSubmit`   | N/A (no submit on mobile yet).                       |
+Unsupported items degrade **inside the same survey** with a clear
+message; they never bounce the participant out to a browser. "Open on
+web" only appears when the mobile renderer package is **missing or
+incompatible** with the installed plugin — never for an individual
+question type.
 
 ## Troubleshooting
 
-### "The survey renders blank on mobile"
+### "The survey shows 'Open on web' instead of rendering"
 
-- Make sure the survey has a current version. Mobile reads the same
-  `surveys.id_current_survey_versions` pointer as the web client.
-- Verify the device can reach Mercure. The renderer falls back to a
-  cached snapshot on first load, but Mercure-driven updates require
-  the SSE connection.
+The installed plugin version needs a compatible mobile renderer in the
+app build. Rebuild the mobile app / preview image after the plugin is
+updated, or check that `compatibility.mobile` in the plugin matches the
+app's mobile renderer version (see the developer
+[mobile architecture](../developer/mobile-architecture.md) doc).
 
-### "Notifications show up on web but not on mobile"
+### "The survey renders blank"
 
-- React Native's polyfill for SSE differs per platform. The mobile
-  package picks `react-native-sse` on iOS / Android and falls back
-  to the browser `EventSource` on Expo Web. Run
-  `npx expo start --clear` after upgrading the plugin if the
-  transport seems stuck.
+- Confirm the survey has a current published version.
+- Confirm the device can reach the backend — the **native app** loads
+  the definition and submits; if the app is signed out you will see a
+  "session expired" prompt with a retry.
 
-### "I want to submit answers from mobile right now"
+### "My session expired mid-survey"
 
-- Open the mobile section in the device's external browser. The
-  same URL works as the web client (the host's frontend renders a
-  full Survey Creator runtime).
+Long surveys are safe: token refresh lives in the native app, not the
+WebView. If your session truly expires, the shell shows a session
+notice and lets you retry after re-authenticating; your in-progress
+answers are kept by autosave when enabled.
 
 ## Related
 
 - [User guide](./user-guide.md)
+- [Mobile architecture (developer)](../developer/mobile-architecture.md)
 - [Plugin architecture](../developer/architecture.md)
-- [Host realtime + no-polling policy](../../../../sh-selfhelp_backend/docs/plugins/realtime-and-no-polling.md)
-- [HeroUI mobile migration plan](https://github.com/humdek-unibe-ch/sh-selfhelp_mobile/issues) (when filed)
+- [Publishing guide](../operations/publish.md)

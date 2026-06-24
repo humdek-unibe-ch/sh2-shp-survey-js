@@ -17,9 +17,11 @@ Navigation entrypoint for the SurveyJS plugin documentation, organized by audien
 | Need | Read |
 | --- | --- |
 | Create, publish, restore, embed, and configure surveys | [user/user-guide.md](user/user-guide.md) |
+| Run surveys on the mobile app / CMS mobile preview | [user/mobile-guide.md](user/mobile-guide.md) |
 | Install the plugin into a SelfHelp host | [operations/install.md](operations/install.md) |
 | Publish a plugin release | [operations/publish.md](operations/publish.md) |
 | Understand plugin internals | [developer/architecture.md](developer/architecture.md) |
+| Understand the mobile WebView renderer | [developer/mobile-architecture.md](developer/mobile-architecture.md) |
 | The exact `plugin.json` contract | [reference/manifest.md](reference/manifest.md) |
 
 ## Documentation map

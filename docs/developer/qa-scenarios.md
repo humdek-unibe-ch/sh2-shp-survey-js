@@ -3,7 +3,7 @@
 Audience: Developers and technical operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-03.
+Last verified: 2026-06-24.
 Source of truth: Runtime code, configuration, and tests in this repository.
 
 This document captures the manual QA scenarios that the legacy
@@ -17,6 +17,10 @@ Automated coverage:
 - Backend static analysis: `cd backend && composer phpstan`.
 - Frontend type-check: `cd frontend && npm run typecheck`.
 - Frontend unit tests: `cd frontend && npm test` (requires `npm install --save-dev vitest jsdom`).
+- Mobile package: `cd mobile && npm run typecheck && npm test` (vitest) — covers the
+  typed bridge contract, the runtime controller driven by real `survey-core`, the
+  host-services API client, registration parity, and the WebView navigation
+  security guard.
 
 ## 1. Submission lifecycle
 
@@ -225,3 +229,93 @@ Automated coverage:
 1. Open the Responses tab.
 2. Submit a response in another browser.
 3. The list refreshes without polling.
+
+## 7. Mobile (WebView renderer)
+
+The mobile renderer hosts the official SurveyJS runtime inside a
+self-contained WebView (`react-native-webview` on native, an iframe on
+the Expo web export) driven by the typed host-services bridge. Each
+behaviour leg below is also covered by an automated test, listed under
+the scenario.
+
+### 7.1 REQUIRED — CMS mobile-preview acceptance smoke (release gate)
+
+This is the gating acceptance for every mobile renderer release. Run it
+in the CMS mobile preview (the `selfhelp-mobile-preview` image bundling
+`@selfhelp/sh2-shp-survey-js-mobile` at the published version) after the
+package is on npm and the preview image is rebuilt.
+
+Preconditions:
+
+- A published survey on a page hosting a `surveyjs` section, with a
+  required question and a `redirect at end` keyword configured.
+- The preview snapshot advertises `mobileRendererVersion: 0.2.0` and the
+  SurveyJS entry (see `web-preview/preview-plugins.json`).
+
+Steps + expected behaviour:
+
+1. Open the page in CMS mobile preview. The survey renders inside the
+   WebView (NOT the "Open on web" card).
+2. Click _Complete_ with the required question empty → SurveyJS shows a
+   validation error and does **not** submit.
+3. Fill every required question and click _Complete_.
+4. A **real** `survey_runs` row is created (`status = completed`,
+   non-null `completed_at`) and answers materialise in the host
+   `data_tables` row — identical to a web submission (there is no
+   preview/test branch on the backend).
+5. The SurveyJS completion screen shows.
+6. The configured redirect is followed.
+
+Automated coverage of each leg (runs in CI, no live stack):
+
+- Fill → validate-gate → completion → `SUBMIT_SURVEY` intent →
+  `SUBMIT_RESULT` → `REQUEST_REDIRECT`:
+  `mobile/__tests__/runtime/controller.test.ts` (drives the real
+  `survey-core` model headlessly).
+- `SUBMIT_SURVEY` → native host → `POST .../submit` (correct route,
+  envelope unwrap, session-expiry mapping):
+  `mobile/__tests__/api/hostApi.test.ts`.
+- `/submit` stores a real `SurveyRun` regardless of origin / preview
+  hints: `backend/tests/Service/SurveyResponseServiceTest.php`
+  (`testMobileOriginSubmitStoresRealRunAndIgnoresPreviewHints`).
+- The preview snapshot bundles SurveyJS at the renderer contract:
+  `sh-selfhelp_mobile/__tests__/unit/pluginHostServices.test.mjs`.
+
+The live run remains required because only an end-to-end CMS preview
+exercises the published npm package + rebuilt image + real browser
+WebView together.
+
+### 7.2 WebView security
+
+1. The WebView only loads the bundled self-contained runtime document;
+   any attempt to navigate it to an external/remote URL is blocked
+   (`onShouldStartLoadWithRequest` → `isAllowedWebViewUrl`). The native
+   transport scopes `originWhitelist` to `about:blank` (not `*`),
+   disables DOM storage, and disables multiple windows; the web-export
+   iframe is sandboxed and the runtime HTML carries a strict CSP
+   (`connect-src 'none'`).
+   - Automated: `mobile/__tests__/security/webviewNavigation.test.ts`.
+2. The bridge accepts only typed messages matching the expected shape;
+   malformed / wrong-source / wrong-direction / hostile payloads are
+   dropped.
+   - Automated: `mobile/__tests__/bridge/messages.test.ts`.
+3. External redirects never happen via WebView navigation — the runtime
+   emits `REQUEST_REDIRECT` and the native host performs the navigation
+   (`Linking.openURL` for external), so an off-origin jump requires
+   native-host action, not WebView self-navigation.
+
+### 7.3 Missing / incompatible package fallback
+
+1. Install a plugin whose `compatibility.mobile` the app's mobile
+   renderer version does not satisfy (or omit the mobile package).
+2. The page renders with the `OpenOnWebFallback` card for the `surveyjs`
+   section (the ONLY legitimate open-on-web case).
+3. Other sections on the page keep rendering natively.
+
+### 7.4 Session expiry mid-survey
+
+1. Start a long survey on the mobile app; let the access token expire.
+2. On save/submit the native host refreshes the token once and retries;
+   the survey continues without losing answers (autosave) when enabled.
+3. If the refresh fails, the shell shows a "session expired" notice and
+   a retry after re-authentication. The WebView never sees the token.

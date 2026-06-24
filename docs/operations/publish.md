@@ -202,14 +202,26 @@ validates but skips the publish step and emits a CI warning.
 
 ## Versioning rules
 
-1. Bump `version` in three places: `plugin.json`,
-   `frontend/package.json`, `mobile/package.json`. All three must
-   agree — the publish script reads from `plugin.json` and the host
-   verifies the published npm packages match.
+1. Bump `version` so every place agrees — the publish script reads from
+   `plugin.json` and the host verifies the published packages match:
+   - `plugin.json` (`version`, `mobile.version`, `backend.composer.version`),
+   - `composer.json` (`version` — must equal `plugin.json#version`),
+   - `frontend/package.json`,
+   - `mobile/package.json`,
+   - `mobile/src/index.ts` (`PLUGIN_VERSION`).
 2. Update `CHANGELOG.md`.
-3. Run the local checks (`vendor/bin/phpstan analyse -c backend/phpstan.neon.dist --memory-limit=1G`, `npm run typecheck`).
+3. Run the local checks (`vendor/bin/phpstan analyse -c backend/phpstan.neon.dist --memory-limit=1G`, and in `mobile/`: `npm run typecheck` + `npm test` + `npm run build`).
 4. Commit, tag (`git tag vX.Y.Z`), and push the tag.
 5. CI takes over from there.
+
+### Mobile compatibility axis
+
+The mobile renderer is gated by the mobile renderer contract
+(`@selfhelp/shared` `MOBILE_RENDERER_VERSION`). When the mobile renderer
+contract changes, raise `plugin.json#compatibility.mobile` to the first
+shared version that ships the feature (currently `^0.2.0`, the typed
+host-services bridge) and bump the host preview snapshot accordingly (see
+"Bundling into the mobile preview" below).
 
 Older versions of the same plugin stay in `registry.json` so hosts
 that pin a specific range can still install them. The host's
@@ -224,17 +236,30 @@ so the **frontend** runtime does not need an npm publish.
 
 The **mobile** renderer is different: the host mobile build bundles it
 at build time. `sh-selfhelp_mobile/scripts/plugins-sync.mjs` adds
-`@humdek/sh2-shp-survey-js-mobile@<version>` to the mobile app's
+`@selfhelp/sh2-shp-survey-js-mobile@<version>` to the mobile app's
 `dependencies` and `npm install` resolves it from the public npm
 registry (the `selfhelp-mobile-preview` image pins the same version in
 `web-preview/preview-plugins.json`). **The selfhelp-mobile-preview build
 fails with an npm `E404` until this package is on npm.**
 
+The mobile package hosts the official SurveyJS runtime inside a
+self-contained WebView, so its build first bundles that runtime:
+`npm run build` runs `build:webview` (Vite + `scripts/wrap-webview-html.mjs`,
+which inlines SurveyJS JS/CSS into `src/webview/generated/runtimeHtml.ts`)
+**before** `tsup`. Never publish without running the full `npm run build`,
+or the package ships only the tiny placeholder runtime.
+
+The mobile package also declares `react-native-webview` as a
+**peerDependency** (the host provides the native module — a plugin npm
+package cannot autolink native code). The host
+(`sh-selfhelp_mobile`) and the `selfhelp-mobile-preview` image must have
+`react-native-webview` installed; the host already does (Expo-pinned).
+
 CI handles the mobile publish automatically: when the `NPM_TOKEN`
 secret is set, `publish-to-registry.yml` builds and runs
 `npm publish --access public` for `mobile/` on every `v*` tag (it is a
 no-op if that exact version is already on npm). Set `NPM_TOKEN` to an
-npm automation token with publish rights on the `@humdek` scope, at the
+npm automation token with publish rights on the `@selfhelp` scope, at the
 org level so every plugin repo inherits it.
 
 To publish manually instead (or to also push the optional frontend
@@ -247,13 +272,41 @@ package), run from the plugin root after the registry push:
 
 That gives consumers:
 
-- `@humdek/sh2-shp-survey-js-mobile@<version>` on the public npm registry (required by the mobile build)
-- `@humdek/sh2-shp-survey-js@<version>` on the public npm registry (optional)
+- `@selfhelp/sh2-shp-survey-js-mobile@<version>` on the public npm registry (required by the mobile build)
+- `@selfhelp/sh2-shp-survey-js@<version>` on the public npm registry (optional)
 
-> **Release order matters.** Tag the plugin (which publishes the mobile
-> npm package) **before** tagging `sh-selfhelp_mobile` (whose preview
-> image installs that exact version). `@selfhelp/shared` must already be
-> on npm at the version the mobile package builds against.
+> **Release order matters.** The mobile renderer depends on
+> `@selfhelp/shared` (the host-services bridge). Publish in this order:
+>
+> 1. **Publish `@selfhelp/shared`** at the version the mobile package
+>    builds against (currently `^1.16.0`, which adds
+>    `MOBILE_RENDERER_VERSION` 0.2.0). It must be on npm first.
+> 2. **Regenerate the mobile lock**: in `mobile/`, run `npm install` so
+>    `mobile/package-lock.json` resolves the new `@selfhelp/shared`
+>    (and `react-native-webview`) versions, then commit it. CI uses
+>    `npm ci`, which **fails** if the lock is out of sync with
+>    `mobile/package.json` — this is the most common first-release
+>    failure.
+> 3. **Tag the plugin** (`git tag vX.Y.Z`), which publishes the mobile
+>    npm package via `publish-mobile.yml` (npm Trusted Publishing / OIDC,
+>    no stored token).
+> 4. **Tag `sh-selfhelp_mobile`** (whose preview image installs that
+>    exact version and must also carry `react-native-webview`).
+
+### Bundling into the mobile preview
+
+After the mobile package is on npm, make the CMS mobile preview render
+the survey natively (instead of falling back to "Open on web"):
+
+1. In `sh-selfhelp_mobile/web-preview/preview-plugins.json`, set
+   `mobileRendererVersion` to the shared `MOBILE_RENDERER_VERSION`
+   (`0.2.0`) and add/update the SurveyJS entry with the published
+   `version` + `mobilePackageVersion`.
+2. Tag `sh-selfhelp_mobile` so the `selfhelp-mobile-preview` image
+   rebuilds, bundling `@selfhelp/sh2-shp-survey-js-mobile` at that
+   version (it must also carry `react-native-webview`).
+3. Verify in CMS mobile preview: fill → validate → submit → a real
+   `SurveyRun` is created → completion shown → redirect handled.
 >
 > **Where to keep credentials?** Run `npm login` once on the developer
 > machine for manual publishes; for CI use the `NPM_TOKEN` secret above.

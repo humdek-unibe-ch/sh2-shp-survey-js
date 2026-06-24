@@ -76,9 +76,12 @@ sh2-shp-survey-js/
 │   ├── src/admin/                   Creator, Responses, Dashboard, Settings pages
 │   ├── src/custom-questions/        rich-text / gpx / video custom question types
 │   └── src/theme/                   Mantine -> SurveyJS theme bridge
-└── mobile/                          npm package (@humdek/sh2-shp-survey-js-mobile, v1 readonly)
+└── mobile/                          npm package (@selfhelp/sh2-shp-survey-js-mobile, WebView renderer)
     ├── package.json
-    └── src/index.ts                 Exports `registerMobile`
+    ├── src/index.ts                 Exports `registerMobile`
+    ├── src/styles/                  RN shell + native/web WebView transports
+    ├── src/runtime/                 DOM-free SurveyJS lifecycle controller + helpers
+    └── src/webview/                 self-contained SurveyJS WebView runtime (built)
 ```
 
 ## Installation — pick one

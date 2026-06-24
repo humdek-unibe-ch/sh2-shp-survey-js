@@ -296,22 +296,18 @@ page. The plugin's UI gates every action on these — for example, the
 
 ## 11. Mobile experience
 
-The mobile package (`@humdek/sh2-shp-survey-js-mobile`) ships a
-**readonly** renderer for now. Mobile users can:
+The mobile package (`@selfhelp/sh2-shp-survey-js-mobile`) hosts the
+**official SurveyJS runtime** inside a self-contained WebView, so the
+mobile app and CMS mobile preview have **full parity with web**:
+mobile users fill in every question type, get the same validation and
+conditional logic, **submit a real response**, see the completion
+screen, and follow the configured redirect. Submitting from the CMS
+mobile preview stores a real response exactly like web preview.
 
-- Open a section that hosts a `surveyjs` style and read the
-  questions + their previous answers.
-- See the same Mercure-driven "new answer" notification flow as the
-  web client.
-
-Editing / submitting on mobile is on the roadmap (the planned mobile
-UI will be HeroUI-driven, parallel to Mantine on web). For now,
-mobile clients submit via the web client at `/surveys/<slug>/run`.
-
-> **Plugin author note**: mobile-side UI primitives are scheduled to
-> migrate to **HeroUI** once the host's mobile shell adopts it. Until
-> then, mobile-only styling for any plugin (including this one)
-> should stay deliberately minimal so the upgrade is mechanical.
+See the [Mobile guide](./mobile-guide.md) for the supported/unsupported
+question matrix and configuration, and the
+[Mobile architecture](../developer/mobile-architecture.md) for the
+WebView + typed host-services bridge design.
 
 ---
 

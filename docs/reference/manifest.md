@@ -26,7 +26,7 @@ It declares a conflict with the legacy `sh-shp-survey_js` plugin (replaced by th
 
 - Backend bundle: `Humdek\SurveyJsBundle\HumdekSurveyJsBundle`; migrations namespace `Humdek\SurveyJsBundle\Migrations`; Composer package `humdek/sh2-shp-survey-js`.
 - Frontend runtime: `dist/plugin.esm.js` + `dist/plugin.css` (format `esm`); dev entrypoint `http://localhost:5174/sh2-shp-survey-js/plugin.esm.js`.
-- Mobile: `@humdek/sh2-shp-survey-js-mobile`, readonly renderer.
+- Mobile: `@selfhelp/sh2-shp-survey-js-mobile`, interactive WebView renderer (`readonly: false`); hosts the official SurveyJS runtime via a typed host-services bridge. Requires `compatibility.mobile` `^0.2.0` and the host-provided `react-native-webview` peer.
 
 ## Security
 
