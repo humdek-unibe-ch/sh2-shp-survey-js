@@ -5,6 +5,32 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.2.24] - 2026-06-24
+
+### Added
+- **Declared `compatibility.mobile: "^0.1.0"` in `plugin.json`.** This is the
+  mobile-renderer-contract range (mirrors `@selfhelp/shared`
+  `MOBILE_RENDERER_VERSION`) that this plugin's mobile package
+  (`@humdek/sh2-shp-survey-js-mobile`) is built against. It is the second axis
+  of the SelfHelp Manager's dual-axis mobile gate (alongside the existing
+  `compatibility.reactNative` / `compatibility.expoSdk`): the Manager reads it
+  from the published plugin release descriptor and, for the selected
+  `selfhelp-mobile-preview` image, decides whether this plugin renders
+  **natively** (bundled + contract satisfied), **warns** (contract satisfied but
+  not baked into the image, or a bundled-version drift — falls back to
+  open-on-web), or **blocks** (the image's `mobileRendererVersion` does not
+  satisfy the declared range). Web-only plugins omit the field and always
+  open-on-web in the preview.
+
+### Publish note
+- No DB change accompanies this metadata addition, so per the SelfHelp plugin
+  SemVer rules the next publish is a **patch** bump. The registry release
+  descriptor is updated automatically on the `v*` tag — `build-plugin-release.mjs`
+  already maps manifest `compatibility.mobile` → `release.compatibility.mobile`
+  (pruned when absent), so no registry-side change is required to surface the new
+  axis.
+
+
 ## [0.2.23] - 2026-06-16
 
 ### Fixed

@@ -2,7 +2,7 @@
     "id": "sh2-shp-survey-js",
     "name": "SurveyJS",
     "description": "SurveyJS v2 integration for SelfHelp CMS. Provides a Mantine-themed Survey Creator (admin), a survey runtime style, and a public submission pipeline that writes into the existing data_tables / data_rows / data_cells. Includes optional GPX, Video, and rich-text custom question types.",
-    "version": "0.2.23",
+    "version": "0.2.24",
     "pluginApiVersion": "0.1.0",
     "author": {
         "name": "Humdek, University of Bern",
@@ -17,7 +17,8 @@
         "node": "^22",
         "react": "^19",
         "reactNative": "^0.83",
-        "expoSdk": "^55"
+        "expoSdk": "^55",
+        "mobile": "^0.1.0"
     },
     "dependencies": [],
     "conflicts": [
@@ -32,7 +33,7 @@
         "migrationsNamespace": "Humdek\\SurveyJsBundle\\Migrations",
         "composer": {
             "package": "humdek/sh2-shp-survey-js",
-            "version": "0.2.23",
+            "version": "0.2.24",
             "repository": {
                 "type": "vcs",
                 "url": "https://github.com/humdek-unibe-ch/sh2-shp-survey-js.git"
@@ -49,7 +50,7 @@
     },
     "mobile": {
         "package": "@humdek/sh2-shp-survey-js-mobile",
-        "version": "0.2.23",
+        "version": "0.2.24",
         "readonly": true
     },
     "security": {

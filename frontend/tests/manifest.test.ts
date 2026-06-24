@@ -24,7 +24,12 @@ const manifest = JSON.parse(
     id: string;
     version: string;
     pluginApiVersion: string;
-    compatibility: { selfhelp: string };
+    compatibility: {
+        selfhelp: string;
+        reactNative?: string;
+        expoSdk?: string;
+        mobile?: string;
+    };
     backend: { composer: { version: string } };
     mobile: { version: string };
     security: { trustLevel: string; signing: { required: boolean } };
@@ -96,6 +101,17 @@ describe('SurveyJS plugin.json release contract', () => {
         expect(satisfies('1.0.0', manifest.compatibility.selfhelp)).toBe(true);
         // Below the declared floor still fails.
         expect(satisfies('0.0.9', manifest.compatibility.selfhelp)).toBe(false);
+    });
+
+    it('declares the dual-axis mobile compatibility for the Manager gate', () => {
+        // The SelfHelp Manager gates this plugin's mobile package on BOTH the
+        // platform axes (reactNative / expoSdk) AND the host mobile-renderer
+        // contract (`compatibility.mobile`, mirrors @selfhelp/shared
+        // MOBILE_RENDERER_VERSION = 0.1.0). `build-plugin-release.mjs` maps this
+        // field into the published release descriptor the gate reads.
+        expect(manifest.compatibility.reactNative).toBeTruthy();
+        expect(manifest.compatibility.expoSdk).toBeTruthy();
+        expect(manifest.compatibility.mobile).toBe('^0.1.0');
     });
 
     it('declares owned tables under its reserved data-table prefix', () => {
