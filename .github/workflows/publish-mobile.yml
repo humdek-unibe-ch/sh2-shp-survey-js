@@ -1,0 +1,116 @@
+# SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+# SPDX-License-Identifier: MPL-2.0
+#
+# Automated npm publish for the mobile renderer
+# (@selfhelp/sh2-shp-survey-js-mobile) via npm Trusted Publishing
+# (GitHub OIDC) — the SAME logic + structure as @selfhelp/shared's
+# publish.yml. No npm token is stored in the repo or in GitHub secrets:
+# npm exchanges this workflow's OIDC id-token for a short-lived publish
+# credential, which also produces provenance attestations automatically.
+#
+# Fires on version tag pushes (`v*`), the same tag that drives
+# publish-to-registry.yml — so one `git tag vX.Y.Z` releases the backend
+# .shplugin, the registry entry, AND this mobile package together. The
+# host mobile build (sh-selfhelp_mobile) bundles the package via
+# scripts/plugins-sync.mjs, and the selfhelp-mobile-preview image installs
+# it by version, so the mobile preview build only succeeds once this
+# package is on npm.
+#
+# One-time setup on npmjs.com (Package -> Settings -> Trusted Publisher ->
+# GitHub Actions), done once by a package owner before the first run:
+#   - Organization:   humdek-unibe-ch
+#   - Repository:     sh2-shp-survey-js
+#   - Workflow file:  publish-mobile.yml
+#   - Environment:    (leave blank)
+#
+# NOTE on the FIRST publish: npm can only attach a Trusted Publisher to a
+# package name that already exists. For the very first version, a package
+# owner publishes once manually (npm login + `npm publish` from
+# mobile/), then configures the Trusted Publisher above; every subsequent
+# tagged release publishes automatically through this workflow with no
+# token. (Orgs that have enabled "create new packages via trusted
+# publishing" can skip the manual bootstrap.)
+
+name: publish-mobile
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read      # checkout
+  id-token: write     # required for npm Trusted Publishing (OIDC)
+
+concurrency:
+  group: publish-mobile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, test, and publish the mobile renderer to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # Node 22 ships npm 10.x; npm Trusted Publishing (OIDC) requires
+      # npm >= 11.5.1. Upgrade so `npm publish` performs the OIDC token
+      # exchange instead of expecting a stored auth token.
+      - name: Upgrade npm (OIDC-capable)
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A published artifact must pass the same gate the package supports
+      # before it is built and pushed to npm.
+      - name: Guard tag/package version parity
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag version ($TAG) != mobile package.json version ($PKG). Bump the package or retag."
+            exit 1
+          fi
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # No NODE_AUTH_TOKEN: with `id-token: write` and a configured Trusted
+      # Publisher on npmjs.com, npm authenticates via OIDC and attaches
+      # provenance automatically.
+      #
+      # Idempotent: if this exact version is already on npm (e.g. the one-time
+      # manual bootstrap publish that creates a brand-new package name before a
+      # Trusted Publisher can be attached), skip instead of failing the tag run.
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          PKG="$(node -p "require('./package.json').name")"
+          VER="$(node -p "require('./package.json').version")"
+          if npm view "${PKG}@${VER}" version > /dev/null 2>&1; then
+            echo "::notice::${PKG}@${VER} is already on npm; skipping publish."
+          else
+            npm publish
+            echo "::notice::Published ${PKG}@${VER} to npm."
+          fi
