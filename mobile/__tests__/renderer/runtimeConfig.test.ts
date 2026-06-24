@@ -3,19 +3,25 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * Unit coverage for the interactive mobile runtime's pure helpers — the
- * parts that decide HOW the survey behaves without rendering React:
- *   - `buildRuntimeConfigFromSection` reads the SAME CMS style fields the
- *     web runtime does (redirect, autosave, once-per-*, schedule labels),
- *   - `resolveApiBase` targets the web-preview proxy / host-injected base,
+ * Unit coverage for the mobile runtime's pure helpers — the parts that decide
+ * HOW the survey behaves without rendering React:
+ *   - `buildRuntimeConfigFromSection` reads the SAME CMS style fields the web
+ *     runtime does (redirect, autosave, once-per-*, schedule labels),
+ *   - `buildEnforcePayload` produces the server-revalidated submit contract,
  *   - `isOutsideSchedule` / `stripHtml` back the lifecycle states.
+ *
+ * Auth/network is no longer the renderer's concern (the native host owns it via
+ * `MobileHostServices`), so the old `resolveApiBase` coverage is gone.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { resolveApiBase } from '../../src/api/surveys';
-import { buildRuntimeConfigFromSection, extractFieldString } from '../../src/styles/section';
-import { isOutsideSchedule, stripHtml } from '../../src/styles/SurveyJsRuntimeStyle';
+import { buildEnforcePayload, isOutsideSchedule, newResponseId, stripHtml } from '../../src/runtime/lifecycle';
+import {
+    buildRuntimeConfigFromSection,
+    extractFieldString,
+    extractSurveyId,
+} from '../../src/styles/section';
 
 describe('buildRuntimeConfigFromSection', () => {
     it('reads redirect + per-page save + once-per-user from CMS fields', () => {
@@ -47,19 +53,44 @@ describe('buildRuntimeConfigFromSection', () => {
     });
 });
 
-describe('resolveApiBase', () => {
-    afterEach(() => {
-        delete (globalThis as { __SELFHELP_API_BASE__?: unknown }).__SELFHELP_API_BASE__;
+describe('extractSurveyId', () => {
+    it('reads the survey-js field (string + { content } shapes) and nulls blanks', () => {
+        expect(extractSurveyId({ id: 1, fields: { 'survey-js': 'survey-42' } })).toBe('survey-42');
+        expect(extractSurveyId({ id: 1, fields: { 'survey-js': { content: '  s-7  ' } } })).toBe('s-7');
+        expect(extractSurveyId({ id: 1, fields: { 'survey-js': '   ' } })).toBeNull();
+        expect(extractSurveyId({ id: 1 })).toBeNull();
+    });
+});
+
+describe('buildEnforcePayload', () => {
+    it('mirrors the once-per-user gate + finished progress into the submit contract', () => {
+        const config = buildRuntimeConfigFromSection({
+            id: 3,
+            fields: { once_per_user: '1', allow_anonymous: '0' },
+        });
+        const enforce = buildEnforcePayload(config, 'R_ABC', 2);
+        expect(enforce.oncePerUser).toBe(true);
+        expect(enforce.allowAnonymous).toBe(false);
+        expect(enforce.responseId).toBe('R_ABC');
+        expect(enforce.editMode).toBe(false);
+        expect(enforce.progress).toEqual({ pageNo: 2, triggerType: 'finished' });
     });
 
-    it('prefers a host-injected base and trims trailing slashes', () => {
-        (globalThis as { __SELFHELP_API_BASE__?: unknown }).__SELFHELP_API_BASE__ =
-            'https://cms.example.com/mobile-preview/api/';
-        expect(resolveApiBase()).toBe('https://cms.example.com/mobile-preview/api');
+    it('omits a schedule window when once-per-schedule is off', () => {
+        const config = buildRuntimeConfigFromSection({ id: 4, fields: {} });
+        const enforce = buildEnforcePayload(config, null, 0);
+        expect(enforce.windowStart).toBeNull();
+        expect(enforce.windowEnd).toBeNull();
+        expect(enforce.responseId).toBeUndefined();
     });
+});
 
-    it('returns an empty base in a non-browser context (relative fallback)', () => {
-        expect(resolveApiBase()).toBe('');
+describe('newResponseId', () => {
+    it('produces a unique R_-prefixed id', () => {
+        const a = newResponseId();
+        const b = newResponseId();
+        expect(a).toMatch(/^R_[0-9A-F]{16}$/);
+        expect(a).not.toBe(b);
     });
 });
 
