@@ -16,5 +16,13 @@
         "noUncheckedIndexedAccess": true,
         "types": ["react-native"]
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*"],
+    "comment-exclude": "Platform-glue transports and the WebView bundle are compiled by Vite/Metro/tsup, not this tsc: src/webview/runtime/** (browser bundle, DOM), src/styles/transport/SurveyWebViewWeb.tsx (iframe, DOM), src/styles/transport/SurveyWebViewNative.tsx (react-native-webview JSX types clash with React 19). They share the typed `transport/contract.ts`, which IS checked.",
+    "exclude": [
+        "node_modules",
+        "dist",
+        "src/webview/runtime/**",
+        "src/styles/transport/SurveyWebViewWeb.tsx",
+        "src/styles/transport/SurveyWebViewNative.tsx"
+    ]
 }
