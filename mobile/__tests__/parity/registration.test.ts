@@ -137,7 +137,7 @@ describe('SurveyJS mobile registration parity', () => {
                 "name": "surveyjs",
               },
             ],
-            "version": "0.3.1",
+            "version": "<in-sync-with-manifest>",
           }
         `);
     });
