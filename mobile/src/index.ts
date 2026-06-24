@@ -9,12 +9,14 @@ SPDX-License-Identifier: MPL-2.0
  * (per EAS profile). Exports `registerMobile` which returns the
  * plugin's `IMobilePluginRegistration` — the `surveyjs` style.
  *
- * The style dispatches by platform (`styles/SurveyJsStyle`): the Expo
- * web export (react-native-web) renders the survey INTERACTIVELY with
- * the SurveyJS React library (`survey-core` + `survey-react-ui`) —
- * fetch + render + per-page progress save + submit + redirect, mirroring
- * the web frontend runtime. On native (no DOM) it falls back to the
- * read-only viewer + "Open on web".
+ * The style (`styles/SurveyJsStyle`) is a thin native shell that hosts the
+ * OFFICIAL SurveyJS web runtime (`survey-core` + `survey-react-ui`) inside an
+ * isolated, self-contained WebView — `react-native-webview` on native, an
+ * `iframe` on the Expo web export — driven by a typed postMessage bridge.
+ * This gives mobile full parity with the web frontend (same JSON, question
+ * types, validation, conditional logic, completion, redirect). The native
+ * host owns ALL authenticated API calls via `@selfhelp/shared`
+ * `MobileHostServices`; the WebView never sees the access token.
  */
 
 import { defineMobilePlugin } from '@selfhelp/shared/plugin-sdk';
@@ -29,7 +31,7 @@ export const PLUGIN_ID = 'sh2-shp-survey-js';
  * compare these constants against the manifest version; a mismatch
  * silently breaks the plugin.
  */
-export const PLUGIN_VERSION = '0.2.25';
+export const PLUGIN_VERSION = '0.3.0';
 
 export const registerMobile = (): IMobilePluginRegistration =>
     defineMobilePlugin({
@@ -39,7 +41,7 @@ export const registerMobile = (): IMobilePluginRegistration =>
         styles: [
             {
                 name: 'surveyjs',
-                description: 'Mobile renderer for a published SurveyJS survey (interactive on web, read-only on native).',
+                description: 'Mobile renderer for a published SurveyJS survey (official SurveyJS runtime in a WebView; full submit/validation/redirect parity with web).',
                 category: 'forms',
                 canHaveChildren: false,
                 component: SurveyJsStyle as never,

@@ -3,26 +3,25 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * Public SurveyJS plugin API client for the MOBILE runtime.
+ * Public SurveyJS plugin API client for the MOBILE host shell.
  *
- * Mirrors the frontend client (`frontend/src/api/surveys.ts`) — same
- * routes, same payload shapes, same response envelope — but adapted for
- * the mobile app:
+ * Unlike the frontend client, the mobile renderer does NOT own authenticated
+ * network access: every call goes through the native host-services bridge
+ * (`IMobileHostServices.request`), which attaches the bearer token, applies
+ * `X-Client-Type: mobile`, and performs the single 401-refresh round-trip
+ * host-side. The WebView runtime never sees the token — it emits intents and
+ * the shell calls these functions in response.
  *
- *   - The mobile app talks to `/cms-api/v1/...` directly (no Next.js BFF
- *     proxy), so there is NO CSRF token to attach (the Symfony backend
- *     disables CSRF for the API). Auth, when present, rides on the
- *     `Authorization: Bearer` header the host injects globally.
- *   - The base URL is resolved at call time: the `selfhelp-mobile-preview`
- *     image serves the app under `<origin>/mobile-preview` and reverse-
- *     proxies `<origin>/mobile-preview/api/cms-api/...` to the private
- *     backend, so requests must carry that prefix. The host may also
- *     publish the resolved base on `globalThis.__SELFHELP_API_BASE__`.
+ * Routes/payloads mirror the frontend client (`frontend/src/api/surveys.ts`)
+ * exactly, so a mobile submission stores a real `SurveyRun` identically to web
+ * (there is no preview/test branch on the backend).
  *
- * Only the public runtime routes the mobile renderer needs are wrapped:
- * hydrate (`published`), per-page progress save (`progress`), and
- * submission (`submit`). The file/choices/edit pipeline stays web-only.
+ * Only the runtime routes the renderer needs are wrapped: hydrate
+ * (`published`), per-page progress (`progress`), submit (`submit`). The
+ * file/choices/edit pipeline stays web-only.
  */
+
+import type { IMobileHostServices } from '@selfhelp/shared/plugin-sdk';
 
 export interface IRuntimeConfig {
     restartOnRefresh: boolean;
@@ -87,181 +86,120 @@ export interface ISubmissionEnforcePayload {
     progress?: Record<string, unknown>;
 }
 
-export interface ISubmissionError extends Error {
-    status: number;
-    reason?: string;
-    body?: unknown;
+/** Error thrown when a host request fails; carries the lifecycle discriminator. */
+export class SurveyHostError extends Error {
+    readonly status: number;
+    readonly reason?: string;
+    readonly sessionExpired: boolean;
+
+    constructor(message: string, status: number, reason?: string, sessionExpired = false) {
+        super(message);
+        this.name = 'SurveyHostError';
+        this.status = status;
+        this.reason = reason;
+        this.sessionExpired = sessionExpired;
+    }
 }
 
 const PLUGIN_API_PATH = '/cms-api/v1/plugins/sh2-shp-survey-js';
 
-/**
- * Resolve the absolute (or root-relative) API base the mobile runtime
- * should call.
- *
- * Priority:
- *   1. `globalThis.__SELFHELP_API_BASE__` — when the host publishes the
- *      resolved server URL (native app + preview both can set this).
- *   2. Web-preview heuristic — the app is served at `<origin>/<seg>/…`
- *      and the proxy lives at `<origin>/<seg>/api`, so derive that.
- *   3. Same-origin root (`<origin>`) as a last resort.
- *   4. Empty string for non-browser contexts (caller builds a relative URL).
- */
-export function resolveApiBase(): string {
-    const injected = (globalThis as { __SELFHELP_API_BASE__?: unknown }).__SELFHELP_API_BASE__;
-    if (typeof injected === 'string' && injected.trim() !== '') {
-        return injected.replace(/\/+$/, '');
-    }
-    // Read `location` off `globalThis` (the mobile tsconfig has no DOM lib);
-    // it is only present on the web export (react-native-web).
-    const location = (globalThis as { location?: { origin?: string; pathname?: string } }).location;
-    if (location && typeof location.origin === 'string') {
-        const origin = location.origin;
-        const firstSegment = (location.pathname ?? '/')
-            .split('/')
-            .filter((part) => part !== '')[0];
-        if (firstSegment) {
-            return `${origin}/${firstSegment}/api`;
-        }
-        return origin;
-    }
-    return '';
-}
-
-function buildUrl(base: string, path: string): string {
-    return `${base}${path}`;
-}
-
-function authHeader(): Record<string, string> {
-    const token = (globalThis as { __SELFHELP_ACCESS_TOKEN__?: unknown }).__SELFHELP_ACCESS_TOKEN__;
-    if (typeof token === 'string' && token.trim() !== '') {
-        return { Authorization: `Bearer ${token}` };
-    }
-    return {};
-}
-
-function runtimeConfigHeader(config?: Record<string, unknown>): Record<string, string> {
-    if (!config) return {};
-    try {
-        return { 'X-SurveyJs-Runtime-Config': JSON.stringify(config) };
-    } catch {
-        return {};
-    }
-}
-
-async function ensureOk<T>(res: Response): Promise<T> {
+/** Unwrap a host response into the inner API-envelope `data`, throwing on failure. */
+function unwrap<T>(res: {
+    ok: boolean;
+    status: number;
+    data: unknown;
+    reason?: string;
+    error?: string;
+    sessionExpired?: boolean;
+}): T {
     if (!res.ok) {
-        let body: unknown = null;
-        try {
-            body = await res.json();
-        } catch {
-            // body may not be JSON; leave null
-        }
-        const reason = (body as { reason?: string } | null)?.reason;
-        const err = new Error(`HTTP ${res.status}`) as ISubmissionError;
-        err.status = res.status;
-        err.reason = reason;
-        err.body = body;
-        throw err;
+        const reason = res.reason ?? extractReason(res.data);
+        throw new SurveyHostError(
+            res.error ?? `HTTP ${res.status}`,
+            res.status,
+            reason,
+            res.sessionExpired ?? res.status === 401,
+        );
     }
-    return (await res.json()) as T;
+    const body = res.data as { data?: T } | null;
+    return (body?.data ?? null) as T;
 }
 
-export async function fetchPublishedSurvey(
+function extractReason(body: unknown): string | undefined {
+    if (body && typeof body === 'object' && 'reason' in body) {
+        const reason = (body as { reason?: unknown }).reason;
+        if (typeof reason === 'string') return reason;
+    }
+    return undefined;
+}
+
+export async function loadPublishedSurvey(
+    host: IMobileHostServices,
     key: string,
-    config?: Record<string, unknown>,
-    urlParams?: Record<string, string | number | boolean>,
+    serverConfig?: Record<string, unknown>,
+    extraParams?: Record<string, string | number | boolean>,
 ): Promise<IPublishedSurvey> {
-    const base = resolveApiBase();
-    let path = `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}`;
-    if (urlParams && Object.keys(urlParams).length > 0) {
-        // Built manually (no DOM `URLSearchParams` in the mobile tsconfig lib);
-        // mirrors the frontend's `extraParams[<k>]=<v>` shape that the backend
-        // reads via `$request->query->all('extraParams')`.
-        const search = Object.entries(urlParams)
-            .map(([k, v]) => `${encodeURIComponent(`extraParams[${k}]`)}=${encodeURIComponent(String(v))}`)
-            .join('&');
-        path = `${path}?${search}`;
+    const query: Record<string, string | number | boolean> = {};
+    if (extraParams) {
+        for (const [k, v] of Object.entries(extraParams)) {
+            query[`extraParams[${k}]`] = v;
+        }
     }
-    const res = await fetch(buildUrl(base, path), {
-        credentials: 'include',
-        headers: {
-            Accept: 'application/json',
-            ...authHeader(),
-            ...runtimeConfigHeader(config),
-        },
+    const headers: Record<string, string> = {};
+    if (serverConfig) {
+        try {
+            headers['X-SurveyJs-Runtime-Config'] = JSON.stringify(serverConfig);
+        } catch {
+            /* non-serialisable config — send without the echo header */
+        }
+    }
+    const res = await host.request<{ data: IPublishedSurvey }>({
+        path: `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}`,
+        method: 'GET',
+        headers,
+        query,
     });
-    const body = await ensureOk<{ data: IPublishedSurvey }>(res);
-    return body.data;
+    return unwrap<IPublishedSurvey>(res);
 }
 
-export async function fetchDraft(key: string, responseId?: string): Promise<IDraftPayload | null> {
-    const base = resolveApiBase();
-    let path = `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/progress`;
-    if (responseId) {
-        path = `${path}?responseId=${encodeURIComponent(responseId)}`;
-    }
-    const res = await fetch(buildUrl(base, path), {
-        credentials: 'include',
-        headers: { Accept: 'application/json', ...authHeader() },
+export async function fetchDraft(
+    host: IMobileHostServices,
+    key: string,
+    responseId?: string,
+): Promise<IDraftPayload | null> {
+    const query: Record<string, string | number | boolean> = {};
+    if (responseId) query.responseId = responseId;
+    const res = await host.request<{ data: IDraftPayload | null }>({
+        path: `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/progress`,
+        method: 'GET',
+        query,
     });
-    const body = await ensureOk<{ data: IDraftPayload | null }>(res);
-    return body.data;
+    return unwrap<IDraftPayload | null>(res);
 }
 
-export async function saveDraft(
+export async function saveProgress(
+    host: IMobileHostServices,
     key: string,
     payload: { responseId?: string; pageNo: number; payload: Record<string, unknown> },
 ): Promise<IDraftPayload> {
-    const base = resolveApiBase();
-    const path = `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/progress`;
-    const res = await fetch(buildUrl(base, path), {
+    const res = await host.request<{ data: IDraftPayload }>({
+        path: `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/progress`,
         method: 'PUT',
-        credentials: 'include',
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            ...authHeader(),
-        },
-        body: JSON.stringify(payload),
+        body: payload,
     });
-    const body = await ensureOk<{ data: IDraftPayload }>(res);
-    return body.data;
+    return unwrap<IDraftPayload>(res);
 }
 
-export async function deleteDraft(key: string, responseId?: string): Promise<void> {
-    const base = resolveApiBase();
-    let path = `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/progress`;
-    if (responseId) {
-        path = `${path}?responseId=${encodeURIComponent(responseId)}`;
-    }
-    const res = await fetch(buildUrl(base, path), {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { Accept: 'application/json', ...authHeader() },
-    });
-    if (!res.ok && res.status !== 404) {
-        throw new Error(`HTTP ${res.status}`);
-    }
-}
-
-export async function submitSurveyAnswers(
+export async function submitSurvey(
+    host: IMobileHostServices,
     key: string,
     answers: Record<string, unknown>,
     enforce?: ISubmissionEnforcePayload,
 ): Promise<ISubmitResult> {
-    const base = resolveApiBase();
-    const path = `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/submit`;
-    const res = await fetch(buildUrl(base, path), {
+    const res = await host.request<{ data: ISubmitResult }>({
+        path: `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}/submit`,
         method: 'POST',
-        credentials: 'include',
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            ...authHeader(),
-        },
-        body: JSON.stringify({ answers, enforce: enforce ?? {} }),
+        body: { answers, enforce: enforce ?? {} },
     });
-    const body = await ensureOk<{ data: ISubmitResult }>(res);
-    return body.data;
+    return unwrap<ISubmitResult>(res);
 }

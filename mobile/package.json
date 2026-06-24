@@ -1,7 +1,7 @@
 {
     "name": "@selfhelp/sh2-shp-survey-js-mobile",
-    "version": "0.2.25",
-    "description": "SurveyJS v2 mobile renderer for the SelfHelp plugin ecosystem (interactive on web export, read-only fallback on native).",
+    "version": "0.3.0",
+    "description": "SurveyJS v2 mobile renderer for the SelfHelp plugin ecosystem. Hosts the official SurveyJS web runtime (survey-core + survey-react-ui) in an isolated, self-contained WebView (react-native-webview on native, iframe on web export) driven by a typed postMessage bridge; the native host owns all authenticated API calls.",
     "license": "MPL-2.0",
     "repository": {
         "type": "git",
@@ -28,7 +28,8 @@
         "README.md"
     ],
     "scripts": {
-        "build": "tsup",
+        "build:webview": "vite build --config vite.webview.config.ts && node scripts/wrap-webview-html.mjs",
+        "build": "npm run build:webview && tsup",
         "typecheck": "tsc --noEmit",
         "test": "vitest run"
     },
@@ -37,10 +38,11 @@
         "survey-react-ui": "2.5.25"
     },
     "peerDependencies": {
+        "@selfhelp/shared": "^1.16.0",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
         "react-native": "^0.83.0",
-        "@selfhelp/shared": "^1.6.0"
+        "react-native-webview": ">=13.0.0 <14.0.0"
     },
     "peerDependenciesMeta": {
         "react-dom": {
@@ -48,14 +50,17 @@
         }
     },
     "devDependencies": {
-        "@selfhelp/shared": "^1.6.0",
+        "@selfhelp/shared": "^1.16.0",
         "@types/react": "^19.2.14",
         "react": "^19.2.0",
+        "react-dom": "^19.2.7",
         "react-native": "^0.83.6",
+        "react-native-webview": "^13.17.0",
         "survey-core": "2.5.25",
         "survey-react-ui": "2.5.25",
         "tsup": "^8.3.5",
         "typescript": "^5.9.3",
+        "vite": "^7.3.5",
         "vitest": "^3.0.0"
     },
     "publishConfig": {
