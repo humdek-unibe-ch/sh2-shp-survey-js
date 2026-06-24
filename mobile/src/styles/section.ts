@@ -12,20 +12,21 @@ SPDX-License-Identifier: MPL-2.0
  * window, and the status labels. Keeping the readers identical is what
  * makes "exactly the same functionality" hold across platforms.
  *
- * `extractSurveyId` stays the single source of truth in
- * `SurveyJsReadOnlyStyle` (the read-only viewer + its certified test
- * depend on it); we re-export it here so callers have one import.
+ * `extractSurveyId` reads the `survey-js` field (the selected published
+ * survey key) and is the single source of truth for both the host shell and
+ * the WebView load handshake.
  */
-
-import { extractSurveyId } from './SurveyJsReadOnlyStyle';
-
-export { extractSurveyId };
 
 export interface ISectionLike {
     id?: number;
     fields?: Record<string, unknown>;
     style_name?: string;
     [key: string]: unknown;
+}
+
+/** Read the selected published-survey key from the section's `survey-js` field. */
+export function extractSurveyId(section: ISectionLike | undefined): string | null {
+    return extractFieldString(section, 'survey-js');
 }
 
 export interface IRuntimeSectionConfig {
