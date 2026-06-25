@@ -106,9 +106,11 @@ export function buildRuntimeConfigFromSection(section?: ISectionLike): IRuntimeS
 }
 
 /**
- * Server-side runtime-config echo (sent as `X-SurveyJs-Runtime-Config`)
- * so the backend re-validates the submission against the SAME config the
- * section declares. Mirrors the frontend `configToServerConfig`.
+ * Server-side runtime-config echo (sent by the host shell as the `?config=`
+ * query param on the published-survey GET — NOT a custom request header, which
+ * would fail the backend CORS preflight cross-origin) so the backend
+ * re-validates the submission against the SAME config the section declares.
+ * Mirrors the frontend `configToServerConfig`.
  */
 export function configToServerConfig(config: IRuntimeSectionConfig): Record<string, unknown> {
     return {

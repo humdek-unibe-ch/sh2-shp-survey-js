@@ -145,18 +145,27 @@ export async function loadPublishedSurvey(
             query[`extraParams[${k}]`] = v;
         }
     }
-    const headers: Record<string, string> = {};
+    // Send the runtime-config echo as the `config` QUERY param, NOT a custom
+    // request header. The backend's `readRuntimeConfigFromRequest()` accepts
+    // body `config` -> `X-SurveyJs-Runtime-Config` header -> `?config=` (in
+    // that order), so the query form is equivalent. A custom request header
+    // would trigger a CORS preflight that the host's allow-list rejects
+    // (`Access-Control-Allow-Headers: content-type, authorization,
+    // x-client-type`), which surfaces as an axios "Network Error" whenever the
+    // mobile shell is cross-origin to the backend (Expo web export, the CMS
+    // mobile-preview iframe, or the RN debugger). Query params are not part of
+    // the CORS preflight, so this loads correctly cross-origin. The frontend
+    // keeps the header because it goes through a same-origin proxy (no CORS).
     if (serverConfig) {
         try {
-            headers['X-SurveyJs-Runtime-Config'] = JSON.stringify(serverConfig);
+            query.config = JSON.stringify(serverConfig);
         } catch {
-            /* non-serialisable config — send without the echo header */
+            /* non-serialisable config — load without the echo */
         }
     }
     const res = await host.request<{ data: IPublishedSurvey }>({
         path: `${PLUGIN_API_PATH}/published/${encodeURIComponent(key)}`,
         method: 'GET',
-        headers,
         query,
     });
     return unwrap<IPublishedSurvey>(res);
