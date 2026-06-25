@@ -18,7 +18,7 @@
         "react": "^19",
         "reactNative": "^0.83",
         "expoSdk": "^55",
-        "mobile": "^0.2.0"
+        "mobile": "^0.1.0"
     },
     "dependencies": [],
     "conflicts": [
