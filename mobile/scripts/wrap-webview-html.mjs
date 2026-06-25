@@ -21,6 +21,28 @@ import { fileURLToPath } from 'node:url';
 const distDir = fileURLToPath(new URL('../dist/webview/', import.meta.url));
 const generatedFile = fileURLToPath(new URL('../src/webview/generated/runtimeHtml.ts', import.meta.url));
 
+/**
+ * Make the inlined survey-core theme CSS truly CDN-free.
+ *
+ * survey-core ships its default "Open Sans" theme font as @font-face rules whose
+ * `src` points at https://fonts.gstatic.com — one block per weight × unicode-range
+ * subset (~two dozen). The WebView/iframe CSP is `font-src data:` (no network), so
+ * those fonts can NEVER load; every subset just emits a blocked-request error. In
+ * the CMS web preview the runtime runs in a `srcdoc` iframe that inherits the parent
+ * origin, so those failures surface in the page's own console as "fonts cannot be
+ * loaded". Drop every external @font-face and alias "Open Sans" to the device's own
+ * UI font, so the runtime stays self-contained and still renders in a native sans-serif.
+ */
+function stripExternalFonts(css) {
+    const withoutCdnFaces = css.replace(/@font-face\s*\{[^{}]*\}/gi, (block) =>
+        /url\(\s*["']?https?:\/\//i.test(block) ? '' : block,
+    );
+    const localOpenSans =
+        '@font-face{font-family:"Open Sans";font-style:normal;font-weight:300 800;' +
+        'src:local("Segoe UI"),local("Roboto"),local("Helvetica Neue"),local("Arial")}';
+    return localOpenSans + withoutCdnFaces;
+}
+
 const htmlPath = `${distDir}index.html`;
 if (!existsSync(htmlPath)) {
     throw new Error(`WebView build output not found at ${htmlPath}. Run "vite build --config vite.webview.config.ts" first.`);
@@ -41,13 +63,19 @@ html = html.replace(
 html = html.replace(
     /<link\b[^>]*\bhref=["']\.?\/?([^"']+\.css)["'][^>]*>/gi,
     (_match, href) => {
-        const css = readFileSync(`${distDir}${href}`, 'utf8');
+        const css = stripExternalFonts(readFileSync(`${distDir}${href}`, 'utf8'));
         return `<style>\n${css}\n</style>`;
     },
 );
 
 if (/\bsrc=["'][^"']+\.js["']/i.test(html) || /<link\b[^>]*\.css/i.test(html)) {
     throw new Error('WebView HTML still references external assets after inlining; aborting to avoid shipping a non-self-contained runtime.');
+}
+
+// Hard guard: the runtime CSP is `font-src data:` (no network), so any surviving
+// font CDN reference can only ever be a blocked, console-flooding request.
+if (/https?:\/\/fonts\.(?:gstatic|googleapis)\.com/i.test(html)) {
+    throw new Error('WebView CSS still references an external font CDN after inlining; aborting to keep the runtime self-contained (no CDN).');
 }
 
 const header = `/*
