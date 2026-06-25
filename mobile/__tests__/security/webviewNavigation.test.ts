@@ -19,7 +19,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 import { describe, expect, it } from 'vitest';
 
-import { isAllowedWebViewUrl } from '../../src/styles/SurveyJsStyle';
+import { chooseRedirectAction, isAllowedWebViewUrl } from '../../src/styles/SurveyJsStyle';
 
 describe('WebView navigation allow-list', () => {
     it('allows only the self-contained runtime document load', () => {
@@ -44,5 +44,47 @@ describe('WebView navigation allow-list', () => {
         for (const url of blocked) {
             expect(isAllowedWebViewUrl(url)).toBe(false);
         }
+    });
+});
+
+describe('survey redirect routing (chooseRedirectAction)', () => {
+    // When the host exposes navigate() (renderer >= 0.3.0) EVERY redirect routes
+    // through the host router — internal AND external, web AND native. This is
+    // the fix: the plugin never touches window.location, so the live-preview
+    // iframe is no longer navigated (and broken) by an in-content redirect.
+    it('routes through the host on a 0.3.0 host regardless of platform/target', () => {
+        expect(chooseRedirectAction(true, true, 'thank-you', false)).toEqual({
+            kind: 'host',
+            target: 'thank-you',
+            external: false,
+        });
+        expect(chooseRedirectAction(true, false, 'thank-you', false)).toEqual({
+            kind: 'host',
+            target: 'thank-you',
+            external: false,
+        });
+        expect(chooseRedirectAction(true, true, 'https://example.com', true)).toEqual({
+            kind: 'host',
+            target: 'https://example.com',
+            external: true,
+        });
+    });
+
+    // Legacy host (renderer < 0.3.0, no navigate): external still opens, but an
+    // internal redirect on web falls back to the same-window assign (the old
+    // "weird preview redirect") and on native is unsupported.
+    it('degrades gracefully on a host that predates navigate()', () => {
+        expect(chooseRedirectAction(false, false, 'https://example.com', true)).toEqual({
+            kind: 'external',
+            target: 'https://example.com',
+        });
+        expect(chooseRedirectAction(false, true, 'thank-you', false)).toEqual({
+            kind: 'web-assign',
+            target: 'thank-you',
+        });
+        expect(chooseRedirectAction(false, false, 'thank-you', false)).toEqual({
+            kind: 'unsupported',
+            target: 'thank-you',
+        });
     });
 });

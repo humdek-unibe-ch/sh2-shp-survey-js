@@ -76,6 +76,39 @@ export function isAllowedWebViewUrl(url: string): boolean {
     return url === '' || url === 'about:blank' || url.startsWith('data:') || url.startsWith('about:srcdoc');
 }
 
+/** How a survey's in-content redirect (`REQUEST_REDIRECT`) is performed. */
+export type TRedirectAction =
+    | { kind: 'host'; target: string; external: boolean }
+    | { kind: 'external'; target: string }
+    | { kind: 'web-assign'; target: string }
+    | { kind: 'unsupported'; target: string };
+
+/**
+ * Decide how to honour a survey redirect. Pure + exported so the routing is
+ * unit-tested without rendering the WebView shell.
+ *
+ * Priority is host-owned navigation (renderer >= 0.3.0): the host owns the
+ * router, so it routes an internal CMS target through the app's navigation stack
+ * and leaves the app only for an explicit external URL — correct in BOTH the
+ * native app and the web-export live preview, where the plugin doing its own
+ * `location.assign` would navigate (and break) the embedded preview iframe
+ * instead of the app. Feature-detected, so on a host that predates `navigate` we
+ * degrade: external URLs still open, web falls back to a same-window assign
+ * (the legacy "weird preview redirect"), and an internal target on a native
+ * legacy host is unsupported (the completion screen stays visible).
+ */
+export function chooseRedirectAction(
+    hasHostNavigate: boolean,
+    isWeb: boolean,
+    target: string,
+    external: boolean,
+): TRedirectAction {
+    if (hasHostNavigate) return { kind: 'host', target, external };
+    if (external) return { kind: 'external', target };
+    if (isWeb) return { kind: 'web-assign', target };
+    return { kind: 'unsupported', target };
+}
+
 function loadTransport(): React.ComponentType<IWebViewTransportProps> {
     // Lazy-require the matching transport so the native module
     // (react-native-webview) is never evaluated on web, and the DOM iframe is
@@ -114,22 +147,41 @@ export function SurveyJsStyle({ section }: ISurveyJsStyleProps): React.ReactElem
     }, []);
 
     const handleRedirect = useCallback((target: string, external: boolean): void => {
-        if (Platform.OS === 'web') {
-            const location = (globalThis as { location?: { assign?: (t: string) => void } }).location;
-            if (location && typeof location.assign === 'function') {
-                location.assign(target);
+        const action = chooseRedirectAction(
+            host !== null && typeof host.navigate === 'function',
+            Platform.OS === 'web',
+            target,
+            external,
+        );
+        switch (action.kind) {
+            case 'host':
+                // Preferred path (renderer >= 0.3.0): the host owns the router, so
+                // it routes an internal CMS target through the app's navigation
+                // stack and leaves the app only for an explicit external URL —
+                // correct in BOTH the native app and the web-export live preview.
+                if (host && host.navigate) host.navigate(action.target, action.external);
+                return;
+            case 'external':
+                void Linking.openURL(action.target);
+                return;
+            case 'web-assign': {
+                // Legacy fallback on web when the host predates `navigate`: a raw
+                // same-window assign. In the live preview this navigates the
+                // embedded iframe (the "weird redirect"); only reached on a host
+                // older than renderer 0.3.0.
+                const location = (globalThis as { location?: { assign?: (t: string) => void } }).location;
+                if (location && typeof location.assign === 'function') location.assign(action.target);
                 return;
             }
+            case 'unsupported':
+                // Internal CMS-keyword navigation on native needs the host router,
+                // which a host older than renderer 0.3.0 did not expose.
+                console.warn(
+                    `[surveyjs] internal redirect "${action.target}" is not supported on this host; staying on completion.`,
+                );
+                return;
         }
-        if (external) {
-            void Linking.openURL(target);
-            return;
-        }
-        // Internal CMS-keyword navigation on native needs the host router, which
-        // a decoupled plugin package cannot reach. Documented limitation: the
-        // completion screen stays visible instead.
-        console.warn(`[surveyjs] internal redirect "${target}" is not supported on native; staying on completion.`);
-    }, []);
+    }, [host]);
 
     const onIntent = useCallback(
         async (message: TWebviewToHostMessage): Promise<void> => {
