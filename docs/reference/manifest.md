@@ -14,7 +14,7 @@ This page summarizes the plugin's declared contract. `plugin.json` is authoritat
 | --- | --- |
 | `id` | `sh2-shp-survey-js` |
 | `name` | SurveyJS |
-| `version` | 0.3.1 |
+| `version` | 0.3.2 |
 | `pluginApiVersion` | 0.1.0 |
 | `compatibility.selfhelp` | `>=0.1.0` (open-ended minimum: the plugin-API axis, not the core axis, is the breakage contract) |
 | `compatibility` (runtime) | php `^8.4`, node `^22`, react `^19`, reactNative `^0.83`, expoSdk `^55` |

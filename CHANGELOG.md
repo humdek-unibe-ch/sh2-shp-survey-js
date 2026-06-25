@@ -5,13 +5,48 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
-## [0.3.1] - 2026-06-25
+## [0.3.2] - 2026-06-25
+
+### Verified
+- **WebView/iframe runtime is UI-only (architecture confirmed).** The SurveyJS
+  runtime renders `survey-core` + `survey-react-ui`, owns validation + the UI
+  lifecycle, and makes ZERO backend calls: it never receives the access token,
+  never sends a backend header, and only emits typed bridge intents (`READY` /
+  `LOAD_SURVEY` / `SAVE_PROGRESS` / `SUBMIT_SURVEY` / `RESIZE` /
+  `REQUEST_REDIRECT` / `RUNTIME_ERROR`). The host shell owns every authenticated
+  call (load / progress / submit), the single 401 refresh, session-expiry, and
+  the completion redirect. Every bridge message is strictly schema-validated
+  (`source` discriminator + type allow-list + per-type field checks) and unknown
+  messages are dropped; WebView navigation is allow-listed and external redirects
+  are host-approved. See `docs/developer/mobile-architecture.md`.
 
 ### Fixed
+- **Mobile survey load failed cross-origin with "Survey not available: Network
+  Error".** The mobile `loadPublishedSurvey` sent the runtime-config echo as a
+  custom `X-SurveyJs-Runtime-Config` request header. That header is not in the
+  backend CORS allow-list (`Access-Control-Allow-Headers: content-type,
+  authorization, x-client-type`), so a cross-origin mobile shell (the Expo web
+  export, the CMS mobile-preview iframe, or the RN debugger) failed the CORS
+  preflight (`400 Unauthorized header x-surveyjs-runtime-config`) and the survey
+  load never reached the server — surfacing as an axios "Network Error". The
+  config is now passed as the `?config=` **query param**, which the backend's
+  `readRuntimeConfigFromRequest()` already accepts and which is CORS-safe (no
+  preflight). The web frontend is unaffected (it proxies same-origin). This is a
+  HOST→backend call (not a runtime call), carries only NON-SENSITIVE section
+  settings (never a token/PII), and is required for the server-side "already
+  completed" lockout pre-check that keeps mobile at full parity with web.
+- **Automatic npm publish unblocked.** `mobile/package-lock.json` was pinned to
+  an older version than `mobile/package.json`, so `npm ci` in `publish-mobile.yml`
+  would fail and the tagged release never published the package (this is why the
+  `v0.3.1` tag produced no `0.3.1` on npm). The lockfile is now synchronized, so
+  the `v*` tag publishes the mobile renderer via npm Trusted Publishing (OIDC).
 - **Frontend version alignment.** The `frontend/package.json` and `frontend/src/index.ts`
   `PLUGIN_VERSION` were missed during the 0.3.0 release and remained at 0.2.25.
-  This caused a version mismatch that could break the plugin at runtime. All version
-  fields are now synchronized at 0.3.1.
+  All version fields are now synchronized at 0.3.2.
+
+> Note: `0.3.1` was tagged but its mobile npm publish failed on the lockfile
+> drift fixed above, so `0.3.2` is the first build that actually ships the
+> cross-origin load fix. Tag `v0.3.2` to release.
 
 ## [0.3.0] - 2026-06-24
 
