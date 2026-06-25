@@ -93,9 +93,33 @@ token-bearing call off-origin.
 
 `mobile/src/api/surveys.ts` maps each route:
 
-- load → `GET plugins/sh2-shp-survey-js/surveys/published/{key}`
+- load → `GET /cms-api/v1/plugins/sh2-shp-survey-js/published/{key}`
 - progress → `PUT .../published/{key}/progress`
 - submit → `POST .../published/{key}/submit`
+
+### Runtime-config transport (why `?config=`, not a header)
+
+The `published` GET echoes the section's runtime config to the backend so it
+can run the server-side **lockout pre-check** (`oncePerUser` /
+`oncePerSchedule` → "you already completed this") and keep mobile at full
+parity with web. The backend reads that config from **body → header →
+`?config=` query** (`readRuntimeConfigFromRequest()`).
+
+The host sends it as the **`?config=` query param**, deliberately NOT as a
+custom request header:
+
+- A custom request header (`X-SurveyJs-Runtime-Config`) is not in the host
+  CORS allow-list (`content-type, authorization, x-client-type`), so a
+  cross-origin shell (Expo web export, CMS mobile-preview iframe, RN debugger)
+  fails the preflight and the request never leaves the browser ("Network
+  Error"). A query param is CORS-safe (no preflight).
+- This is a **host→backend** call, never a runtime→backend call. The WebView
+  runtime is UI-only and never sees the URL, the token, or this config.
+- The payload is **non-sensitive** section settings only (once-per-* gates,
+  schedule window, labels, autosave interval) — never a token or PII — so a
+  query param is an acceptable, stable transport. (The web frontend keeps the
+  header only because it proxies same-origin through the Next.js BFF, where
+  CORS does not apply.)
 
 Submission is identical to web — the backend
 (`SurveysPublicController::submit()`) has **no preview/test/mobile
