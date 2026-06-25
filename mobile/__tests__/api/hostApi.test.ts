@@ -10,7 +10,10 @@ SPDX-License-Identifier: MPL-2.0
  * to assert the client:
  *   - targets the correct plugin route + method,
  *   - unwraps the SelfHelp API envelope (`data.data` -> inner payload),
- *   - builds the `extraParams[...]` query + the runtime-config echo header,
+ *   - builds the `extraParams[...]` query + the runtime-config echo as a
+ *     `config` QUERY param (NOT a custom header — a custom request header
+ *     trips the backend CORS allow-list and fails cross-origin with a
+ *     "Network Error"; the query form is CORS-safe and the backend reads it),
  *   - maps non-ok responses to `SurveyHostError` with the backend `reason`,
  *   - flags session expiry so the shell can branch.
  */
@@ -44,7 +47,7 @@ function recordingHost(
 const ok = (data: unknown): IMobileHostResponse => ({ ok: true, status: 200, data: { data } });
 
 describe('loadPublishedSurvey', () => {
-    it('GETs the published route, echoes runtime config, and unwraps the envelope', async () => {
+    it('GETs the published route, echoes runtime config in the query, and unwraps the envelope', async () => {
         const { host, calls } = recordingHost(() =>
             ok({ surveyId: 'k', definition: { pages: [] }, tokens: {}, extraParams: {} }),
         );
@@ -54,8 +57,14 @@ describe('loadPublishedSurvey', () => {
         const req = calls[0];
         expect(req.method).toBe('GET');
         expect(req.path).toBe('/cms-api/v1/plugins/sh2-shp-survey-js/published/my%20key');
-        expect(req.query).toEqual({ 'extraParams[foo]': 'bar' });
-        expect(req.headers?.['X-SurveyJs-Runtime-Config']).toBe(JSON.stringify({ oncePerUser: true }));
+        // Config travels as the `config` query param (CORS-safe), and NO custom
+        // request header is sent (a custom header trips the backend CORS
+        // allow-list and fails cross-origin with "Network Error").
+        expect(req.query).toEqual({
+            'extraParams[foo]': 'bar',
+            config: JSON.stringify({ oncePerUser: true }),
+        });
+        expect(req.headers).toBeUndefined();
     });
 });
 
