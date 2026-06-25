@@ -239,6 +239,32 @@ official Humdek plugin registry at
 <https://github.com/humdek-unibe-ch/sh2-plugin-registry> which is
 served at <https://humdek-unibe-ch.github.io/sh2-plugin-registry/>.
 
+### Version bump synchronization (bump it EVERYWHERE, in one change)
+
+This plugin carries the version in MANY files. A bump is a SINGLE atomic
+change that sets the identical version in ALL of them — a partial bump
+ships a self-inconsistent plugin and trips version checks. When you bump
+the plugin version, update together:
+
+- `plugin.json` — `version`, `backend.composer.version`, `mobile.version`
+  (and `compatibility.selfhelp.*` / `compatibility.mobile` when the
+  required host/renderer contract changes);
+- `composer.json` — `version`;
+- `frontend/package.json` and `mobile/package.json` — `version` (and any
+  `@selfhelp/shared` range you now require, plus its `package-lock.json`
+  entry);
+- `frontend/src/index.ts` and `mobile/src/index.ts` — the `PLUGIN_VERSION`
+  constant;
+- `CHANGELOG.md`;
+- docs that pin the version (`docs/reference/manifest.md` example,
+  `docs/developer/*` "Applies to").
+
+Follow plugin version semantics (patch = code only; minor = ships a DB
+migration; major = breaking + `pluginApiVersion`/`compatibility` update).
+After bumping, grep the previous version string across the repo to confirm
+nothing stale remains, then build the `.shplugin` so the published artifact
+and manifest agree.
+
 ### Required scripts
 
 Every plugin MUST ship the following files under `scripts/`:
