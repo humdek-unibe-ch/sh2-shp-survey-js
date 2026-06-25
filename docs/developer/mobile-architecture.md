@@ -7,8 +7,8 @@ SPDX-License-Identifier: MPL-2.0
 
 Audience: Plugin developers and technical operators.
 Status: active.
-Applies to: `@selfhelp/sh2-shp-survey-js-mobile` >= 0.3.0 (mobile renderer contract `MOBILE_RENDERER_VERSION` 0.2.0).
-Last verified: 2026-06-24.
+Applies to: `@selfhelp/sh2-shp-survey-js-mobile` >= 0.3.3 (mobile renderer contract `MOBILE_RENDERER_VERSION` 0.3.0).
+Last verified: 2026-06-25.
 Source of truth: `mobile/src/`, the WebView runtime bundle, `@selfhelp/shared` `plugin-sdk`, and the host `sh-selfhelp_mobile`.
 
 The mobile renderer hosts the **official SurveyJS web runtime**
@@ -151,21 +151,31 @@ Enforced in the shell + transports and covered by tests:
   `about:blank` on native; sandboxed `srcDoc` iframe on web);
 - no arbitrary navigation — `onShouldStartLoadWithRequest` blocks every
   navigation the shell did not explicitly allow;
-- unknown external URLs are blocked; external redirects happen only via
-  native host approval;
+- unknown external URLs are blocked; the runtime never navigates itself —
+  every in-content redirect (`REQUEST_REDIRECT`) is performed by the host via
+  `IMobileHostServices.navigate` (renderer >= 0.3.0): an internal CMS target
+  routes through the app router and an explicit external URL leaves the app,
+  correct in BOTH the native app and the live-preview iframe. The decision is
+  the pure, tested `chooseRedirectAction()`; on a host older than 0.3.0 the
+  plugin degrades (external opens, web falls back to a same-window assign);
 - only typed bridge messages matching the expected shape are accepted;
   everything else is dropped (`__tests__/bridge/messages.test.ts`).
 
 ## Compatibility / versioning (dual axis)
 
-- `@selfhelp/shared` `MOBILE_RENDERER_VERSION` = `0.2.0` (adds the typed
-  host-services bridge). The plugin sets `compatibility.mobile` to
-  `^0.2.0` in `plugin.json` and keeps `reactNative` / `expoSdk` ranges.
+- `@selfhelp/shared` `MOBILE_RENDERER_VERSION` = `0.3.0` (`0.2.0` added the typed
+  host-services bridge; `0.3.0` adds the optional `IMobileHostServices.navigate`
+  host-navigation capability). The plugin sets `compatibility.mobile` to
+  `>=0.2.0` in `plugin.json` (it requires the host-services bridge and
+  *optionally* uses `navigate`, feature-detected) and keeps `reactNative` /
+  `expoSdk` ranges. Note the pre-1.0 caret pitfall: `^0.2.0` matches only
+  `0.2.x`, so it would wrongly exclude the `0.3.0` image — use the open-ended
+  `>=0.2.0`.
 - Bump the version together in `plugin.json` (`version`,
   `mobile.version`, `backend.composer.version`), `composer.json`,
   `mobile/package.json`, and `mobile/src/index.ts#PLUGIN_VERSION`.
 - The host preview snapshot (`sh-selfhelp_mobile/web-preview/preview-plugins.json`)
-  advertises `mobileRendererVersion: 0.2.0` and bundles the SurveyJS
+  advertises `mobileRendererVersion: 0.3.0` and bundles the SurveyJS
   mobile package at the matching version.
 - Fallbacks: a **missing/incompatible mobile package** → `OpenOnWebFallback`
   (the only legitimate open-on-web case). A **WebView load/runtime

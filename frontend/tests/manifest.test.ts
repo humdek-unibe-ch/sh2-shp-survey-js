@@ -107,11 +107,11 @@ describe('SurveyJS plugin.json release contract', () => {
         // The SelfHelp Manager gates this plugin's mobile package on BOTH the
         // platform axes (reactNative / expoSdk) AND the host mobile-renderer
         // contract (`compatibility.mobile`, mirrors @selfhelp/shared
-        // MOBILE_RENDERER_VERSION = 0.1.0). `build-plugin-release.mjs` maps this
+        // MOBILE_RENDERER_VERSION = 0.2.0). `build-plugin-release.mjs` maps this
         // field into the published release descriptor the gate reads.
         expect(manifest.compatibility.reactNative).toBeTruthy();
         expect(manifest.compatibility.expoSdk).toBeTruthy();
-        expect(manifest.compatibility.mobile).toBe('^0.1.0');
+        expect(manifest.compatibility.mobile).toBe('>=0.2.0');
     });
 
     it('declares owned tables under its reserved data-table prefix', () => {

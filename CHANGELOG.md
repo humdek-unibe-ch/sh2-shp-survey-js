@@ -5,6 +5,48 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.3.3] - 2026-06-25
+
+### Fixed
+- **Survey "redirect on completion" was broken in the CMS live preview** (it
+  worked in the standalone app). After submit, the mobile shell's web fallback
+  did a same-window `location.assign(target)`, which navigated — and broke — the
+  embedded preview iframe instead of the host app. The redirect now routes
+  through the host: `SurveyJsStyle.handleRedirect` prefers the new
+  `IMobileHostServices.navigate(target, external)` (renderer >= 0.3.0), so the
+  host owns the router and an internal CMS target goes through the app's
+  navigation stack while an explicit external URL leaves the app — correct in
+  BOTH the native app and the live-preview iframe. This also makes internal
+  redirects work on native, which the old shell did not support. The routing
+  decision is extracted to the pure, exported `chooseRedirectAction()` and
+  regression-tested (`__tests__/security/webviewNavigation.test.ts`). The plugin
+  feature-detects `navigate`, so it degrades gracefully on a host older than
+  renderer 0.3.0 (external opens; web falls back to the legacy assign).
+- **Self-contained survey fonts in the web export / live preview.** The bundled
+  survey-core theme shipped ~24 `@font-face` rules for "Open Sans" pointing at
+  `fonts.gstatic.com`; under the runtime CSP (`font-src data:`) those requests
+  are blocked and flooded the live-preview console with "fonts cannot be loaded"
+  errors. `scripts/wrap-webview-html.mjs` now strips every external `@font-face`
+  and aliases "Open Sans" to the device UI font, and a guard aborts the build if
+  any font CDN URL remains. Locked in by
+  `__tests__/security/webviewSelfContained.test.ts`.
+
+### Changed
+- **`compatibility.mobile` corrected `^0.1.0` -> `>=0.2.0`.** The renderer
+  contract uses pre-1.0 caret semantics, so `^0.1.0` matched only renderer
+  `0.1.x` and (incorrectly) excluded the `0.2.0`/`0.3.0` images the plugin
+  actually runs on — the source of the version warnings. The plugin genuinely
+  requires the host-services bridge (renderer `>=0.2.0`) and optionally uses the
+  `0.3.0` `navigate()` capability, so the open-ended `>=0.2.0` is the honest,
+  warning-free range.
+- **Mobile dev dependency `@selfhelp/shared` `^1.16.0` -> `^1.17.0`** (the
+  `navigate` type lives there). The peer dependency stays `^1.16.0`: the plugin
+  feature-detects `navigate` and runs against an older host.
+
+> Patch release (no DB migration). Tag `v0.3.3` to publish the composer package
+> and the mobile renderer (npm Trusted Publishing). Requires `@selfhelp/shared`
+> `1.17.0` to be on npm first so the mobile lockfile resolves.
+
 ## [0.3.2] - 2026-06-25
 
 ### Verified
