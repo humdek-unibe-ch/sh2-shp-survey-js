@@ -16,8 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   human-readable label while storage stays keyed by the stable question name.
   `SurveyAnswerNormalizer` emits an optional per-cell `title`, and
   `CoreDataTableWriter` passes those titles to `DataService::saveData()` as
-  field labels. Degrades gracefully on an older host (the extra label argument
-  is ignored).
+  field labels. The label enrichment requires host **core `>=0.1.23`** (the
+  version that added the `saveData()` field-labels parameter); it is a
+  progressive enhancement, not a hard requirement, so `compatibility.selfhelp`
+  stays `>=0.1.0`. On an older host the extra label argument is ignored: answers
+  are still stored, only the column keeps its auto label instead of the question
+  title.
 
 ### Added
 - **Question-name rename/removal guard.** Publishing a new survey version is now
