@@ -21,7 +21,10 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 interface DataTableWriterInterface
 {
     /**
-     * @param list<array{name:string, type:string, value:mixed, sanitizedHtml:bool}> $cells
+     * @param list<array{name:string, type:string, title?:string|null, value:mixed, sanitizedHtml:bool}> $cells
+     *                                    each cell's immutable `name` is the storage key (host
+     *                                    `data_cols.field_key`); the optional `title` is the human
+     *                                    label the host stores as the column `display_name`.
      * @param string   $responseId        the SurveyJS `R_...` response id that is also persisted on
      *                                    `survey_runs.response_id`; the writer stores it inside the
      *                                    target `data_tables` row (`response_id` cell) so the CMS

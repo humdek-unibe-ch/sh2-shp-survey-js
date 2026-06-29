@@ -3,7 +3,7 @@
 Audience: Developers and technical operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-03.
+Last verified: 2026-06-26.
 Source of truth: Runtime code, configuration, and tests in this repository.
 
 This document describes the moving parts of the SurveyJS v2 plugin and how they connect to the SelfHelp host. The plugin is split into three packages: a Symfony bundle (`backend/`), a React/Mantine npm package (`frontend/`), and a read-only React Native package (`mobile/`).
@@ -178,6 +178,31 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
    - publishes `surveys/{surveyId}/responses` on Mercure,
    - commits.
 5. The dashboard receives the SSE event and prepends the new run to its list — no polling, no manual refresh.
+
+## Storage-key contract (host issue #56)
+
+The host stores form/survey data by an **immutable `field_key`** (the column
+identity in `data_cols`) separate from a **mutable `display_name`** (the human
+label). SurveyJS maps onto that contract as follows:
+
+- **`question.name` → `field_key`.** `SurveyAnswerNormalizer` emits each cell
+  keyed by the question name (dotted for dynamic-panel/matrix sub-keys, e.g.
+  `household.member_name`); the host treats that key as an **opaque immutable
+  literal**. `CoreDataTableWriter` passes those keys straight into
+  `DataService::saveData()`, and `SurveyAnswerLink.question_name` stores the same
+  key, so old and new responses stay comparable across versions.
+- **`question.title` → `display_name`.** The normalizer also emits the question
+  **title** as the column label (`fieldLabels`), which `CoreDataTableWriter`
+  forwards to the host as the column `display_name`. Changing a title is
+  therefore a **label-only** change — it never changes the storage key and never
+  forks a column.
+- **Renaming/removing an answered `question.name` is blocked at publish.**
+  `SurveyService::publishDraft()` rejects publishing a new version (HTTP `409`
+  via `SurveysAdminController::publishVersion()`) when the draft renames or
+  removes a `question.name` that **already has stored responses** in a published
+  version. The admin must instead rename the **title** (a safe display change) or
+  add a **new** question with a new name. This is what keeps survey response data
+  from fragmenting when authors edit a live survey.
 
 ## File layout
 

@@ -20,11 +20,13 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
  *     (`page.panel.question`);
  *   - applies HTML sanitization for `rich-text` answers via the
  *     injected `SurveyJsHtmlSanitizer`;
- *   - encodes file uploads as a JSON pointer object that downstream
+     *   - encodes file uploads as a JSON pointer object that downstream
  *     services resolve to the existing files storage;
- *   - returns the per-question normalized cell value AND the question
- *     type so `SurveyResponseService` can persist the right
- *     `survey_answer_link.question_type`.
+ *   - returns the per-question normalized cell value, the question
+ *     type (so `SurveyResponseService` can persist the right
+ *     `survey_answer_link.question_type`) AND the question title (the
+ *     human label the host stores as the column `display_name`, while
+ *     the immutable `question.name` stays the storage key).
  *
  * The normalizer is NOT responsible for sanitizing or storing the
  * data; it only describes the shape downstream services will use.
@@ -38,14 +40,21 @@ final class SurveyAnswerNormalizer
 
     /**
      * @param array<string, mixed> $answers
-     * @return array<int, array{name:string, type:string, value:mixed, sanitizedHtml:bool}>
+     * @return array<int, array{name:string, type:string, title:string|null, value:mixed, sanitizedHtml:bool}>
      */
     public function normalize(SurveyVersion $version, array $answers): array
     {
-        $questionTypes = $this->indexQuestionTypes($version->getDefinition());
+        $definition = $version->getDefinition();
+        $questionTypes = $this->indexQuestionTypes($definition);
+        $questionTitles = $this->indexQuestionTitles($definition);
         $out = [];
         foreach ($this->flatten($answers) as $name => $value) {
             $type = $questionTypes[$name] ?? 'text';
+            // The immutable storage key is `name` (possibly a dotted
+            // panel path); the human label is resolved by the exact key
+            // first, then by the bare trailing question.name segment
+            // (SurveyJS question names are unique across a survey).
+            $title = $questionTitles[$name] ?? $questionTitles[$this->lastSegment($name)] ?? null;
             $sanitizedHtml = false;
             if ($type === 'rich-text' && is_string($value)) {
                 $value = $this->sanitizer->sanitize($value);
@@ -57,6 +66,7 @@ final class SurveyAnswerNormalizer
             $out[] = [
                 'name' => $name,
                 'type' => $type,
+                'title' => $title,
                 'value' => $value,
                 'sanitizedHtml' => $sanitizedHtml,
             ];
@@ -93,6 +103,73 @@ final class SurveyAnswerNormalizer
             }
         }
         return $out;
+    }
+
+    /**
+     * Collect a flat `question.name => title` map for every titled element in
+     * the survey definition. Keyed by the bare element name (NOT the page/panel
+     * path) because SurveyJS question names are unique across a whole survey and
+     * the answer flattening only nests dynamic-panel keys.
+     *
+     * @param array<string, mixed> $node
+     * @return array<string, string>
+     */
+    private function indexQuestionTitles(array $node): array
+    {
+        $out = [];
+        foreach (['pages', 'elements'] as $childKey) {
+            if (!isset($node[$childKey]) || !is_array($node[$childKey])) {
+                continue;
+            }
+            foreach ($node[$childKey] as $child) {
+                if (!is_array($child)) {
+                    continue;
+                }
+                if (isset($child['name']) && isset($child['title'])) {
+                    $title = $this->resolveTitle($child['title']);
+                    if ($title !== null) {
+                        $out[(string) $child['name']] = $title;
+                    }
+                }
+                $out = array_merge($out, $this->indexQuestionTitles($child));
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * SurveyJS titles may be a plain string or a localized object
+     * (`{default: "...", de: "..."}`). Prefer `default`, then the first
+     * non-empty localized string. Returns null when no usable label exists.
+     */
+    private function resolveTitle(mixed $title): ?string
+    {
+        if (is_string($title)) {
+            $trimmed = trim($title);
+            return $trimmed === '' ? null : $trimmed;
+        }
+        if (is_array($title)) {
+            $default = $title['default'] ?? null;
+            if (is_string($default) && trim($default) !== '') {
+                return trim($default);
+            }
+            foreach ($title as $value) {
+                if (is_string($value) && trim($value) !== '') {
+                    return trim($value);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The trailing segment of a dotted normalized key (`panel.question` ->
+     * `question`); returns the key unchanged when it has no dot.
+     */
+    private function lastSegment(string $key): string
+    {
+        $pos = strrpos($key, '.');
+        return $pos === false ? $key : substr($key, $pos + 1);
     }
 
     /**

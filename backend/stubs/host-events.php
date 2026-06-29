@@ -109,6 +109,7 @@ namespace App\Service\CMS {
             /**
              * @param array<string, mixed> $data
              * @param array<string, mixed>|null $updateBasedOn
+             * @param array<string, string|null>|null $fieldLabels
              */
             public function saveData(
                 string $tableName,
@@ -116,6 +117,7 @@ namespace App\Service\CMS {
                 string $transactionBy = 'by_user',
                 ?array $updateBasedOn = null,
                 bool $ownEntriesOnly = true,
+                ?array $fieldLabels = null,
             ): int|false {
                 return false;
             }
