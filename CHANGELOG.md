@@ -5,6 +5,31 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [0.3.4] - 2026-06-26
+
+### Changed
+- **Immutable storage keys for survey answers (host issue #56).** Survey answers
+  are written to the host `data_tables` keyed by `question.name`, which the host
+  now treats as the permanent, immutable `data_cols.field_key`. The plugin now
+  also forwards each question's **title** as the column's mutable
+  `display_name`, so admin data views and CMS interpolation show the
+  human-readable label while storage stays keyed by the stable question name.
+  `SurveyAnswerNormalizer` emits an optional per-cell `title`, and
+  `CoreDataTableWriter` passes those titles to `DataService::saveData()` as
+  field labels. Degrades gracefully on an older host (the extra label argument
+  is ignored).
+
+### Added
+- **Question-name rename/removal guard.** Publishing a new survey version is now
+  blocked (HTTP 409) when it renames or removes a `question.name` that already
+  has stored responses, so historical answers cannot be orphaned or fragmented.
+  Editing a question **title** stays free (it is only a display label), and
+  adding new questions is always allowed.
+
+> Patch release (no DB migration). Tag `v0.3.4` to publish the composer package
+> and the mobile renderer. Recommended on hosts that ship the issue-#56
+> `data_cols.field_key`/`display_name` split; older hosts are unaffected.
+
 ## [0.3.3] - 2026-06-25
 
 ### Fixed
