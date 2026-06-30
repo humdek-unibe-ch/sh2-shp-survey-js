@@ -120,19 +120,31 @@ final class SurveysAdminController
         }
         $body = $this->decode($request);
         $userId = $this->userId($request);
-        if (array_key_exists('definition', $body)) {
-            if (!is_array($body['definition'])) {
-                return new JsonResponse(['error' => 'definition must be an object.'], 422);
+        try {
+            if (array_key_exists('definition', $body)) {
+                if (!is_array($body['definition'])) {
+                    return new JsonResponse(['error' => 'definition must be an object.'], 422);
+                }
+                $this->surveyService->saveDraft(
+                    $survey,
+                    $this->normaliseSurveyDefinition($body['definition']),
+                    $this->stringOrNull($body['expectedDraftHash'] ?? null),
+                    $userId,
+                    (bool) ($body['force'] ?? false),
+                );
             }
-            $this->surveyService->saveDraft(
-                $survey,
-                $this->normaliseSurveyDefinition($body['definition']),
-                $this->stringOrNull($body['expectedDraftHash'] ?? null),
-                $userId,
-                (bool) ($body['force'] ?? false),
-            );
+            $version = $this->surveyService->publishDraft($survey, $userId);
+        } catch (\DomainException $e) {
+            // 409: draft conflict or an immutable-key violation (issue #56) -
+            // a renamed/removed answered question.name.
+            if ($e->getCode() === 409) {
+                return new JsonResponse([
+                    'error' => $e->getMessage(),
+                    'data' => $this->detail($survey),
+                ], 409);
+            }
+            throw $e;
         }
-        $version = $this->surveyService->publishDraft($survey, $userId);
         return new JsonResponse(['data' => [
             'id' => $survey->getId(),
             'surveyId' => $survey->getSurveyId(),

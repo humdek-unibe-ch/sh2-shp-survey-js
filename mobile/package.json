@@ -1,6 +1,6 @@
 {
     "name": "@selfhelp/sh2-shp-survey-js-mobile",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "description": "SurveyJS v2 mobile renderer for the SelfHelp plugin ecosystem. Hosts the official SurveyJS web runtime (survey-core + survey-react-ui) in an isolated, self-contained WebView (react-native-webview on native, iframe on web export) driven by a typed postMessage bridge; the native host owns all authenticated API calls.",
     "license": "MPL-2.0",
     "repository": {

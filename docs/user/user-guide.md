@@ -3,7 +3,7 @@
 Audience: Non-technical users, admins, and operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-03.
+Last verified: 2026-06-26.
 Source of truth: Observable product behavior of the current build.
 
 This guide walks an admin through everything they can do with the
@@ -121,6 +121,16 @@ To publish:
 
 Every published version is durable; you cannot delete a version that
 has even one response attached to it.
+
+> **You cannot rename or remove a question that already has responses.**
+> A question's **name** is its permanent storage key — it is how every saved
+> answer is linked across versions. If your draft renames or deletes a question
+> that already has stored responses, **Publish is rejected** with a clear
+> message. To change the *wording* a respondent sees, edit the question's
+> **title** instead (the title is only a display label and is always safe to
+> change). To ask something genuinely new, add a **new** question with a new
+> name. This is what keeps your collected data from splitting into two columns
+> when you edit a live survey.
 
 > **Renaming**: hover the survey name in the Designer header and
 > click the pencil icon (or double-click the title) to rename inline

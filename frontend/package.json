@@ -1,6 +1,6 @@
 {
     "name": "@humdek/sh2-shp-survey-js",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "description": "SurveyJS v2 frontend integration for the SelfHelp CMS plugin ecosystem.",
     "license": "MPL-2.0",
     "private": true,

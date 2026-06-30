@@ -56,8 +56,16 @@ final class CoreDataTableWriter implements DataTableWriterInterface
             'id_users'    => $userId ?? 1,
             'response_id' => $responseId,
         ];
+        // Storage key is the immutable question.name; the question title (when
+        // present) travels as the column display label. The host stores the key
+        // and only auto-refreshes the label while it was not admin-curated.
+        $labels = [];
         foreach ($cells as $cell) {
             $data[$cell['name']] = $this->stringifyCellValue($cell['value']);
+            $title = $cell['title'] ?? null;
+            if (is_string($title) && $title !== '') {
+                $labels[$cell['name']] = $title;
+            }
         }
 
         $dataRowId = $this->dataService->saveData(
@@ -71,6 +79,7 @@ final class CoreDataTableWriter implements DataTableWriterInterface
             // inserted.
             $existingDataRowId !== null ? ['id' => $existingDataRowId] : null,
             false,
+            $labels === [] ? null : $labels,
         );
 
         if ($dataRowId === false) {
