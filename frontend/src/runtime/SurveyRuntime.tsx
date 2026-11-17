@@ -7,8 +7,11 @@ SPDX-License-Identifier: MPL-2.0
  * `sh-shp-survey_js` plugin.
  *
  * Responsibilities:
- *   - fetch `/published/{key}` (definition + interpolated tokens +
- *     `runtimeConfig` + lockout state),
+ *   - fetch `/published/{key}` for the page and section it is drawn on
+ *     (definition with the section's variables filled in, the section's
+ *     settings as `runtimeConfig`, lockout and window state). Every call
+ *     names page and section; the server reads the settings and enforces
+ *     the limits, the client sends none (rule 7.7),
  *   - render one of the "lifecycle" UI states (loading, locked,
  *     edit-blocked, ready, submitting, done, timed-out, error),
  *   - hydrate from server-side draft / localStorage on mount when
@@ -19,9 +22,7 @@ SPDX-License-Identifier: MPL-2.0
  *   - copy URL params to `survey.setVariable('extra_param_<key>', v)`,
  *   - register a Save-as-PDF nav button when the feature flag +
  *     SurveyJS commercial license are configured,
- *   - send the `enforce` payload (oncePerUser / windowStart-End /
- *     responseId / progress) so the server re-validates the
- *     submission,
+ *   - send which response a submit is (responseId, edit mode, progress),
  *   - wire the file question pipeline (upload / download / clear)
  *     through the plugin's secure file endpoints,
  *   - render "already submitted" / "not yet active" Markdown labels
@@ -42,7 +43,7 @@ import {
 import {
     type IDraftPayload,
     type IPublishedSurvey,
-    type ISubmissionEnforcePayload,
+    type ISurveySectionRef,
     RUNTIME_LICENSE_HEADER,
     deleteDraft,
     deleteSurveyFile,
@@ -74,12 +75,21 @@ type TPluginStyleSection = {
     [key: string]: unknown;
 };
 
+/** The page the section is drawn on (`IPluginStyleProps.page` of the plugin SDK). */
+interface ISurveyHostPage {
+    id: number | null;
+    languageId: number | null;
+    preview: boolean;
+    routeParams: Record<string, string>;
+}
+
 export interface ISurveyJsStyleProps {
     style?: TPluginStyleSection;
     section?: TPluginStyleSection;
     values?: Record<string, unknown>;
     styleProps?: Record<string, string>;
     cssClass?: string;
+    page?: ISurveyHostPage;
 }
 
 interface ISurveyRuntimeBridge {
@@ -97,6 +107,7 @@ type LifecycleState =
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
     | { kind: 'not-active'; label: string | null }
+    | { kind: 'login-required' }
     | { kind: 'locked'; label: string | null; reason?: string }
     | { kind: 'ready' }
     | { kind: 'submitting' }
@@ -121,11 +132,21 @@ export function SurveyRuntime({
     section,
     styleProps,
     cssClass,
+    page,
 }: ISurveyJsStyleProps): React.ReactElement | null {
     const runtimeSection = section ?? style;
     const surveyIdentifier = useMemo(() => extractFieldString(runtimeSection, 'survey-js'), [runtimeSection]);
     const sectionId = runtimeSection?.id;
-    const config = useMemo(() => buildRuntimeConfigFromSection(runtimeSection), [runtimeSection]);
+    const pageId = page?.id ?? null;
+    const languageId = page?.languageId ?? null;
+    const preview = page?.preview ?? false;
+    const routeParams = page?.routeParams;
+    const sectionRef = useMemo<ISurveySectionRef | null>(
+        () => (pageId !== null && sectionId !== undefined
+            ? { pageId, sectionId, languageId, preview, routeParams: routeParams ?? {} }
+            : null),
+        [pageId, sectionId, languageId, preview, routeParams],
+    );
 
     const [bridge, setBridge] = useState<ISurveyRuntimeBridge | null>(null);
     const [published, setPublished] = useState<IPublishedSurvey | null>(null);
@@ -181,10 +202,10 @@ export function SurveyRuntime({
 
     // Step 2: fetch the published definition + runtimeConfig.
     useEffect(() => {
-        if (!surveyIdentifier) return;
+        if (!surveyIdentifier || !sectionRef) return;
         let cancelled = false;
-        const urlParams = config.urlParams ? extractUrlParams() : {};
-        fetchPublishedSurvey(surveyIdentifier, configToServerConfig(config), urlParams)
+        // Sent always; the server keeps them only when the section passes URL parameters.
+        fetchPublishedSurvey(surveyIdentifier, sectionRef, extractUrlParams())
             .then((data) => {
                 if (cancelled) return;
                 setPublished(data);
@@ -201,7 +222,7 @@ export function SurveyRuntime({
                     });
                     return;
                 }
-                if (isOutsideSchedule(data.runtimeConfig)) {
+                if (data.state.notActive) {
                     setLifecycle({
                         kind: 'not-active',
                         label: data.runtimeConfig.labelSurveyNotActive,
@@ -210,19 +231,24 @@ export function SurveyRuntime({
                 }
                 setLifecycle({ kind: 'ready' });
             })
-            .catch((err: Error) => {
-                if (!cancelled) {
-                    setLifecycle({ kind: 'error', message: `Survey not available: ${err.message}` });
+            .catch((err: Error & { reason?: string }) => {
+                if (cancelled) return;
+                if (err.reason === 'authentication_required') {
+                    setLifecycle({ kind: 'login-required' });
+                    return;
                 }
+                setLifecycle({ kind: 'error', message: `Survey not available: ${err.message}` });
             });
         return () => {
             cancelled = true;
         };
-    }, [surveyIdentifier, config]);
+    }, [surveyIdentifier, sectionRef]);
 
     // Step 3: build the SurveyJS model once both bridge and definition arrived.
     useEffect(() => {
-        if (!bridge || !published || lifecycle.kind !== 'ready') return;
+        if (!bridge || !published || !sectionRef || lifecycle.kind !== 'ready') return;
+        const config = published.runtimeConfig;
+        const section: ISurveySectionRef = sectionRef;
         let disposed = false;
 
         const nextModel = new bridge.Model(published.definition);
@@ -231,8 +257,7 @@ export function SurveyRuntime({
         // shows more than one survey.
         nextModel.elementIdPrefix = `surveyjs-${sectionId ?? published.surveyId}-`;
 
-        const tokensAndExtras = { ...published.tokens, ...published.extraParams };
-        for (const [key, value] of Object.entries(tokensAndExtras)) {
+        for (const [key, value] of Object.entries(published.extraParams)) {
             nextModel.setVariable(key, value);
         }
 
@@ -241,18 +266,18 @@ export function SurveyRuntime({
             responseIdProvider: () => responseIdRef.current ?? '',
             uploadFile: async (questionName, file) => {
                 const responseId = ensureResponseId();
-                return uploadSurveyFile(published.surveyId, {
+                return uploadSurveyFile(published.surveyId, sectionRef, {
                     responseId,
                     questionName,
                     file,
                 });
             },
             deleteFile: async (fileId) => {
-                await deleteSurveyFile(published.surveyId, fileId);
+                await deleteSurveyFile(published.surveyId, sectionRef, fileId);
             },
         });
 
-        if (config.savePdf && published.runtimeConfig.savePdf) {
+        if (config.savePdf) {
             const licenseKey = readRuntimeLicenseKey();
             if (licenseKey) {
                 bridge.setLicenseKey(licenseKey);
@@ -263,7 +288,7 @@ export function SurveyRuntime({
         // Step 4: hydrate (server draft / local cache / edit-mode response).
         void hydrateModel(nextModel, {
             published,
-            config,
+            sectionRef,
             draftStore: draftStoreRef.current,
             editModeResponseId: editModeResponseIdRef.current,
             assignResponseId(value) {
@@ -310,7 +335,7 @@ export function SurveyRuntime({
                     if (draftStoreRef.current && responseIdRef.current) {
                         draftStoreRef.current.clear(responseIdRef.current);
                     }
-                    void deleteDraft(published.surveyId, responseIdRef.current ?? undefined).catch(() => {});
+                    void deleteDraft(published.surveyId, sectionRef, responseIdRef.current ?? undefined).catch(() => {});
                 },
             });
             timerRef.current.start();
@@ -320,13 +345,11 @@ export function SurveyRuntime({
         nextModel.onComplete.add((sender) => {
             submittingRef.current = true;
             setLifecycle({ kind: 'submitting' });
-            const enforce = buildEnforcePayload(config, responseIdRef.current, {
-                pageNo: sender.currentPageNo,
-                triggerType: 'finished',
-                meta: metaRef.current,
+            void submitSurveyAnswers(published.surveyId, sectionRef, sender.data, {
+                responseId: responseIdRef.current ?? undefined,
                 editMode: editModeResponseIdRef.current !== null,
-            });
-            void submitSurveyAnswers(published.surveyId, sender.data, enforce)
+                progress: { pageNo: sender.currentPageNo, meta: metaRef.current, locale: sender.locale },
+            })
                 .then((result) => {
                     if (disposed) return;
                     submittingRef.current = false;
@@ -357,6 +380,10 @@ export function SurveyRuntime({
                     submittingRef.current = false;
                     if (disposed) return;
                     const reason = (err as { reason?: string }).reason ?? '';
+                    if (reason === 'not_active') {
+                        setLifecycle({ kind: 'not-active', label: config.labelSurveyNotActive });
+                        return;
+                    }
                     if (reason === 'already_submitted_once' || reason === 'already_submitted_in_window') {
                         setLifecycle({
                             kind: 'locked',
@@ -400,7 +427,7 @@ export function SurveyRuntime({
             };
             draftStoreRef.current?.save(localPayload);
             try {
-                await saveDraft(published.surveyId, {
+                await saveDraft(published.surveyId, section, {
                     responseId,
                     pageNo: survey.currentPageNo,
                     payload: {
@@ -415,7 +442,7 @@ export function SurveyRuntime({
                 // holds the answer; the next autosave will retry.
             }
         }
-    }, [bridge, published, sectionId, config]);
+    }, [bridge, published, sectionId, sectionRef]);
 
     const startOver = useCallback(() => {
         if (!published || !model) return;
@@ -453,6 +480,14 @@ export function SurveyRuntime({
         return renderInfoBlock(
             lifecycle.label,
             'gray',
+        );
+    }
+
+    if (lifecycle.kind === 'login-required') {
+        return (
+            <StateFrame>
+                <Alert color="blue">Please sign in to answer this survey.</Alert>
+            </StateFrame>
         );
     }
 
@@ -572,7 +607,7 @@ function hasMeaningfulHtmlContent(value: string): boolean {
 
 interface IHydrateArgs {
     published: IPublishedSurvey;
-    config: IRuntimeSectionConfig;
+    sectionRef: ISurveySectionRef;
     draftStore: LocalDraftStore | null;
     editModeResponseId: string | null;
     assignResponseId: (value: string) => void;
@@ -580,11 +615,11 @@ interface IHydrateArgs {
 }
 
 async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHydrateArgs): Promise<void> {
-    const { published, config, draftStore, editModeResponseId, assignResponseId, captureMeta } = args;
+    const { published, sectionRef, draftStore, editModeResponseId, assignResponseId, captureMeta } = args;
     captureMeta(captureSurveyMeta());
 
     if (editModeResponseId) {
-        const editable = await fetchEditableResponse(published.surveyId, editModeResponseId).catch(() => null);
+        const editable = await fetchEditableResponse(published.surveyId, sectionRef, editModeResponseId).catch(() => null);
         if (editable) {
             assignResponseId(editable.responseId);
             model.data = { ...editable.answers };
@@ -592,7 +627,7 @@ async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHy
         }
     }
 
-    if (config.restartOnRefresh) {
+    if (published.runtimeConfig.restartOnRefresh) {
         const fresh = `R_${cryptoRandomHex(8)}`;
         assignResponseId(fresh);
         return;
@@ -603,6 +638,7 @@ async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHy
     try {
         const draft: IDraftPayload | null = await fetchDraft(
             published.surveyId,
+            sectionRef,
             published.state.draft?.responseId,
         );
         if (draft) {
@@ -647,90 +683,6 @@ function readRuntimeLicenseKey(): string {
     return (window as Window & { __SURVEYJS_LICENSE_KEY?: string }).__SURVEYJS_LICENSE_KEY ?? '';
 }
 
-function buildEnforcePayload(
-    config: IRuntimeSectionConfig,
-    responseId: string | null,
-    progress: { pageNo: number; triggerType: string; meta: ISurveyMeta | null; editMode?: boolean },
-): ISubmissionEnforcePayload {
-    const scheduleWindow = config.oncePerSchedule
-        ? resolveScheduleWindow(config.startTime, config.endTime)
-        : null;
-    return {
-        oncePerUser: config.oncePerUser,
-        oncePerSchedule: config.oncePerSchedule,
-        allowAnonymous: config.allowAnonymous,
-        windowStart: scheduleWindow?.start ?? null,
-        windowEnd: scheduleWindow?.end ?? null,
-        responseId: responseId ?? undefined,
-        editMode: progress.editMode ?? false,
-        progress: {
-            pageNo: progress.pageNo,
-            triggerType: progress.triggerType,
-            meta: progress.meta,
-        },
-    };
-}
-
-function resolveScheduleWindow(
-    startTime: string | null,
-    endTime: string | null,
-): { start: string; end: string } | null {
-    const start = parseClockTimeParts(startTime);
-    const end = parseClockTimeParts(endTime);
-    if (!start || !end) return null;
-
-    const now = new Date();
-    const windowStart = new Date(now);
-    windowStart.setHours(start.hour, start.minute, 0, 0);
-
-    const windowEnd = new Date(now);
-    windowEnd.setHours(end.hour, end.minute, 0, 0);
-
-    if (windowStart.getTime() > windowEnd.getTime()) {
-        if (windowEnd.getTime() > now.getTime()) {
-            windowStart.setDate(windowStart.getDate() - 1);
-        } else {
-            windowEnd.setDate(windowEnd.getDate() + 1);
-        }
-    }
-
-    return {
-        start: windowStart.toISOString(),
-        end: windowEnd.toISOString(),
-    };
-}
-
-function parseClockTimeParts(time: string | null): { hour: number; minute: number } | null {
-    if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return null;
-    const parts = time.split(':').map((part) => Number.parseInt(part, 10));
-    return {
-        hour: parts[0] ?? 0,
-        minute: parts[1] ?? 0,
-    };
-}
-
-function isOutsideSchedule(config: { startTime: string | null; endTime: string | null }): boolean {
-    if (!config.startTime || !config.endTime) return false;
-    if (config.startTime === '00:00' && config.endTime === '00:00') return false;
-    const now = new Date();
-    const start = parseClockTime(config.startTime);
-    const end = parseClockTime(config.endTime);
-    if (start === null || end === null) return false;
-    const minutesNow = now.getHours() * 60 + now.getMinutes();
-    if (start <= end) {
-        return minutesNow < start || minutesNow > end;
-    }
-    return minutesNow > end && minutesNow < start;
-}
-
-function parseClockTime(time: string | null): number | null {
-    if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return null;
-    const parts = time.split(':').map((part) => Number.parseInt(part, 10));
-    const hh = parts[0] ?? 0;
-    const mm = parts[1] ?? 0;
-    return hh * 60 + mm;
-}
-
 function readQueryParam(name: string): string | null {
     if (typeof window === 'undefined') return null;
     const value = new URL(window.location.href).searchParams.get(name);
@@ -745,33 +697,6 @@ function cryptoRandomHex(byteLength: number): string {
         for (let i = 0; i < byteLength; i++) bytes[i] = Math.floor(Math.random() * 256);
     }
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
-}
-
-function configToServerConfig(config: IRuntimeSectionConfig): Record<string, unknown> {
-    const scheduleWindow = config.oncePerSchedule
-        ? resolveScheduleWindow(config.startTime, config.endTime)
-        : null;
-    return {
-        restartOnRefresh: config.restartOnRefresh,
-        autoSaveIntervalSeconds: config.autoSaveIntervalSeconds,
-        timeoutMinutes: config.timeoutMinutes,
-        savePdf: config.savePdf,
-        closeModalAtEnd: config.closeModalAtEnd,
-        redirectAtEnd: config.redirectAtEnd,
-        urlParams: config.urlParams,
-        startTime: config.startTime,
-        endTime: config.endTime,
-        oncePerUser: config.oncePerUser,
-        oncePerSchedule: config.oncePerSchedule,
-        ownEntriesOnly: config.ownEntriesOnly,
-        allowAnonymous: config.allowAnonymous,
-        windowStart: scheduleWindow?.start ?? null,
-        windowEnd: scheduleWindow?.end ?? null,
-        labelSurveyDone: config.labelSurveyDone,
-        labelSurveyNotActive: config.labelSurveyNotActive,
-        dataConfig: config.dataConfig,
-        dynamicReplacement: config.dynamicReplacement,
-    };
 }
 
 function ensureRuntimeProperties(bridge: ISurveyRuntimeBridge): void {
@@ -835,48 +760,6 @@ async function exportSurveyAsPdf(
     }
 }
 
-export interface IRuntimeSectionConfig {
-    restartOnRefresh: boolean;
-    autoSaveIntervalSeconds: number;
-    timeoutMinutes: number;
-    savePdf: boolean;
-    closeModalAtEnd: boolean;
-    redirectAtEnd: string | null;
-    urlParams: boolean;
-    startTime: string | null;
-    endTime: string | null;
-    oncePerUser: boolean;
-    oncePerSchedule: boolean;
-    ownEntriesOnly: boolean;
-    allowAnonymous: boolean;
-    labelSurveyDone: string | null;
-    labelSurveyNotActive: string | null;
-    dataConfig: Record<string, unknown>;
-    dynamicReplacement: Record<string, unknown>;
-}
-
-function buildRuntimeConfigFromSection(section?: TPluginStyleSection): IRuntimeSectionConfig {
-    return {
-        restartOnRefresh: extractFieldBoolean(section, 'restart_on_refresh', false),
-        autoSaveIntervalSeconds: extractFieldNumber(section, 'auto_save_interval', 0),
-        timeoutMinutes: extractFieldNumber(section, 'timeout', 0),
-        savePdf: extractFieldBoolean(section, 'save_pdf', false),
-        closeModalAtEnd: extractFieldBoolean(section, 'close_modal_at_end', false),
-        redirectAtEnd: extractFieldString(section, 'redirect_at_end'),
-        urlParams: extractFieldBoolean(section, 'url_params', false),
-        startTime: extractFieldString(section, 'start_time'),
-        endTime: extractFieldString(section, 'end_time'),
-        oncePerUser: extractFieldBoolean(section, 'once_per_user', false),
-        oncePerSchedule: extractFieldBoolean(section, 'once_per_schedule', false),
-        ownEntriesOnly: extractFieldBoolean(section, 'own_entries_only', false),
-        allowAnonymous: extractFieldBoolean(section, 'allow_anonymous', true),
-        labelSurveyDone: extractFieldString(section, 'label_survey_done'),
-        labelSurveyNotActive: extractFieldString(section, 'label_survey_not_active'),
-        dataConfig: extractFieldJsonObject(section, 'data_config'),
-        dynamicReplacement: extractFieldJsonObject(section, 'dynamic_replacement'),
-    };
-}
-
 function extractFieldString(section: TPluginStyleSection | undefined, key: string): string | null {
     const value = section?.fields?.[key] ?? section?.[key];
     if (typeof value === 'string' && value.trim() !== '') return value.trim();
@@ -892,44 +775,6 @@ function extractFieldString(section: TPluginStyleSection | undefined, key: strin
         return String(content).trim() || null;
     }
     return null;
-}
-
-function extractFieldBoolean(
-    section: TPluginStyleSection | undefined,
-    key: string,
-    fallback: boolean,
-): boolean {
-    const raw = extractFieldString(section, key);
-    if (raw === null) return fallback;
-    return raw === '1' || raw.toLowerCase() === 'true';
-}
-
-function extractFieldNumber(
-    section: TPluginStyleSection | undefined,
-    key: string,
-    fallback: number,
-): number {
-    const raw = extractFieldString(section, key);
-    if (raw === null) return fallback;
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function extractFieldJsonObject(
-    section: TPluginStyleSection | undefined,
-    key: string,
-): Record<string, unknown> {
-    const raw = extractFieldString(section, key);
-    if (!raw) return {};
-    try {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
-        }
-    } catch {
-        // fall through to empty fallback below
-    }
-    return {};
 }
 
 // keep the export so the legacy import in `index.ts` still wires up

@@ -7,9 +7,13 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Wraps every public route declared in `plugin.json#apiRoutes` (the
  * host's `PluginApiRouteSynchronizer` persists those rows into
- * `api_routes` at install/update time): survey hydration, draft
- * autosave, submission, edit-mode rehydration, file pipeline +
- * dynamic choices.
+ * `api_routes` at install/update time): survey hydration, progress,
+ * submission, edit-mode rehydration and the file pipeline.
+ *
+ * Every call names the page and the section it is made for
+ * ({@link ISurveySectionRef}, sent as query parameters). The server checks
+ * the caller may use that section and reads every setting from it; the
+ * client sends no limits of its own (rule 7.7).
  *
  * The client is intentionally framework-agnostic (plain fetch) so it
  * is easy to call from the runtime style component, custom-question
@@ -19,6 +23,16 @@ SPDX-License-Identifier: MPL-2.0
 import { csrfHeaders } from './csrf';
 import { guestKeyHeaders } from './guestKey';
 
+/** The section a call is made for, as the host tells the plugin style. */
+export interface ISurveySectionRef {
+    pageId: number;
+    sectionId: number;
+    languageId: number | null;
+    preview: boolean;
+    routeParams: Record<string, string>;
+}
+
+/** The section's settings, read by the server from the published section. */
 export interface IRuntimeConfig {
     restartOnRefresh: boolean;
     autoSaveIntervalSeconds: number;
@@ -27,21 +41,18 @@ export interface IRuntimeConfig {
     closeModalAtEnd: boolean;
     redirectAtEnd: string | null;
     urlParams: boolean;
-    startTime: string | null;
-    endTime: string | null;
     oncePerUser: boolean;
     oncePerSchedule: boolean;
-    ownEntriesOnly: boolean;
-    allowAnonymous: boolean;
     labelSurveyDone: string | null;
     labelSurveyNotActive: string | null;
 }
 
 export interface IPublishedRuntimeState {
     isAuthenticated: boolean;
-    visitorId: string | null;
+    /** Outside the section's daily window, in the participant's timezone. */
+    notActive: boolean;
     lockoutReason: { reason: string; responseId: string; submittedAt: string | null } | null;
-    draft: { responseId: string; pageNo: number; lastSavedAt: string } | null;
+    draft: { responseId: string; pageNo: number; lastSavedAt: string | null } | null;
     completedResponseId: string | null;
 }
 
@@ -50,9 +61,9 @@ export interface IPublishedSurvey {
     name: string;
     themeCode: string | null;
     revision: number;
+    /** The published definition with the section's `{{variables}}` filled in. */
     definition: Record<string, unknown>;
     extraParams: Record<string, string | number | boolean>;
-    tokens: Record<string, string>;
     runtimeConfig: IRuntimeConfig;
     state: IPublishedRuntimeState;
 }
@@ -89,23 +100,10 @@ export interface IEditResponsePayload {
     answers: Record<string, unknown>;
 }
 
-export interface ISubmissionEnforcePayload {
-    oncePerUser?: boolean;
-    oncePerSchedule?: boolean;
-    allowAnonymous?: boolean;
-    windowStart?: string | null;
-    windowEnd?: string | null;
+/** What the client says about a submit: which response, and where the participant stands. */
+export interface ISubmissionPayload {
     responseId?: string;
-    /**
-     * When true, the backend updates the existing run identified by
-     * `responseId` in place instead of creating a fresh one. Used by
-     * the runtime when the participant is editing a previously
-     * submitted response (`?record_id=…`).
-     *
-     * Without this flag the backend silently generates a new
-     * `responseId` and writes a duplicate row, which breaks the
-     * legacy plugin's "edit" parity.
-     */
+    /** Update the participant's submitted response `responseId` in place (`?record_id=…`). */
     editMode?: boolean;
     progress?: Record<string, unknown>;
 }
@@ -119,21 +117,28 @@ export interface ISubmissionError extends Error {
 // Browser-side public-runtime calls go through the host's Next.js
 // BFF proxy (`src/app/api/[...path]/route.ts`). The proxy validates
 // CSRF, attaches the httpOnly JWT and forwards to Symfony with the
-// `/cms-api/v1` prefix prepended. Calling `/cms-api/v1/...` directly
-// from the browser would skip the proxy and 404 against the Next.js
-// dev server. Keep paths after `/api/` in sync with the public
-// entries in `plugin.json#apiRoutes` — those are the single source
-// of truth the host installer persists into `api_routes`.
+// `/cms-api/v1` prefix prepended. Keep paths after `/api/` in sync with
+// the public entries in `plugin.json#apiRoutes`.
 const BASE = '/api/plugins/sh2-shp-survey-js';
 export const RUNTIME_LICENSE_HEADER = 'X-SurveyJs-License-Key';
 
-function runtimeConfigHeader(config?: Record<string, unknown>): Record<string, string> {
-    if (!config) return {};
-    try {
-        return { 'X-SurveyJs-Runtime-Config': JSON.stringify(config) };
-    } catch {
-        return {};
+function sectionUrl(path: string, ref: ISurveySectionRef, extra: Record<string, string> = {}): string {
+    const url = new URL(`${BASE}${path}`, window.location.origin);
+    url.searchParams.set('page_id', String(ref.pageId));
+    url.searchParams.set('section_id', String(ref.sectionId));
+    if (ref.languageId !== null) url.searchParams.set('language_id', String(ref.languageId));
+    if (ref.preview) url.searchParams.set('preview', '1');
+    for (const [name, value] of Object.entries(ref.routeParams)) {
+        url.searchParams.set(`route[${name}]`, value);
     }
+    for (const [name, value] of Object.entries(extra)) {
+        url.searchParams.set(name, value);
+    }
+    return url.toString();
+}
+
+function surveyPath(key: string, rest = ''): string {
+    return `/published/${encodeURIComponent(key)}${rest}`;
 }
 
 async function ensureOk<T>(res: Response): Promise<T> {
@@ -156,22 +161,16 @@ async function ensureOk<T>(res: Response): Promise<T> {
 
 export async function fetchPublishedSurvey(
     key: string,
-    config?: Record<string, unknown>,
+    ref: ISurveySectionRef,
     urlParams?: Record<string, string | number | boolean>,
 ): Promise<IPublishedSurvey> {
-    const url = new URL(`${BASE}/published/${encodeURIComponent(key)}`, window.location.origin);
-    if (urlParams) {
-        for (const [k, v] of Object.entries(urlParams)) {
-            url.searchParams.set(`extraParams[${k}]`, String(v));
-        }
+    const extra: Record<string, string> = {};
+    for (const [k, v] of Object.entries(urlParams ?? {})) {
+        extra[`extraParams[${k}]`] = String(v);
     }
-    const res = await fetch(url.toString(), {
+    const res = await fetch(sectionUrl(surveyPath(key), ref, extra), {
         credentials: 'include',
-        headers: {
-            Accept: 'application/json',
-            ...guestKeyHeaders(),
-            ...runtimeConfigHeader(config),
-        },
+        headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });
     const runtimeLicenseKey = res.headers.get(RUNTIME_LICENSE_HEADER);
     if (typeof window !== 'undefined') {
@@ -188,10 +187,11 @@ export async function fetchPublishedSurvey(
 
 export async function submitSurveyAnswers(
     key: string,
+    ref: ISurveySectionRef,
     answers: Record<string, unknown>,
-    enforce?: ISubmissionEnforcePayload,
+    submission: ISubmissionPayload = {},
 ): Promise<ISubmitResult> {
-    const res = await fetch(`${BASE}/published/${encodeURIComponent(key)}/submit`, {
+    const res = await fetch(sectionUrl(surveyPath(key, '/submit'), ref), {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -200,7 +200,7 @@ export async function submitSurveyAnswers(
             'Content-Type': 'application/json',
             ...csrfHeaders(),
         },
-        body: JSON.stringify({ answers, enforce: enforce ?? {} }),
+        body: JSON.stringify({ answers, enforce: submission }),
     });
     const body = await ensureOk<{ data: ISubmitResult }>(res);
     return body.data;
@@ -208,16 +208,10 @@ export async function submitSurveyAnswers(
 
 export async function fetchDraft(
     key: string,
+    ref: ISurveySectionRef,
     responseId?: string,
 ): Promise<IDraftPayload | null> {
-    const url = new URL(
-        `${BASE}/published/${encodeURIComponent(key)}/progress`,
-        window.location.origin,
-    );
-    if (responseId) {
-        url.searchParams.set('responseId', responseId);
-    }
-    const res = await fetch(url.toString(), {
+    const res = await fetch(sectionUrl(surveyPath(key, '/progress'), ref, responseId ? { responseId } : {}), {
         credentials: 'include',
         headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });
@@ -227,13 +221,14 @@ export async function fetchDraft(
 
 export async function saveDraft(
     key: string,
+    ref: ISurveySectionRef,
     payload: {
         responseId?: string;
         pageNo: number;
         payload: Record<string, unknown>;
     },
 ): Promise<IDraftPayload> {
-    const res = await fetch(`${BASE}/published/${encodeURIComponent(key)}/progress`, {
+    const res = await fetch(sectionUrl(surveyPath(key, '/progress'), ref), {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -248,15 +243,8 @@ export async function saveDraft(
     return body.data;
 }
 
-export async function deleteDraft(key: string, responseId?: string): Promise<void> {
-    const url = new URL(
-        `${BASE}/published/${encodeURIComponent(key)}/progress`,
-        window.location.origin,
-    );
-    if (responseId) {
-        url.searchParams.set('responseId', responseId);
-    }
-    const res = await fetch(url.toString(), {
+export async function deleteDraft(key: string, ref: ISurveySectionRef, responseId?: string): Promise<void> {
+    const res = await fetch(sectionUrl(surveyPath(key, '/progress'), ref, responseId ? { responseId } : {}), {
         method: 'DELETE',
         credentials: 'include',
         headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
@@ -268,14 +256,10 @@ export async function deleteDraft(key: string, responseId?: string): Promise<voi
 
 export async function fetchEditableResponse(
     key: string,
+    ref: ISurveySectionRef,
     responseId: string,
 ): Promise<IEditResponsePayload | null> {
-    const url = new URL(
-        `${BASE}/published/${encodeURIComponent(key)}/edit`,
-        window.location.origin,
-    );
-    url.searchParams.set('responseId', responseId);
-    const res = await fetch(url.toString(), {
+    const res = await fetch(sectionUrl(surveyPath(key, '/edit'), ref, { responseId }), {
         credentials: 'include',
         headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });
@@ -288,13 +272,14 @@ export async function fetchEditableResponse(
 
 export async function uploadSurveyFile(
     key: string,
+    ref: ISurveySectionRef,
     args: { responseId: string; questionName: string; file: File },
 ): Promise<IUploadedFile> {
     const form = new FormData();
     form.append('responseId', args.responseId);
     form.append('questionName', args.questionName);
     form.append('file', args.file, args.file.name);
-    const res = await fetch(`${BASE}/published/${encodeURIComponent(key)}/files`, {
+    const res = await fetch(sectionUrl(surveyPath(key, '/files'), ref), {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -308,36 +293,13 @@ export async function uploadSurveyFile(
     return body.data;
 }
 
-export async function deleteSurveyFile(key: string, fileId: number): Promise<void> {
-    const res = await fetch(
-        `${BASE}/published/${encodeURIComponent(key)}/files/${fileId}`,
-        {
-            method: 'DELETE',
-            credentials: 'include',
-            headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
-        },
-    );
+export async function deleteSurveyFile(key: string, ref: ISurveySectionRef, fileId: number): Promise<void> {
+    const res = await fetch(sectionUrl(surveyPath(key, `/files/${fileId}`), ref), {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
+    });
     if (!res.ok && res.status !== 404) {
         throw new Error(`HTTP ${res.status}`);
     }
-}
-
-export async function fetchChoices(
-    key: string,
-    token: string,
-    config?: Record<string, unknown>,
-): Promise<Array<{ value: string; text?: string }>> {
-    const res = await fetch(
-        `${BASE}/published/${encodeURIComponent(key)}/choices/${encodeURIComponent(token)}`,
-        {
-            credentials: 'include',
-            headers: {
-                Accept: 'application/json',
-                ...guestKeyHeaders(),
-                ...runtimeConfigHeader(config),
-            },
-        },
-    );
-    const body = await ensureOk<{ data: Array<{ value: string; text?: string }> }>(res);
-    return body.data;
 }

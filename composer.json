@@ -28,7 +28,10 @@
     "autoload-dev": {
         "psr-4": {
             "Humdek\\SurveyJsBundle\\Tests\\": "backend/tests/"
-        }
+        },
+        "files": [
+            "backend/stubs/host-events.php"
+        ]
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

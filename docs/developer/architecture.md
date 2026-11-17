@@ -170,8 +170,8 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
 ## Data flow on submission
 
 1. The host frontend renders the `surveyjs` style for a public page.
-2. The style fetches `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}` and renders the SurveyJS model.
-3. On submit, the style POSTs to `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}/submit`.
+2. The style fetches `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}?page_id=…&section_id=…` and renders the SurveyJS model. Every public call names the page and the section it is drawn on (the host passes `page` to plugin styles), with `language_id`, `preview` and `route[...]`. `SurveySectionResolver` lets the core check the caller may use that section (`PublicSectionAccessService`, H4) and reads every setting from the published section into `SurveySectionSettings`; nothing that limits a participant comes from the request. The survey's `{{variables}}` are filled with the section's variables (H1). The reply is never cached.
+3. On submit, the style POSTs to `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}/submit` (same query); it sends only which response it is (response id, edit mode, page reached, language). The server applies login needed, open hours and once per user or window, the window in the participant's timezone.
 4. `SurveysPublicController::submit()` calls `SurveyResponseService::submit()` which:
    - checks the once-per-user and schedule limits,
    - normalizes + sanitizes the answers (`SurveyAnswerNormalizer` + `SurveyJsHtmlSanitizer`),

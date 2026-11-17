@@ -587,18 +587,6 @@
             "requirements": {
                 "fileId": "\\d+"
             }
-        },
-        {
-            "name": "surveyjs_public_choices",
-            "path": "/plugins/sh2-shp-survey-js/published/{key}/choices/{token}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::choices",
-            "methods": [
-                "GET"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+",
-                "token": "[a-zA-Z0-9_-]+"
-            }
         }
     ],
     "scheduledJobs": [],

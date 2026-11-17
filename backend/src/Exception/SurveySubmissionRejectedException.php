@@ -23,6 +23,8 @@ final class SurveySubmissionRejectedException extends \RuntimeException
     public const REASON_ONCE_PER_USER = 'already_submitted_once';
     public const REASON_WINDOW_EXHAUSTED = 'already_submitted_in_window';
     public const REASON_AUTH_REQUIRED = 'authentication_required';
+    /** Outside the section's daily window. */
+    public const REASON_NOT_ACTIVE = 'not_active';
 
     /**
      * Edit-mode submit referenced a responseId that does not exist

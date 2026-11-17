@@ -333,3 +333,126 @@ namespace App\Service\CMS {
         }
     }
 }
+
+namespace App\Exception {
+    if (!\class_exists(ServiceException::class, false)) {
+        /** Mirrors the host service exception (the code is the HTTP status). */
+        class ServiceException extends \Exception
+        {
+            /**
+             * @param array<string, mixed>|null $data
+             */
+            public function __construct(string $message, int $code = 400, ?array $data = null)
+            {
+                parent::__construct($message, $code);
+            }
+        }
+    }
+}
+
+namespace App\Entity {
+    if (!\class_exists(Lookup::class, false)) {
+        class Lookup
+        {
+            public function getLookupCode(): ?string
+            {
+                return null;
+            }
+        }
+    }
+    if (!\class_exists(User::class, false)) {
+        class User
+        {
+            public function getTimezone(): ?Lookup
+            {
+                return null;
+            }
+        }
+    }
+    if (!\class_exists(Page::class, false)) {
+        class Page
+        {
+        }
+    }
+}
+
+namespace App\Service\Core {
+    if (!\class_exists(UserContextAwareService::class, false)) {
+        class UserContextAwareService
+        {
+            public function getCurrentUser(): ?\App\Entity\User
+            {
+                return null;
+            }
+        }
+    }
+    if (!\class_exists(InterpolationService::class, false)) {
+        class InterpolationService
+        {
+            /**
+             * @param array<array-key, mixed> $contentArray
+             * @param array<array-key, mixed> ...$dataArrays
+             * @return array<array-key, mixed>
+             */
+            public function interpolateArray(array $contentArray, array ...$dataArrays): array
+            {
+                return $contentArray;
+            }
+        }
+    }
+}
+
+namespace App\Service\CMS {
+    if (!\class_exists(CmsPreferenceService::class, false)) {
+        class CmsPreferenceService
+        {
+            public function getDefaultTimezone(): ?\App\Entity\Lookup
+            {
+                return null;
+            }
+        }
+    }
+}
+
+namespace App\Service\CMS\Effective {
+    if (!\class_exists(PublicSectionScope::class, false)) {
+        /** Mirrors the host scope of a public section (H4). */
+        final class PublicSectionScope
+        {
+            /**
+             * @param array<string, array<int, string>> $fields
+             */
+            public function __construct(
+                public readonly \App\Entity\Page $page,
+                public readonly object $effective,
+                public readonly int $sectionId,
+                public readonly array $fields,
+            ) {
+            }
+
+            public function field(string $name, int $languageId = 1): string
+            {
+                return '';
+            }
+        }
+    }
+    if (!\class_exists(PublicSectionAccessService::class, false)) {
+        /** Mirrors the host check "may this caller use section S of page P" (H4, H1). */
+        class PublicSectionAccessService
+        {
+            public function forSection(int $pageId, int $sectionId, string $styleName, bool $preview = false): PublicSectionScope
+            {
+                throw new \LogicException('stub');
+            }
+
+            /**
+             * @param array<string, string> $routeParams
+             * @return array<array-key, mixed>
+             */
+            public function variables(PublicSectionScope $scope, int $languageId, array $routeParams = []): array
+            {
+                return [];
+            }
+        }
+    }
+}

@@ -7,11 +7,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1 and 5. Web only; mobile still ships SurveyJS 2.
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5 and 6a. Web only; mobile still ships SurveyJS 2.
+
+**Needs** a core with the section access check and section variables (H4, H1)
+and a frontend that passes `page` to plugin styles (`PluginStyleHost`); set the
+`supports.core` / `compatibility.selfhelp` floors at release.
 
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **The server decides, the client draws (wave 6a).** Every public call names
+  the page and the section (`page_id`, `section_id`, `language_id`, `preview`,
+  `route[...]`). The core checks the caller may use that section (page access,
+  section on the page, condition, style) and every setting (once per user, once
+  per window, open hours, login needed, labels, autosave, PDF) is read from the
+  published section. The client sends no limits any more; a forged limit in the
+  request is ignored. A guest on a section that needs a login gets 401 and a
+  "Please sign in" notice.
+- **The daily window is in the participant's timezone** (their profile, else
+  the CMS default), computed on the server. Submitting outside it is refused
+  (409, `not_active`).
+- **Variables in the survey come from the section (H1).** `{{variables}}` in
+  the survey's texts get the values valid at the section: user and system
+  values, globals, route parameters, the section's `data_config` data. Replaced
+  on text values only, never on the JSON as one string.
+- The licence key is sent with the survey only when the section offers the PDF
+  download. The survey reply is never cached (`Cache-Control: no-store`).
 - **Answers in one home (wave 5).** A response is now only a row of the core
   data table `sh2_surveyjs_<survey id>`, written through
   `DataService::saveData()` and read through the data query engine. Progress of
@@ -52,6 +73,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   not produce duplicate HTML ids.
 
 ### Fixed
+- The browser could switch off a survey's limits: the backend believed the
+  limits the client sent and checked no page or section (problem 1, F109).
+- The plugin's backend tests failed when run without the host (the plugin CI):
+  the host stubs are now loaded in plugin-only runs (`autoload-dev`).
 - Submitting a survey with a matrix question failed (HTTP 400) when a row
   value contained a space: the split columns were keys the core refuses.
 - The PDF of a response printed answers that look like HTML unsanitized; on
@@ -65,6 +90,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   (in design mode) before it is compared with the Creator's JSON.
 
 ### Removed
+- **Client-sent configuration (wave 6a):** the `X-SurveyJs-Runtime-Config`
+  header, the `enforce` limits and the `config` parameter are no longer read;
+  `dynamic_replacement` and the `data_config` token map are replaced by core
+  variables; the `choices/{token}` endpoint (it echoed client data back).
 - **Plugin copies of the answers (wave 5).** The tables `survey_runs`,
   `survey_answer_links` and `survey_response_drafts` and the `survey_files`
   columns `id_survey_runs` / `id_survey_response_drafts` are dropped by

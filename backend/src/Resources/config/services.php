@@ -57,7 +57,6 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyResponseDraftService::class)->autowire();
     $services->set(SurveyResponseStore::class)->autowire();
     $services->set(SurveyDashboardService::class)->autowire();
-    $services->set(SurveyDataInterpolator::class)->autowire();
     $services->set(SurveyPdfService::class)->autowire();
 
     // Anonymous-user identity for once-per-user enforcement.

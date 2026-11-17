@@ -117,6 +117,12 @@ Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
 
+### Wave 6a as built (2026-11-17)
+
+- **Calls name page and section.** The host passes `page` (`id`, `languageId`, `preview`, `routeParams`) to plugin styles through `PluginStyleHost` (frontend, shared SDK `IPluginStylePage`); the runtime sends them as query parameters on every public call. `SurveySectionResolver` runs the core check (H4) and reads the settings; the timezone is the participant's, else the CMS default. Variables come from H1; `dynamic_replacement`, the client config header and the `choices` endpoint are gone.
+- **Still on the client:** the `timeout` countdown. Its value now comes from the section, but the server cannot check it yet: a row's timestamp is its last change, and the start of a response is only in core data history. Open point.
+- **Not yet:** survey files are still served by signed URL, not through page and section (F165); schemas and the standard envelope are wave 6c.
+
 ### Wave 5 as built (2026-11-17)
 
 - **Store.** `SurveyResponseStore` is the only code that touches responses: one row per response in `sh2_surveyjs_<survey id>`, trigger `started` (first progress save), `updated` (later saves), `finished` (submit). Reserved columns: `response_id`, `survey_revision`, `guest_key`, `language`, `page_no`; publishing refuses a question with one of these names or a core row column (`422`).

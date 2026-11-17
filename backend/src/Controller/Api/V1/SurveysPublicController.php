@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
+use App\Exception\ServiceException;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyFile;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
@@ -15,12 +16,13 @@ use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
 use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
-use Humdek\SurveyJsBundle\Service\SurveyDataInterpolator;
 use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
 use Humdek\SurveyJsBundle\Service\SurveyResponseDraftService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
+use Humdek\SurveyJsBundle\Service\SurveySectionResolver;
+use Humdek\SurveyJsBundle\Service\SurveySectionSettings;
 use Humdek\SurveyJsBundle\Service\VisitorIdResolver;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -48,11 +50,11 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
  * 3. File pipeline for the file / GPX / microphone question types
  *    (`/published/{key}/files`, `/files/{fileId}`).
  *
- * The `published()` response carries the full runtime configuration
- * (theme, timeout, schedule, labels, …) supplied by the section the
- * runtime is on. The runtime sends those fields back inside `enforce`
- * on submit so the server can re-validate the once-per-user /
- * schedule rules independently from the client.
+ * Every call names the page and the section it is made for. The core
+ * checks the caller may use that section ({@see SurveySectionResolver}),
+ * and every setting (limits, window, labels) is read from the published
+ * section, never from the request (rule 7.7, F109). Replies are not cached:
+ * they depend on the clock and the participant.
  */
 #[AsController]
 final class SurveysPublicController
@@ -64,7 +66,7 @@ final class SurveysPublicController
         private readonly SurveyResponseDraftService $draftService,
         private readonly SurveyFileStorage $fileStorage,
         private readonly SignedFileUrlService $signedUrls,
-        private readonly SurveyDataInterpolator $interpolator,
+        private readonly SurveySectionResolver $sections,
         private readonly VisitorIdResolver $visitor,
         private readonly SurveyFileRepository $files,
         private readonly SurveyResponseStore $responseStore,
@@ -82,20 +84,16 @@ final class SurveysPublicController
             return new JsonResponse(['error' => 'No published version.'], 404);
         }
 
-        $config = $this->readRuntimeConfigFromRequest($request);
-        $urlParams = $this->readUrlParams($request);
-        $interpolation = $this->interpolator->apply(
-            $version->getDefinition(),
-            is_array($config['dataConfig'] ?? null) ? $config['dataConfig'] : [],
-            is_array($config['dynamicReplacement'] ?? null) ? $config['dynamicReplacement'] : [],
-            $urlParams,
-        );
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
+        }
 
         $userId = $this->userId($request);
         $response = new JsonResponse();
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
 
-        $alreadyLocked = $this->checkLockoutStatus($survey, $userId, $visitorId, $config);
+        $alreadyLocked = $this->checkLockoutStatus($survey, $userId, $visitorId, $settings);
         $existingDraft = $this->draftService->resume($survey, $userId, $visitorId, null);
         $completed = $this->responseStore->findLatestFinished($survey, $userId, $visitorId);
 
@@ -105,29 +103,24 @@ final class SurveysPublicController
                 'name' => $survey->getName(),
                 'themeCode' => $survey->getThemeCode(),
                 'revision' => $version->getRevision(),
-                'definition' => $interpolation['definition'],
-                'extraParams' => $interpolation['extraParams'],
-                'tokens' => $interpolation['tokens'],
+                'definition' => $this->sections->interpolate($settings, $version->getDefinition()),
+                'extraParams' => $settings->urlParams ? $this->readUrlParams($request) : [],
                 'runtimeConfig' => [
-                    'restartOnRefresh' => (bool) ($config['restartOnRefresh'] ?? false),
-                    'autoSaveIntervalSeconds' => (int) ($config['autoSaveIntervalSeconds'] ?? 0),
-                    'timeoutMinutes' => (int) ($config['timeoutMinutes'] ?? 0),
-                    'savePdf' => (bool) ($config['savePdf'] ?? false),
-                    'closeModalAtEnd' => (bool) ($config['closeModalAtEnd'] ?? false),
-                    'redirectAtEnd' => $config['redirectAtEnd'] ?? null,
-                    'urlParams' => (bool) ($config['urlParams'] ?? false),
-                    'startTime' => $config['startTime'] ?? null,
-                    'endTime' => $config['endTime'] ?? null,
-                    'oncePerUser' => (bool) ($config['oncePerUser'] ?? false),
-                    'oncePerSchedule' => (bool) ($config['oncePerSchedule'] ?? false),
-                    'ownEntriesOnly' => (bool) ($config['ownEntriesOnly'] ?? false),
-                    'allowAnonymous' => (bool) ($config['allowAnonymous'] ?? true),
-                    'labelSurveyDone' => $config['labelSurveyDone'] ?? null,
-                    'labelSurveyNotActive' => $config['labelSurveyNotActive'] ?? null,
+                    'restartOnRefresh' => $settings->restartOnRefresh,
+                    'autoSaveIntervalSeconds' => $settings->autoSaveIntervalSeconds,
+                    'timeoutMinutes' => $settings->timeoutMinutes,
+                    'savePdf' => $settings->savePdf,
+                    'closeModalAtEnd' => $settings->closeModalAtEnd,
+                    'redirectAtEnd' => $settings->redirectAtEnd,
+                    'urlParams' => $settings->urlParams,
+                    'oncePerUser' => $settings->oncePerUser,
+                    'oncePerSchedule' => $settings->oncePerSchedule,
+                    'labelSurveyDone' => $settings->labelSurveyDone,
+                    'labelSurveyNotActive' => $settings->labelSurveyNotActive,
                 ],
                 'state' => [
                     'isAuthenticated' => $userId !== null,
-                    'visitorId' => $visitorId,
+                    'notActive' => $settings->isOutsideWindow(),
                     'lockoutReason' => $alreadyLocked,
                     'draft' => $existingDraft !== null ? [
                         'responseId' => $existingDraft->responseId,
@@ -138,10 +131,14 @@ final class SurveysPublicController
                 ],
             ],
         ];
-        if (($config['savePdf'] ?? false) && is_string($this->licenseKey) && $this->licenseKey !== '') {
+        // The participant's PDF download needs the licence; only a section that
+        // offers it gets it.
+        if ($settings->savePdf && is_string($this->licenseKey) && $this->licenseKey !== '') {
             $response->headers->set('X-SurveyJs-License-Key', $this->licenseKey);
         }
         $response->setData($payload);
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
         return $response;
     }
 
@@ -151,17 +148,39 @@ final class SurveysPublicController
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
+        }
         $body = $this->decode($request);
         $answers = is_array($body['answers'] ?? null) ? $body['answers'] : null;
         if (!is_array($answers)) {
             return new JsonResponse(['error' => 'answers required.'], 422);
         }
-        $enforce = is_array($body['enforce'] ?? null) ? $body['enforce'] : [];
+        // From the client only which response this is and where the
+        // participant stands; every limit comes from the section.
+        $client = is_array($body['enforce'] ?? null) ? $body['enforce'] : [];
+        $editMode = (bool) ($client['editMode'] ?? false);
+        $progress = is_array($client['progress'] ?? null) ? $client['progress'] : [];
+        if (!$editMode && $settings->isOutsideWindow()) {
+            return new JsonResponse([
+                'error' => 'The survey is not open now.',
+                'reason' => SurveySubmissionRejectedException::REASON_NOT_ACTIVE,
+            ], 409);
+        }
+        $window = $settings->oncePerSchedule ? $settings->window() : null;
+        $enforce = [
+            'oncePerUser' => $settings->oncePerUser,
+            'allowAnonymous' => $settings->allowAnonymous,
+            'windowStart' => $window !== null ? $window[0]->format(DATE_ATOM) : null,
+            'windowEnd' => $window !== null ? $window[1]->format(DATE_ATOM) : null,
+            'responseId' => is_string($client['responseId'] ?? null) ? $client['responseId'] : null,
+            'editMode' => $editMode,
+            'progress' => $progress,
+        ];
         $userId = $this->userId($request);
         $response = new JsonResponse();
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
-
-        $progress = is_array($enforce['progress'] ?? null) ? $enforce['progress'] : [];
         $language = is_string($progress['locale'] ?? null) && $progress['locale'] !== '' ? $progress['locale'] : null;
 
         try {
@@ -196,6 +215,10 @@ final class SurveysPublicController
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
+        }
         $userId = $this->userId($request);
         $response = new JsonResponse();
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
@@ -217,6 +240,10 @@ final class SurveysPublicController
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
         }
         $body = $this->decode($request);
         $payload = is_array($body['payload'] ?? null) ? $body['payload'] : null;
@@ -248,6 +275,10 @@ final class SurveysPublicController
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
+        }
         $userId = $this->userId($request);
         $response = new JsonResponse(['data' => ['deleted' => true]]);
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
@@ -269,6 +300,10 @@ final class SurveysPublicController
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
         }
         $userId = $this->userId($request);
         $response = new JsonResponse();
@@ -300,6 +335,10 @@ final class SurveysPublicController
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
         }
         $userId = $this->userId($request);
         $response = new JsonResponse();
@@ -369,6 +408,10 @@ final class SurveysPublicController
         if (!$survey instanceof Survey || $survey->isArchived()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        $settings = $this->gate($request, $survey);
+        if ($settings instanceof JsonResponse) {
+            return $settings;
+        }
         $file = $this->files->find($fileId);
         if (!$file instanceof SurveyFile || $file->getSurvey()->getId() !== $survey->getId()) {
             return new JsonResponse(['error' => 'Not found.'], 404);
@@ -435,67 +478,10 @@ final class SurveysPublicController
         return $download;
     }
 
-    public function choices(string $key, string $token, Request $request): Response
-    {
-        $survey = $this->resolveSurvey($key);
-        if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
-        }
-        $config = $this->readRuntimeConfigFromRequest($request);
-        $dataConfig = is_array($config['dataConfig'] ?? null) ? $config['dataConfig'] : [];
-        $catalog = is_array($dataConfig['choices'] ?? null) ? $dataConfig['choices'] : [];
-        $values = $catalog[$token] ?? null;
-        if (!is_array($values)) {
-            return new JsonResponse(['error' => 'Unknown lookup token.'], 404);
-        }
-        return new JsonResponse(['data' => array_values($values)]);
-    }
-
     /**
-     * @return array{
-     *     restartOnRefresh?: bool,
-     *     autoSaveIntervalSeconds?: int,
-     *     timeoutMinutes?: int,
-     *     savePdf?: bool,
-     *     closeModalAtEnd?: bool,
-     *     redirectAtEnd?: ?string,
-     *     urlParams?: bool,
-     *     startTime?: ?string,
-     *     endTime?: ?string,
-     *     oncePerUser?: bool,
-     *     oncePerSchedule?: bool,
-     *     ownEntriesOnly?: bool,
-     *     allowAnonymous?: bool,
-     *     labelSurveyDone?: ?string,
-     *     labelSurveyNotActive?: ?string,
-     *     dataConfig?: array<string,mixed>,
-     *     dynamicReplacement?: array<string,mixed>,
-     * }
-     */
-    private function readRuntimeConfigFromRequest(Request $request): array
-    {
-        $body = $this->decode($request);
-        if (is_array($body['config'] ?? null)) {
-            return $body['config'];
-        }
-        $configHeader = $request->headers->get('X-SurveyJs-Runtime-Config');
-        if (is_string($configHeader) && $configHeader !== '') {
-            $decoded = json_decode($configHeader, true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-        }
-        $configQuery = $request->query->get('config');
-        if (is_string($configQuery) && $configQuery !== '') {
-            $decoded = json_decode($configQuery, true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-        }
-        return [];
-    }
-
-    /**
+     * The page's URL parameters as survey variables `extra_param_<name>`
+     * (the names the legacy plugin used), for a section with `url_params`.
+     *
      * @return array<string, scalar>
      */
     private function readUrlParams(Request $request): array
@@ -503,34 +489,30 @@ final class SurveysPublicController
         $rawParams = $request->query->all('extraParams');
         $out = [];
         foreach ($rawParams as $key => $value) {
-            if (is_string($key) && is_scalar($value)) {
-                $out[$key] = $value;
+            if (is_string($key) && $key !== '' && is_scalar($value)) {
+                $out['extra_param_' . $key] = $value;
             }
         }
         return $out;
     }
 
     /**
-     * @return array<string, mixed>|null
+     * Why the participant may not answer again (once per user, or once in
+     * today's window in their timezone), or null.
+     *
+     * @return array{reason: string, responseId: string, submittedAt: string|null}|null
      */
-    private function checkLockoutStatus(Survey $survey, ?int $userId, ?string $visitorId, array $config): ?array
+    private function checkLockoutStatus(Survey $survey, ?int $userId, ?string $visitorId, SurveySectionSettings $settings): ?array
     {
-        $oncePerUser = (bool) ($config['oncePerUser'] ?? false);
-        $oncePerSchedule = (bool) ($config['oncePerSchedule'] ?? false);
-        if (!$oncePerUser && !$oncePerSchedule) {
+        if (!$settings->oncePerUser && !$settings->oncePerSchedule) {
             return null;
         }
-        $windowStart = $this->parseRuntimeTimestamp($config['windowStart'] ?? null);
-        $windowEnd = $this->parseRuntimeTimestamp($config['windowEnd'] ?? null);
-        if ($windowStart === null && $windowEnd === null) {
-            [$windowStart, $windowEnd] = $this->resolveScheduleWindow(
-                $config['startTime'] ?? null,
-                $config['endTime'] ?? null,
-            );
+        $window = $settings->oncePerSchedule && !$settings->oncePerUser ? $settings->window() : null;
+        if ($settings->oncePerSchedule && !$settings->oncePerUser && $window === null) {
+            return null;
         }
-
-        $from = $oncePerSchedule ? $windowStart : null;
-        $to = $oncePerSchedule ? $windowEnd : null;
+        $from = $window[0] ?? null;
+        $to = $window[1] ?? null;
         $existing = $this->responseStore->findLatestFinished($survey, $userId, $visitorId, $from, $to);
         if ($existing === null && $userId !== null) {
             // A response sent as a guest before signing in counts too.
@@ -540,7 +522,7 @@ final class SurveysPublicController
             return null;
         }
         return [
-            'reason' => $oncePerUser
+            'reason' => $settings->oncePerUser
                 ? SurveySubmissionRejectedException::REASON_ONCE_PER_USER
                 : SurveySubmissionRejectedException::REASON_WINDOW_EXHAUSTED,
             'responseId' => $existing->responseId,
@@ -549,73 +531,25 @@ final class SurveysPublicController
     }
 
     /**
-     * Resolve the currently-active schedule window using the legacy
-     * SurveyJS anchoring logic:
-     *
-     * - start <= end: same-day window (`12:00 -> 13:00`)
-     * - start > end and now < end: start belongs to previous day
-     * - start > end and now >= end: end belongs to next day
-     *
-     * This is what makes "once per schedule" mean "once in the active
-     * window until the next window begins", including overnight
-     * windows like `22:00 -> 06:00`.
-     *
-     * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}
+     * The section this call is made for, after the core access check, or the
+     * error reply. A guest is refused when the section needs a login.
      */
-    private function resolveScheduleWindow(mixed $startRaw, mixed $endRaw): array
+    private function gate(Request $request, Survey $survey): SurveySectionSettings|JsonResponse
     {
-        $start = $this->parseClockTime($startRaw);
-        $end = $this->parseClockTime($endRaw);
-        if ($start === null || $end === null) {
-            return [null, null];
-        }
-
-        $tz = new \DateTimeZone('UTC');
-        $now = new \DateTimeImmutable('now', $tz);
-        $today = $now->setTime(0, 0, 0, 0);
-
-        $windowStart = $today->setTime($start['hour'], $start['minute']);
-        $windowEnd = $today->setTime($end['hour'], $end['minute']);
-
-        if ($windowStart > $windowEnd) {
-            if ($windowEnd > $now) {
-                $windowStart = $windowStart->modify('-1 day');
-            } else {
-                $windowEnd = $windowEnd->modify('+1 day');
-            }
-        }
-
-        return [$windowStart, $windowEnd];
-    }
-
-    /**
-     * @return array{hour:int, minute:int}|null
-     */
-    private function parseClockTime(mixed $value): ?array
-    {
-        if (!is_string($value) || $value === '') {
-            return null;
-        }
-        if (!preg_match('/^\d{1,2}:\d{2}$/', $value)) {
-            return null;
-        }
-        $parts = explode(':', $value);
-        return [
-            'hour' => (int) $parts[0],
-            'minute' => (int) $parts[1],
-        ];
-    }
-
-    private function parseRuntimeTimestamp(mixed $value): ?\DateTimeImmutable
-    {
-        if (!is_string($value) || $value === '') {
-            return null;
-        }
         try {
-            return new \DateTimeImmutable($value);
-        } catch (\Exception) {
-            return null;
+            $settings = $this->sections->resolve($request, $survey);
+        } catch (ServiceException $e) {
+            $status = $e->getCode() >= 400 && $e->getCode() < 500 ? $e->getCode() : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
+        if (!$settings->allowAnonymous && $this->userId($request) === null) {
+            return new JsonResponse([
+                'error' => 'This survey needs a login.',
+                'reason' => SurveySubmissionRejectedException::REASON_AUTH_REQUIRED,
+            ], 401);
+        }
+
+        return $settings;
     }
 
     /**
