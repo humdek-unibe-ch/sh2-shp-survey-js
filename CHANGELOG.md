@@ -5,6 +5,48 @@ All notable changes to `sh2-shp-survey-js` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to the [SelfHelp plugin SemVer rules](../../sh-selfhelp_backend/docs/plugins/developer-guide.md#7-versioning-and-compatibility).
 
 
+## [Unreleased]
+
+First wave of the SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`, wave 1). Web only; mobile still ships SurveyJS 2.
+
+### Changed
+- **SurveyJS 3.** `survey-core`, `survey-react-ui`, `survey-creator-core`,
+  `survey-creator-react`, `survey-analytics` and `survey-pdf` move from 2.5.25
+  to 3.2.5.
+- **Surveys take the site's Mantine look.** The new stylesheet
+  `frontend/src/theme/mantine-adapter.css` points the SurveyJS 3 design tokens
+  (`--sjs2-*`) at Mantine's CSS variables. The survey, the Creator and the
+  dashboard follow the site's primary colour, radius, font and light or dark
+  mode with no plugin code. It replaces `theme/mantineBridge.ts`, which copied
+  colour values in JavaScript.
+- A question's error is shown under its field by default, as in a Mantine form.
+  An author can still choose another place in the Creator.
+- Each rendered survey sets `elementIdPrefix`, so two surveys on one page do
+  not produce duplicate HTML ids.
+
+### Fixed
+- The Designer no longer shows "N unpublished changes" on a survey nobody
+  edited. SurveyJS 3 renames some properties and drops default values when it
+  loads a definition, so the published version is now normalized the same way
+  (in design mode) before it is compared with the Creator's JSON.
+
+### Removed
+- The per-survey theme choice (Default, Modern, High contrast) in the survey
+  settings, the section field `survey-js-theme` as a runtime input, and the
+  Creator's Theme tab: on web a survey always looks like the site. The
+  `surveys.theme_code` column, the `themeCode` API field and the
+  `surveyJsTheme` lookup are still there and no longer read by the web part;
+  a later wave removes them.
+
+### Added
+- **Theme test page.** `npm --prefix frontend run dev:theme` opens a page with
+  every SurveyJS question type next to real Mantine controls, in light and
+  dark and with any primary colour. It runs without a SelfHelp host.
+- Tests that fail when a SurveyJS or Mantine update renames a variable the
+  adapter uses, and when SurveyJS adds a question type the test page does not
+  show.
+
+
 ## [0.3.4] - 2026-06-26
 
 ### Changed

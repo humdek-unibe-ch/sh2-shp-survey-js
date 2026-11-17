@@ -3,10 +3,10 @@
 Audience: Developers and technical operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-29.
+Last verified: 2026-11-16 (theming section; the rest 2026-06-29).
 Source of truth: Runtime code, configuration, and tests in this repository.
 
-This document describes the moving parts of the SurveyJS v2 plugin and how they connect to the SelfHelp host. The plugin is split into three packages: a Symfony bundle (`backend/`), a React/Mantine npm package (`frontend/`), and a read-only React Native package (`mobile/`).
+This document describes the moving parts of the SurveyJS v3 plugin and how they connect to the SelfHelp host. The plugin is split into three packages: a Symfony bundle (`backend/`), a React/Mantine npm package (`frontend/`), and a read-only React Native package (`mobile/`).
 
 ## High-level layout
 
@@ -75,7 +75,9 @@ The npm package's entry point (`src/index.ts`) returns an `IPluginRegistration` 
 
 SurveyJS modules (`survey-core`, `survey-react-ui`, `survey-creator-react`) are declared as `peerDependencies` and imported through dynamic `import()` inside the style/admin components, so the host shell only pays for them when the SurveyJS plugin is actively rendering something.
 
-The Mantine theme bridge (`src/theme/mantineBridge.ts`) translates the host's Mantine palette to the CSS variables SurveyJS v2 reads from `Model.applyTheme()`. The Creator and the runtime both consume the same bridge so the visual identity stays consistent.
+The look comes from one stylesheet, `src/theme/mantine-adapter.css`. SurveyJS 3 is styled through design tokens (CSS variables starting with `--sjs2-`), set on `.sjs-theme-overrides`, the class SurveyJS puts on the root of every survey and of the Creator. The adapter points those tokens at Mantine's variables (`--mantine-*`) and copies no value, so the site's primary colour, radius, font and light or dark mode restyle the survey, the Creator and the dashboard with no plugin code. No theme is applied in JavaScript. The few things tokens cannot express are targeted rules at the end of the file. `src/theme/surveyDefaults.ts` holds the one model default that belongs to the look: a question's error is shown under its field.
+
+To work on the look, run `npm --prefix frontend run dev:theme` and open `http://localhost:5175`. The page shows every question type next to real Mantine controls and needs no SelfHelp host. URL parameters fix a state: `scheme=light|dark`, `primary=<mantine colour>`, `page=<number>`, `single=1`, `errors=1`, `view=creator`. `tests/mantineAdapter.test.ts` fails when a SurveyJS or Mantine update renames a variable the adapter uses.
 
 ## Survey versioning workflow
 
@@ -244,7 +246,7 @@ sh2-shp-survey-js/
 │                   SurveyDashboardPage, SurveySettingsPage,
 │                   SurveyVersionsPage, definitionDiff}.tsx,
 │            custom-questions/register.ts,
-│            theme/mantineBridge.ts}
+│            theme/{mantine-adapter.css, surveyDefaults.ts}}
 └── mobile/
     ├── package.json
     ├── tsconfig.json

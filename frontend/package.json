@@ -1,7 +1,7 @@
 {
     "name": "@humdek/sh2-shp-survey-js",
     "version": "0.3.4",
-    "description": "SurveyJS v2 frontend integration for the SelfHelp CMS plugin ecosystem.",
+    "description": "SurveyJS v3 frontend integration for the SelfHelp CMS plugin ecosystem.",
     "license": "MPL-2.0",
     "private": true,
     "type": "module",
@@ -15,22 +15,23 @@
         "build:runtime": "vite build",
         "dev": "vite",
         "dev:runtime": "node ../scripts/dev-runtime.mjs",
+        "dev:theme": "vite --config vite.preview.config.ts",
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:e2e": "playwright test"
     },
     "peerDependencies": {
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
         "@mantine/core": "^9.0.0",
         "@mantine/hooks": "^9.0.0",
         "@selfhelp/shared": "^1.17.0",
         "@tabler/icons-react": "^3.0.0",
-        "survey-core": "2.5.25",
-        "survey-creator-core": "2.5.25",
-        "survey-creator-react": "2.5.25",
-        "survey-react-ui": "2.5.25"
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "survey-core": "3.2.5",
+        "survey-creator-core": "3.2.5",
+        "survey-creator-react": "3.2.5",
+        "survey-react-ui": "3.2.5"
     },
     "devDependencies": {
         "@mantine/core": "^9.0.2",
@@ -41,19 +42,19 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^5.0.0",
+        "jsdom": "^26.0.0",
         "leaflet": "^1.9.4",
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
-        "survey-core": "2.5.25",
-        "survey-analytics": "2.5.25",
-        "survey-pdf": "2.5.25",
-        "survey-creator-core": "2.5.25",
-        "survey-creator-react": "2.5.25",
-        "survey-react-ui": "2.5.25",
+        "survey-analytics": "3.2.5",
+        "survey-core": "3.2.5",
+        "survey-creator-core": "3.2.5",
+        "survey-creator-react": "3.2.5",
+        "survey-pdf": "3.2.5",
+        "survey-react-ui": "3.2.5",
         "typescript": "^5.9.3",
         "vite": "^7.0.0",
-        "vitest": "^2.1.0",
-        "jsdom": "^26.0.0"
+        "vitest": "^2.1.0"
     },
     "sideEffects": [
         "**/*.css"

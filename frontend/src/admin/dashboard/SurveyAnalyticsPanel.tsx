@@ -115,7 +115,9 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
             </Alert>
         );
     }
+    // The two classes are SurveyJS's theme root: they give the charts the
+    // design tokens that `theme/mantine-adapter.css` points at Mantine.
     return (
-        <div ref={containerRef} style={{ minHeight: 320 }} />
+        <div ref={containerRef} className="sd-theme-root sjs-theme-overrides" style={{ minHeight: 320 }} />
     );
 }

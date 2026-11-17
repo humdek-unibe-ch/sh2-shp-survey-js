@@ -65,7 +65,7 @@ import { registerCustomQuestionRuntime } from '../custom-questions/runtimeBridge
 import { registerCustomQuestions } from '../custom-questions/register';
 import { getPluginApi } from './pluginApi';
 
-import { buildSurveyJsTheme, useMantineLivePalette } from '../theme/mantineBridge';
+import { applyMantineSurveyDefaults } from '../theme/surveyDefaults';
 
 type TPluginStyleSection = {
     id: number;
@@ -89,6 +89,7 @@ interface ISurveyRuntimeBridge {
     Serializer: {
         addProperty: (className: string, descriptor: Record<string, unknown>) => void;
         getProperty: (className: string, name: string) => unknown;
+        findProperty: (className: string, name: string) => { defaultValue: unknown } | null;
     };
 }
 
@@ -123,9 +124,8 @@ export function SurveyRuntime({
 }: ISurveyJsStyleProps): React.ReactElement | null {
     const runtimeSection = section ?? style;
     const surveyIdentifier = useMemo(() => extractFieldString(runtimeSection, 'survey-js'), [runtimeSection]);
-    const configuredTheme = useMemo(() => extractFieldString(runtimeSection, 'survey-js-theme'), [runtimeSection]);
+    const sectionId = runtimeSection?.id;
     const config = useMemo(() => buildRuntimeConfigFromSection(runtimeSection), [runtimeSection]);
-    const livePalette = useMantineLivePalette();
 
     const [bridge, setBridge] = useState<ISurveyRuntimeBridge | null>(null);
     const [published, setPublished] = useState<IPublishedSurvey | null>(null);
@@ -226,12 +226,10 @@ export function SurveyRuntime({
         let disposed = false;
 
         const nextModel = new bridge.Model(published.definition);
-        nextModel.applyTheme(
-            buildSurveyJsTheme(
-                configuredTheme ?? published.themeCode ?? 'default',
-                livePalette,
-            ),
-        );
+        // The look comes from `theme/mantine-adapter.css`; no theme is
+        // applied here. The prefix keeps HTML ids unique when a page
+        // shows more than one survey.
+        nextModel.elementIdPrefix = `surveyjs-${sectionId ?? published.surveyId}-`;
 
         const tokensAndExtras = { ...published.tokens, ...published.extraParams };
         for (const [key, value] of Object.entries(tokensAndExtras)) {
@@ -417,7 +415,7 @@ export function SurveyRuntime({
                 // holds the answer; the next autosave will retry.
             }
         }
-    }, [bridge, published, configuredTheme, livePalette, config]);
+    }, [bridge, published, sectionId, config]);
 
     const startOver = useCallback(() => {
         if (!published || !model) return;
@@ -431,17 +429,21 @@ export function SurveyRuntime({
 
     if (!surveyIdentifier) {
         return (
-            <Alert color="yellow" title="Configuration error">
-                The SurveyJS style is missing a selected survey on this section.
-            </Alert>
+            <StateFrame>
+                <Alert color="yellow" title="Configuration error">
+                    The SurveyJS style is missing a selected survey on this section.
+                </Alert>
+            </StateFrame>
         );
     }
 
     if (lifecycle.kind === 'error') {
         return (
-            <Alert color="red" title="Survey unavailable">
-                {lifecycle.message}
-            </Alert>
+            <StateFrame>
+                <Alert color="red" title="Survey unavailable">
+                    {lifecycle.message}
+                </Alert>
+            </StateFrame>
         );
     }
 
@@ -470,34 +472,40 @@ export function SurveyRuntime({
 
     if (lifecycle.kind === 'loading' || !bridge || !published || !model) {
         return (
-            <Stack align="center" gap="xs" py="md">
-                <Loader size="md" />
-                <Text>Loading survey…</Text>
-            </Stack>
+            <StateFrame>
+                <Stack align="center" gap="xs">
+                    <Loader size="md" />
+                    <Text>Loading survey…</Text>
+                </Stack>
+            </StateFrame>
         );
     }
 
     if (lifecycle.kind === 'submitting') {
         return (
-            <Stack align="center" gap="xs" py="md">
-                <Loader size="md" />
-                <Text>Submitting your response…</Text>
-            </Stack>
+            <StateFrame>
+                <Stack align="center" gap="xs">
+                    <Loader size="md" />
+                    <Text>Submitting your response…</Text>
+                </Stack>
+            </StateFrame>
         );
     }
 
     if (lifecycle.kind === 'submitted') {
         return (
-            <Stack>
-                <Alert color="green" title="Response recorded">
-                    Thank you — your response was recorded at {lifecycle.submittedAt}.
-                </Alert>
-                <Group>
-                    <Button variant="default" onClick={startOver}>
-                        Start a new response
-                    </Button>
-                </Group>
-            </Stack>
+            <StateFrame>
+                <Stack>
+                    <Alert color="green" title="Response recorded">
+                        Thank you — your response was recorded at {lifecycle.submittedAt}.
+                    </Alert>
+                    <Group>
+                        <Button variant="default" onClick={startOver}>
+                            Start a new response
+                        </Button>
+                    </Group>
+                </Stack>
+            </StateFrame>
         );
     }
 
@@ -512,15 +520,25 @@ export function SurveyRuntime({
     );
 }
 
+/**
+ * Spacing around a message shown instead of the survey (loading, done,
+ * closed, error). The width comes from the page tree, as for the survey.
+ */
+function StateFrame({ children }: { children: React.ReactNode }): React.ReactElement {
+    return <Box py="md">{children}</Box>;
+}
+
 function renderInfoBlock(label: string | null, color: string): React.ReactElement | null {
     const html = renderStatusLabel(label);
     if (html === null) {
         return null;
     }
     return (
-        <Alert color={color}>
-            <Box dangerouslySetInnerHTML={{ __html: html }} />
-        </Alert>
+        <StateFrame>
+            <Alert color={color}>
+                <Box dangerouslySetInnerHTML={{ __html: html }} />
+            </Alert>
+        </StateFrame>
     );
 }
 
@@ -757,6 +775,7 @@ function configToServerConfig(config: IRuntimeSectionConfig): Record<string, unk
 }
 
 function ensureRuntimeProperties(bridge: ISurveyRuntimeBridge): void {
+    applyMantineSurveyDefaults(bridge.Serializer);
     if (bridge.Serializer.getProperty('page', 'resetOnBack')) return;
     bridge.Serializer.addProperty('page', {
         name: 'resetOnBack:boolean',

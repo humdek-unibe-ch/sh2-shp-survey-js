@@ -231,7 +231,6 @@ the section, so different pages can pin different parameters.
 |-----------------------|-------------|-----------------------------------------------------------------|
 | `surveyKeySlug`       | _required_  | Which survey to render.                                          |
 | `mode`                | `interactive` | `readonly` mounts the renderer in display-only mode.            |
-| `themeCode`           | `default`   | Overrides `surveys.theme_code` for this section only.            |
 | `savePartialAnswers`  | `false`     | POST progress after each page change.                            |
 | `redirectOnSubmit`    | _empty_     | Absolute / relative URL; empty means stay on the same page.      |
 | `showProgressBar`     | `auto`      | `off` / `auto` / `top` / `bottom`.                               |

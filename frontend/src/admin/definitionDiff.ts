@@ -105,6 +105,38 @@ function questionFingerprint(question: IQuestionLike): string {
     return stableStringify(subset);
 }
 
+/**
+ * Rewrites a stored definition the way the current SurveyJS version
+ * would save it. SurveyJS 3 renamed properties (`showClearButton` to
+ * `allowClear`, `renderAs` to `displayMode`, a boolean's `label` to
+ * `title`) and drops default values, so a definition saved with
+ * SurveyJS 2 differs from what the Creator holds even when nobody
+ * edited it. Compare only normalized definitions. `Model` is passed in
+ * so this file does not load `survey-core` itself.
+ *
+ * The model is built in design mode, like the Creator's: a running
+ * survey would also write runtime state (a question hidden by its
+ * condition, a rating drawn as a dropdown) into the JSON.
+ */
+export function normalizeDefinition(
+    definition: Record<string, unknown> | null | undefined,
+    Model: TSurveyModelConstructor,
+): Record<string, unknown> | null {
+    if (!definition) {
+        return null;
+    }
+    const model = new Model();
+    model.setDesignMode(true);
+    model.fromJSON(definition);
+    return model.toJSON();
+}
+
+export type TSurveyModelConstructor = new (json?: unknown) => {
+    setDesignMode: (value: boolean) => void;
+    fromJSON: (json: unknown) => void;
+    toJSON: () => Record<string, unknown>;
+};
+
 export function computeDefinitionDiff(
     previous: Record<string, unknown> | null | undefined,
     next: Record<string, unknown> | null | undefined,

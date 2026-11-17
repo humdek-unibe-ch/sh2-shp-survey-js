@@ -1,7 +1,7 @@
 {
     "id": "sh2-shp-survey-js",
     "name": "SurveyJS",
-    "description": "SurveyJS v2 integration for SelfHelp CMS. Provides a Mantine-themed Survey Creator (admin), a survey runtime style, and a public submission pipeline that writes into the existing data_tables / data_rows / data_cells. Includes optional GPX, Video, and rich-text custom question types.",
+    "description": "SurveyJS v3 integration for SelfHelp CMS. Provides a Mantine-themed Survey Creator (admin), a survey runtime style, and a public submission pipeline that writes into the existing data_tables / data_rows / data_cells. Includes optional GPX, Video, and rich-text custom question types.",
     "version": "0.3.4",
     "pluginApiVersion": "0.1.0",
     "author": {

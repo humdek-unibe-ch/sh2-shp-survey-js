@@ -44,21 +44,16 @@ import {
     updateSurvey,
     type IAdminSurveyDetail,
 } from '../api/surveys-admin';
-import { buildCreatorTheme, buildSurveyJsTheme, useMantineLivePalette } from '../theme/mantineBridge';
+import { applyMantineSurveyDefaults } from '../theme/surveyDefaults';
 import { getPluginApi } from '../runtime/pluginApi';
 import { isRichTextEditorEnabled, registerTiptapPropertyEditors } from '../creator/richTextEditorAdapter';
 import { registerCustomQuestions } from '../custom-questions/register';
-import { computeDefinitionDiff, formatChangeSummary } from './definitionDiff';
+import { computeDefinitionDiff, formatChangeSummary, normalizeDefinition, type TSurveyModelConstructor } from './definitionDiff';
 
 interface ICreatorBridge {
     SurveyCreatorComponent: React.ComponentType<{ creator: unknown }>;
     SurveyCreator: new (options: Record<string, unknown>) => unknown;
     rawModule: Record<string, unknown>;
-}
-
-interface IThemeableCreator {
-    applyTheme?: (theme: Record<string, unknown>) => void;
-    applyCreatorTheme?: (theme: Record<string, unknown>) => void;
 }
 
 async function loadCreator(): Promise<ICreatorBridge> {
@@ -102,8 +97,6 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
     const [titleValue, setTitleValue] = useState<string>('');
     const [savingTitle, setSavingTitle] = useState<boolean>(false);
     const titleInputRef = useRef<HTMLInputElement>(null);
-    const livePalette = useMantineLivePalette();
-    const themeCode = survey?.themeCode ?? 'default';
 
     const realtime = usePluginRealtime<IEditingEvent>({
         pluginId: 'sh2-shp-survey-js',
@@ -194,6 +187,26 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
         return data;
     }, [onSurveyChanged, surveyId]);
 
+    // SurveyJS `Model`, kept once the Creator loads, to normalize the
+    // published definition before comparing it with the Creator's JSON.
+    const surveyModelRef = useRef<TSurveyModelConstructor | null>(null);
+    const normalizedPublishedRef = useRef<{ source: unknown; value: Record<string, unknown> | null } | null>(null);
+    const publishedForDiff = useCallback(
+        (data: IAdminSurveyDetail | null): Record<string, unknown> | null => {
+            const published = data?.publishedDefinition ?? null;
+            if (!surveyModelRef.current) return published;
+            // `onModified` runs on every edit; the published version only changes on reload.
+            if (normalizedPublishedRef.current?.source !== published) {
+                normalizedPublishedRef.current = {
+                    source: published,
+                    value: normalizeDefinition(published, surveyModelRef.current),
+                };
+            }
+            return normalizedPublishedRef.current.value;
+        },
+        [],
+    );
+
     const currentDefinition = useCallback((): Record<string, unknown> => {
         if (!creator) return { pages: [] };
         const json = (creator as { JSON: Record<string, unknown> }).JSON;
@@ -207,17 +220,10 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             return;
         }
         const current = currentDefinition();
-        const published = survey.publishedDefinition ?? null;
-        const diff = computeDefinitionDiff(published, current);
+        const diff = computeDefinitionDiff(publishedForDiff(survey), current);
         setHasUnpublishedChanges(diff.hasChanges);
         setChangeCount(diff.totalChanges);
-    }, [currentDefinition, survey]);
-
-    const applyDesignerThemes = useCallback((instance: unknown): void => {
-        const themed = instance as IThemeableCreator;
-        themed.applyTheme?.(buildSurveyJsTheme(themeCode, livePalette));
-        themed.applyCreatorTheme?.(buildCreatorTheme(themeCode, livePalette));
-    }, [livePalette, themeCode]);
+    }, [currentDefinition, publishedForDiff, survey]);
 
     useEffect(() => {
         if (renamingTitle && titleInputRef.current) {
@@ -316,20 +322,21 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             // renders the "developer license required" banner even
             // when the SURVEYJS_LICENSE_KEY backend env var is set and
             // `fetchLicenseKey()` correctly returns a non-null key.
-            if (license.licenseKey) {
-                const surveyCore = await import('survey-core');
-                if (typeof surveyCore.setLicenseKey === 'function') {
-                    surveyCore.setLicenseKey(license.licenseKey);
-                }
+            const surveyCore = await import('survey-core');
+            if (license.licenseKey && typeof surveyCore.setLicenseKey === 'function') {
+                surveyCore.setLicenseKey(license.licenseKey);
             }
+            applyMantineSurveyDefaults(surveyCore.Serializer);
+            surveyModelRef.current = surveyCore.Model as unknown as TSurveyModelConstructor;
             const options: Record<string, unknown> = {
                 showLogicTab: true,
                 isAutoSave: false,
-                showThemeTab: true,
+                // A survey always takes the site's Mantine look
+                // (`theme/mantine-adapter.css`), so there is no theme to design.
+                showThemeTab: false,
                 showJSONEditorTab: true,
             };
             const instance = new bridge.SurveyCreator(options);
-            applyDesignerThemes(instance);
 
             if (survey?.definition) {
                 (instance as { JSON: Record<string, unknown> }).JSON = survey.definition;
@@ -418,8 +425,7 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             if (onModified && typeof onModified.add === 'function') {
                 onModified.add(() => {
                     const json = (instance as { JSON: Record<string, unknown> }).JSON;
-                    const published = survey?.publishedDefinition ?? null;
-                    const diff = computeDefinitionDiff(published, json);
+                    const diff = computeDefinitionDiff(publishedForDiff(survey), json);
                     setHasUnpublishedChanges(diff.hasChanges);
                     setChangeCount(diff.totalChanges);
                 });
@@ -428,7 +434,7 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
             // initial diff after the Creator hydrates the current JSON.
             const initialJson = (instance as { JSON: Record<string, unknown> }).JSON;
             const initialDiff = computeDefinitionDiff(
-                survey?.publishedDefinition ?? null,
+                publishedForDiff(survey),
                 initialJson && Object.keys(initialJson).length > 0 ? initialJson : { pages: [] },
             );
             setHasUnpublishedChanges(initialDiff.hasChanges);
@@ -436,12 +442,7 @@ export function SurveyDesignerPage({ surveyId, onSurveyChanged }: ISurveyDesigne
         };
         void init();
         return () => { cancelled = true; };
-    }, [applyDesignerThemes, bridge, reloadSurvey, survey, surveyId]);
-
-    useEffect(() => {
-        if (!creator) return;
-        applyDesignerThemes(creator);
-    }, [applyDesignerThemes, creator]);
+    }, [bridge, publishedForDiff, reloadSurvey, survey, surveyId]);
 
     // Recompute the diff whenever the survey reloads (e.g. after publish)
     // so the header reflects the latest baseline.

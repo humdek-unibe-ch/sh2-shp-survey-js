@@ -1,0 +1,349 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Humdek, University of Bern
+ * SPDX-License-Identifier: MPL-2.0
+ *
+ * Mantine -> SurveyJS adapter.
+ *
+ * SurveyJS 3 is styled through design tokens (CSS variables starting
+ * with `--sjs2-`). This file points those tokens at Mantine's own
+ * variables, so a survey, the Creator and the dashboard take the look
+ * of the site. It follows the adapters SurveyJS ships for Bootstrap,
+ * MUI and shadcn (`survey-core/themes/adapters`).
+ *
+ * Rules for editing this file:
+ *   - Refer to Mantine variables; never copy a colour or a size value.
+ *     A change of site theme or of light/dark mode then restyles the
+ *     survey with no plugin code (`tests/mantineAdapter.test.ts`).
+ *   - Prefer a semantic token (`--sjs2-color-bg-*`, `-fg-*`,
+ *     `-border-*`); the component tokens derive from them. Set a
+ *     component token only where Mantine's control differs.
+ *   - Tokens live on `.sjs-theme-overrides`, the class SurveyJS puts
+ *     on the root of every survey and of the Creator.
+ */
+
+.sjs-theme-overrides {
+    /* Greys Mantine has no scheme-aware variable for. Redefined for dark below. */
+    --shp-sjs-surface-subtle: var(--mantine-color-gray-0);
+    --shp-sjs-surface-muted: var(--mantine-color-gray-1);
+    --shp-sjs-surface-strong: var(--mantine-color-gray-2);
+
+    /* Sizes of Mantine's default (sm) controls. */
+    --shp-sjs-control-height: calc(2.25rem * var(--mantine-scale));
+    --shp-sjs-control-padding-x: calc(0.75rem * var(--mantine-scale));
+    --shp-sjs-check-size: calc(1.25rem * var(--mantine-scale));
+    --shp-sjs-text-line: calc(var(--mantine-font-size-sm) * var(--mantine-line-height));
+
+    /* Units */
+    --sjs2-base-unit-radius: var(--mantine-radius-default);
+    --sjs2-spacing-medium-horizontal: var(--mantine-spacing-md);
+    --sjs2-spacing-medium-vertical: var(--mantine-spacing-md);
+    --sjs2-spacing-large-horizontal: var(--mantine-spacing-md);
+    --sjs2-spacing-large-vertical: var(--mantine-spacing-lg);
+    --sjs2-radius-component-panel: var(--mantine-radius-default);
+    --sjs2-radius-component-page: var(--mantine-radius-default);
+    --sjs2-radius-component-drop: var(--mantine-radius-default);
+    --sjs2-radius-component-menu: var(--mantine-radius-default);
+    --sjs2-radius-component-drop-item: var(--mantine-radius-default);
+    --sjs2-radius-component-menu-item: var(--mantine-radius-default);
+    --sjs2-radius-component-modal: var(--mantine-radius-default);
+    --sjs2-radius-component-notifier: var(--mantine-radius-default);
+    --sjs2-radius-component-checkbox: var(--mantine-radius-default);
+    --sjs2-radius-component-formbox-action: var(--mantine-radius-default);
+    --sjs2-radius-component-buttongroup-item: var(--mantine-radius-default);
+
+    /* Typography */
+    --sjs2-typography-font-family-text: var(--mantine-font-family);
+    --sjs2-typography-font-family-code: var(--mantine-font-family-monospace);
+    --sjs2-typography-font-size-small: var(--mantine-font-size-xs);
+    --sjs2-typography-font-size-default: var(--mantine-font-size-sm);
+    --sjs2-typography-font-size-medium: var(--mantine-h4-font-size);
+    --sjs2-typography-font-size-large: var(--mantine-h3-font-size);
+    --sjs2-typography-line-height-small: calc(var(--mantine-font-size-xs) * var(--mantine-line-height));
+    --sjs2-typography-line-height-default: var(--shp-sjs-text-line);
+    --sjs2-typography-line-height-medium: calc(var(--mantine-h4-font-size) * var(--mantine-h4-line-height));
+    --sjs2-typography-line-height-large: calc(var(--mantine-h3-font-size) * var(--mantine-h3-line-height));
+    --sjs2-typography-font-weight-strong: var(--mantine-heading-font-weight);
+    /* Input.Label, Input.Description and Input.Error */
+    --sjs2-typography-font-weight-component-question-title: 500;
+    --sjs2-typography-font-weight-component-panel-title: 500;
+    --sjs2-typography-font-size-component-question-description: var(--mantine-font-size-xs);
+    --sjs2-typography-font-size-component-message-content: var(--mantine-font-size-xs);
+    --sjs2-typography-line-height-component-question-description: var(--sjs2-typography-line-height-small);
+    --sjs2-typography-line-height-component-message-content: var(--sjs2-typography-line-height-small);
+
+    /* Brand: the site's primary colour */
+    --sjs2-color-project-brand-400: var(--mantine-primary-color-4);
+    --sjs2-color-project-brand-600: var(--mantine-primary-color-filled);
+    --sjs2-color-project-brand-700: var(--mantine-primary-color-filled-hover);
+    --sjs2-color-project-brand-800: var(--mantine-primary-color-9);
+    --sjs2-color-bg-brand-primary: var(--mantine-primary-color-filled);
+    --sjs2-color-bg-brand-primary-dim: var(--mantine-primary-color-filled-hover);
+    --sjs2-color-bg-brand-secondary: var(--mantine-primary-color-light);
+    --sjs2-color-bg-brand-secondary-dim: var(--mantine-primary-color-light-hover);
+    --sjs2-color-bg-brand-tertiary: transparent;
+    --sjs2-color-bg-brand-tertiary-dim: var(--mantine-primary-color-light);
+    --sjs2-color-bg-brand-primary-disabled: var(--mantine-color-disabled);
+    --sjs2-color-fg-brand-primary: var(--mantine-primary-color-light-color);
+    --sjs2-color-fg-brand-primary-dim: var(--mantine-primary-color-light-color);
+    --sjs2-color-fg-brand-on-primary: var(--mantine-primary-color-contrast);
+    --sjs2-color-fg-brand-primary-disabled: var(--mantine-color-disabled-color);
+    --sjs2-color-border-brand-primary: var(--mantine-primary-color-filled);
+
+    /* Surfaces */
+    --sjs2-color-utility-body: var(--mantine-color-body);
+    --sjs2-color-utility-sheet: var(--mantine-color-body);
+    --sjs2-color-utility-surface-survey: transparent;
+    --sjs2-color-utility-surface-designer: var(--shp-sjs-surface-subtle);
+    --sjs2-color-utility-toolbox: var(--mantine-color-body);
+    --sjs2-color-utility-property-grid: var(--mantine-color-body);
+    --sjs2-color-utility-tabs: var(--mantine-color-body);
+    --sjs2-color-utility-overlay: color-mix(in srgb, var(--mantine-color-black) 60%, transparent);
+    --sjs2-color-utility-scrollbar: color-mix(in srgb, var(--mantine-color-text) 15%, transparent);
+    --sjs2-color-bg-basic-primary: var(--mantine-color-body);
+    --sjs2-color-bg-basic-secondary: var(--shp-sjs-surface-subtle);
+    --sjs2-color-bg-basic-tertiary: var(--shp-sjs-surface-muted);
+    --sjs2-color-bg-basic-primary-dim: var(--shp-sjs-surface-subtle);
+    --sjs2-color-bg-basic-secondary-dim: var(--shp-sjs-surface-muted);
+    --sjs2-color-bg-basic-tertiary-dim: var(--shp-sjs-surface-strong);
+    --sjs2-color-bg-basic-primary-disabled: var(--mantine-color-disabled);
+    --sjs2-color-bg-neutral-primary: var(--mantine-color-text);
+    --sjs2-color-bg-neutral-primary-dim: var(--mantine-color-dimmed);
+    --sjs2-color-bg-neutral-secondary: var(--mantine-color-default);
+    --sjs2-color-bg-neutral-secondary-dim: var(--mantine-color-default-hover);
+    --sjs2-color-bg-neutral-tertiary: transparent;
+    --sjs2-color-bg-neutral-tertiary-dim: var(--mantine-color-default-hover);
+    --sjs2-color-bg-neutral-primary-disabled: var(--mantine-color-disabled);
+
+    /* Text */
+    --sjs2-color-fg-basic-primary: var(--mantine-color-text);
+    --sjs2-color-fg-basic-primary-muted: var(--mantine-color-text);
+    --sjs2-color-fg-basic-primary-dim: var(--mantine-color-text);
+    --sjs2-color-fg-basic-secondary: var(--mantine-color-dimmed);
+    --sjs2-color-fg-basic-tertiary: var(--mantine-color-placeholder);
+    --sjs2-color-fg-basic-primary-disabled: var(--mantine-color-disabled-color);
+    --sjs2-color-fg-basic-secondary-disabled: var(--mantine-color-disabled-color);
+    --sjs2-color-fg-basic-tertiary-disabled: var(--mantine-color-disabled-color);
+    --sjs2-color-fg-neutral-primary: var(--mantine-color-default-color);
+    --sjs2-color-fg-neutral-primary-muted: var(--mantine-color-default-color);
+    --sjs2-color-fg-neutral-primary-dim: var(--mantine-color-default-color);
+    --sjs2-color-fg-neutral-on-primary: var(--mantine-color-body);
+    --sjs2-color-fg-neutral-primary-disabled: var(--mantine-color-disabled-color);
+
+    /* Borders */
+    --sjs2-color-border-basic-primary: var(--mantine-color-text);
+    --sjs2-color-border-basic-secondary: var(--mantine-color-default-border);
+    --sjs2-color-border-basic-secondary-disabled: var(--mantine-color-disabled-border);
+    --sjs2-color-border-neutral-primary: var(--mantine-color-body);
+
+    /* Status colours */
+    --sjs2-color-bg-alert-primary: var(--mantine-color-red-filled);
+    --sjs2-color-bg-alert-primary-dim: var(--mantine-color-red-filled-hover);
+    --sjs2-color-bg-alert-secondary: var(--mantine-color-red-light);
+    --sjs2-color-bg-alert-secondary-dim: var(--mantine-color-red-light-hover);
+    --sjs2-color-fg-alert-primary: var(--mantine-color-error);
+    --sjs2-color-border-alert-primary: var(--mantine-color-error);
+    --sjs2-color-bg-note-primary: var(--mantine-color-blue-filled);
+    --sjs2-color-bg-note-primary-dim: var(--mantine-color-blue-filled-hover);
+    --sjs2-color-bg-note-secondary: var(--mantine-color-blue-light);
+    --sjs2-color-bg-note-secondary-dim: var(--mantine-color-blue-light-hover);
+    --sjs2-color-fg-note-primary: var(--mantine-color-blue-light-color);
+    --sjs2-color-border-note-primary: var(--mantine-color-blue-outline);
+    --sjs2-color-bg-positive-primary: var(--mantine-color-green-filled);
+    --sjs2-color-bg-positive-primary-dim: var(--mantine-color-green-filled-hover);
+    --sjs2-color-bg-positive-secondary: var(--mantine-color-green-light);
+    --sjs2-color-bg-positive-secondary-dim: var(--mantine-color-green-light-hover);
+    --sjs2-color-fg-positive-primary: var(--mantine-color-green-light-color);
+    --sjs2-color-border-positive-primary: var(--mantine-color-green-outline);
+    --sjs2-color-bg-warning-primary: var(--mantine-color-yellow-filled);
+    --sjs2-color-bg-warning-primary-dim: var(--mantine-color-yellow-filled-hover);
+    --sjs2-color-bg-warning-secondary: var(--mantine-color-yellow-light);
+    --sjs2-color-bg-warning-secondary-dim: var(--mantine-color-yellow-light-hover);
+    --sjs2-color-fg-warning-primary: var(--mantine-color-yellow-light-color);
+    --sjs2-color-border-warning-primary: var(--mantine-color-yellow-outline);
+
+    /* Focus ring: Mantine's outline, two pixels of the primary colour. */
+    --sjs2-color-utility-a11y: var(--mantine-primary-color-filled);
+    --sjs2-border-effect-a11y: 0 0 0 calc(0.125rem * var(--mantine-scale)) var(--mantine-primary-color-filled);
+
+    /* Inputs (Mantine Input, default variant) */
+    --sjs2-color-component-formbox-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-hovered-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-focused-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-invalid-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-invalid-focused-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-highlighted-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-readonly-bg: var(--mantine-color-default);
+    --sjs2-color-component-formbox-disabled-bg: var(--mantine-color-disabled);
+    --sjs2-layout-component-formbox-medium-padding-vertical: 0px;
+    --sjs2-layout-component-formbox-medium-padding-horizontal: 0px;
+    --sjs2-layout-component-input-medium-content-padding-vertical: calc(
+        (var(--shp-sjs-control-height) - var(--shp-sjs-text-line)) / 2
+    );
+    --sjs2-layout-component-input-medium-content-padding-horizontal: var(--shp-sjs-control-padding-x);
+    /* The chevron and clear buttons inside an input: as tall as the input. */
+    --sjs2-layout-component-action-small-box-padding-vertical: calc(
+        (var(--shp-sjs-control-height) - var(--shp-sjs-text-line)) / 2
+    );
+
+    /* Checkbox and radio, and the rows of a choice list (Mantine Stack gap xs) */
+    --sjs2-size-component-checkbox-box: var(--shp-sjs-check-size);
+    --sjs2-size-component-radio-box: var(--shp-sjs-check-size);
+    --sjs2-color-component-checkbox-false-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-checkbox-false-hovered-bg: var(--mantine-color-default);
+    --sjs2-color-component-radio-false-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-radio-false-hovered-bg: var(--mantine-color-default);
+    --sjs2-layout-component-labeled-group-box-gap-vertical: var(--mantine-spacing-xs);
+    --sjs2-layout-component-labeled-group-box-padding-vertical: calc(var(--mantine-spacing-xs) / 2);
+
+    /* Selected values of a multi-select dropdown (Mantine Pill) */
+    --sjs2-radius-component-tagbox-item: var(--mantine-radius-xl);
+    --sjs2-color-component-tagbox-item-default-bg: var(--shp-sjs-surface-muted);
+    --sjs2-color-component-tagbox-item-hovered-bg: var(--shp-sjs-surface-muted);
+    --sjs2-color-component-tagbox-item-default-border: transparent;
+    --sjs2-color-component-tagbox-item-hovered-border: transparent;
+
+    /* Yes/No switch and button groups (Mantine SegmentedControl) */
+    --sjs2-radius-component-boolean: var(--mantine-radius-default);
+    --sjs2-radius-component-boolean-item: var(--mantine-radius-default);
+    --sjs2-color-component-boolean-default-bg: var(--shp-sjs-surface-muted);
+    --sjs2-color-component-boolean-default-border: transparent;
+    --sjs2-color-component-boolean-item-true-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-boolean-item-true-default-border: transparent;
+    --sjs2-color-component-boolean-item-true-default-value: var(--mantine-color-text);
+    --sjs2-color-component-buttongroup-item-true-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-buttongroup-item-true-default-value: var(--mantine-color-text);
+
+    /* The page stepper: round steps, like Mantine's Stepper */
+    --sjs2-radius-component-stepper-item: var(--sjs2-radius-round);
+
+    /* Buttons (Mantine Button, size sm) */
+    --sjs2-typography-font-weight-component-action-large-content: 600;
+    --sjs2-layout-component-action-large-box-padding-vertical: calc(
+        (var(--shp-sjs-control-height) - var(--shp-sjs-text-line)) / 2
+    );
+    --sjs2-layout-component-action-large-box-padding-horizontal: calc(1.125rem * var(--mantine-scale));
+    --sjs2-layout-component-action-large-label-padding-horizontal: 0px;
+    /* Outlined buttons (Previous): Mantine's default variant. The border is drawn inside, so the survey's edge cannot clip it. */
+    --sjs2-color-component-action-brand-tertiary-surface-default-bg: var(--mantine-color-default);
+    --sjs2-color-component-action-brand-tertiary-surface-default-label: var(--mantine-color-default-color);
+    --sjs2-color-component-action-brand-tertiary-surface-default-icon: var(--mantine-color-default-color);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-bg: var(--mantine-color-default-hover);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-label: var(--mantine-color-default-color);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-icon: var(--mantine-color-default-color);
+    --sjs2-border-effect-component-action-brand-tertiary-surface-default: inset 0 0 0 1px var(--mantine-color-default-border);
+    --sjs2-border-effect-component-action-brand-tertiary-surface-hovered: inset 0 0 0 1px var(--mantine-color-default-border);
+    /* Small text buttons (Clear): Mantine's subtle variant */
+    --sjs2-color-component-action-neutral-secondary-default-bg: transparent;
+    --sjs2-color-component-action-neutral-secondary-hovered-bg: var(--mantine-color-default-hover);
+
+    /* Error under a field: Input.Error is plain red text, no box. */
+    --sjs2-color-component-message-error-bg: transparent;
+    --sjs2-color-component-message-error-text: var(--mantine-color-error);
+    --sjs2-layout-component-message-box-padding-horizontal: 0px;
+    --sjs2-layout-component-message-box-padding-vertical: 0px;
+
+    /* Questions sit on the page like the fields of a Mantine form, not in cards. */
+    --sjs2-is-panelless: true;
+    --sjs2-color-component-panel-simple-default-bg: transparent;
+    --sjs2-color-component-panel-simple-default-border: transparent;
+    --sjs2-radius-component-panel-simple: 0px;
+    --sjs2-layout-component-panel-simple-content-area-padding-horizontal: 0px;
+    --sjs2-layout-component-panel-simple-content-area-padding-top: 0px;
+    --sjs2-layout-component-panel-simple-content-area-padding-bottom: 0px;
+    --sjs2-layout-component-panel-simple-box-gap-vertical: calc(var(--mantine-spacing-xs) / 2);
+    --sjs2-layout-component-page-box-gap-vertical: var(--mantine-spacing-md);
+    --sjs2-layout-component-page-content-area-gap-vertical: var(--mantine-spacing-md);
+    --sjs2-layout-component-page-content-area-gap-horizontal: var(--mantine-spacing-md);
+    --sjs2-layout-component-page-content-area-padding-horizontal: 0px;
+    --sjs2-layout-component-page-header-padding-horizontal: 0px;
+    --sjs2-layout-component-survey-header-padding-horizontal: 0px;
+    --sjs2-layout-component-survey-footer-padding-horizontal: 0px;
+    --sjs2-layout-component-survey-box-padding-top: 0px;
+    /* Room under the navigation buttons, so the next section or the footer does not touch them. */
+    --sjs2-layout-component-survey-box-padding-bottom: var(--mantine-spacing-xl);
+    --sjs2-layout-component-survey-box-gap-vertical: var(--mantine-spacing-lg);
+    --sjs2-layout-component-question-box-gap-vertical: calc(var(--mantine-spacing-xs) / 2);
+}
+
+[data-mantine-color-scheme='dark'] .sjs-theme-overrides {
+    --shp-sjs-surface-subtle: var(--mantine-color-dark-6);
+    --shp-sjs-surface-muted: var(--mantine-color-dark-5);
+    --shp-sjs-surface-strong: var(--mantine-color-dark-4);
+}
+
+/*
+ * Targeted rules, for what the tokens cannot express. Keep this part
+ * short: every rule here has to be re-checked on a SurveyJS update.
+ */
+
+/*
+ * The page stepper and the survey header (phone layout) bring their own
+ * padding. The survey fills its section, so the section's container
+ * decides the spacing; these line up with the questions.
+ */
+.sjs-theme-overrides .sd-progress-buttons {
+    padding-top: 0;
+    padding-inline: 0;
+}
+
+.sjs-theme-overrides .sv-header--mobile {
+    padding-inline: 0;
+}
+
+/* Next is the main action of a page, like Complete: a filled button. */
+.sjs-theme-overrides .sd-navigation__next-btn {
+    --sjs2-color-component-action-brand-tertiary-surface-default-bg: var(--sjs2-color-component-action-brand-primary-default-bg);
+    --sjs2-color-component-action-brand-tertiary-surface-default-label: var(--sjs2-color-component-action-brand-primary-default-label);
+    --sjs2-color-component-action-brand-tertiary-surface-default-icon: var(--sjs2-color-component-action-brand-primary-default-icon);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-bg: var(--sjs2-color-component-action-brand-primary-hovered-bg);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-label: var(--sjs2-color-component-action-brand-primary-hovered-label);
+    --sjs2-color-component-action-brand-tertiary-surface-hovered-icon: var(--sjs2-color-component-action-brand-primary-hovered-icon);
+    --sjs2-border-effect-component-action-brand-tertiary-surface-default: none;
+    --sjs2-border-effect-component-action-brand-tertiary-surface-hovered: none;
+}
+
+/* The question number sits in a left gutter by default. Questions have no gutter here, so it goes in the title line. */
+.sjs-theme-overrides .sd-element__num {
+    float: none;
+    width: auto;
+    margin-inline-start: 0;
+    padding-block: 0;
+    padding-inline-end: calc(var(--mantine-spacing-xs) / 2);
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+}
+
+/* Selected values of a multi-select dropdown, sized like a Mantine Pill inside an input. */
+.sjs-theme-overrides .sd-tagbox__input.sd-dropdown__input {
+    align-items: center;
+    padding-inline-start: calc(var(--mantine-spacing-xs) / 2);
+}
+
+.sjs-theme-overrides .sd-tagbox-item {
+    padding-block: 0;
+    padding-inline: calc(var(--mantine-spacing-xs) / 2);
+}
+
+.sjs-theme-overrides .sd-tagbox-item__text {
+    font-size: var(--mantine-font-size-xs);
+}
+
+.sjs-theme-overrides .sd-tagbox-item__clean {
+    padding-block: 0;
+}
+
+/* The Yes/No switch is as tall as an input. */
+.sjs-theme-overrides .sd-boolean__thumb,
+.sjs-theme-overrides .sd-boolean__label {
+    padding-block: calc((var(--shp-sjs-control-height) - var(--shp-sjs-text-line)) / 2 - var(--sjs2-spacing-x050));
+    padding-inline: var(--shp-sjs-control-padding-x);
+}
+
+/* A numbered rating item looks like a default button, as tall as an input. */
+.sjs-theme-overrides .sd-rating__item {
+    border-radius: var(--mantine-radius-default);
+    height: var(--shp-sjs-control-height);
+    min-width: var(--shp-sjs-control-height);
+    padding-inline: var(--shp-sjs-control-padding-x);
+}

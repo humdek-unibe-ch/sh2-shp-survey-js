@@ -49,6 +49,7 @@ declare module 'survey-core' {
     export interface ISurveyModel {
         data: Record<string, unknown>;
         currentPageNo: number;
+        elementIdPrefix: string;
         getAllQuestions: () => Array<{ name: string; getType: () => string; value: unknown; readOnly: boolean }>;
         applyTheme(theme: Record<string, unknown>): void;
         setVariable(name: string, value: unknown): void;
@@ -76,6 +77,9 @@ declare module 'survey-core' {
         constructor(definition: unknown);
         data: Record<string, unknown>;
         currentPageNo: number;
+        elementIdPrefix: string;
+        questionsOnPageMode: string;
+        validate(fireCallback?: boolean, focusOnFirstError?: boolean): boolean;
         completedHtml: string;
         showCompletedPage: boolean;
         navigateToUrl: string | null;
@@ -115,6 +119,7 @@ declare module 'survey-core' {
     export const Serializer: {
         addProperty: (className: string, descriptor: Record<string, unknown>) => void;
         getProperty: (className: string, name: string) => unknown;
+        findProperty: (className: string, name: string) => { defaultValue: unknown } | null;
         removeProperty: (className: string, name: string) => void;
     };
     export const surveyLocalization: {

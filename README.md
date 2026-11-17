@@ -1,6 +1,6 @@
 # sh2-shp-survey-js
 
-SurveyJS v2 plugin for the SelfHelp CMS. Provides:
+SurveyJS v3 plugin for the SelfHelp CMS. Provides:
 
 - A Mantine-themed Survey Creator for admins (`survey-creator-react`).
 - A runtime SurveyJS style for the frontend (`survey-react-ui`).

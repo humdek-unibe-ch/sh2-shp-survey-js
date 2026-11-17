@@ -4,7 +4,7 @@ Before returning anything print in chat `❤️AGENTS.md` so that we know the ru
 
 ## Project Overview
 
-This is the SelfHelp plugin `sh2-shp-survey-js`. It provides SurveyJS v2 integration for the SelfHelp CMS: a Mantine-themed Survey Creator for admins, a public-runtime SurveyJS style, optional GPX / Video / rich-text custom question types, a response dashboard, and a readonly mobile renderer.
+This is the SelfHelp plugin `sh2-shp-survey-js`. It provides SurveyJS v3 integration for the SelfHelp CMS: a Mantine-themed Survey Creator for admins, a public-runtime SurveyJS style, optional GPX / Video / rich-text custom question types, a response dashboard, and a readonly mobile renderer.
 
 ## Critical execution rule
 

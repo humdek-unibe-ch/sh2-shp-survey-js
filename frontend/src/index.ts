@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * `@humdek/sh2-shp-survey-js` — SurveyJS v2 frontend plugin entry.
+ * `@humdek/sh2-shp-survey-js` — SurveyJS v3 frontend plugin entry.
  *
  * Mounted by the host `PluginRuntime` at app boot. The runtime calls
  * `register(api)`; we return an `IPluginRegistration` describing every
@@ -26,6 +26,9 @@ SPDX-License-Identifier: MPL-2.0
  * same `plugin.css`, so we keep the imports here for a single point of
  * truth. Neither CSS file ships any `url(...)` references, so no
  * fonts/images need to be staged into `dist/assets/`.
+ *
+ * Order matters: `theme/mantine-adapter.css` comes after the SurveyJS
+ * stylesheets it restyles.
  */
 
 import 'survey-core/survey-core.css';
@@ -33,6 +36,7 @@ import 'survey-creator-core/survey-creator-core.css';
 import 'survey-analytics/survey.analytics.min.css';
 import 'survey-analytics/survey.analytics.tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_site_dark.min.css';
+import './theme/mantine-adapter.css';
 import './custom-questions/custom-questions.css';
 
 import { definePlugin } from '@selfhelp/shared/plugin-sdk';

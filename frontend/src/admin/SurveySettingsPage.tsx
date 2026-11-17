@@ -11,7 +11,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Code, Group, Loader, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Button, Card, Code, Group, Loader, Stack, Text, TextInput, Title } from '@mantine/core';
 
 import { getSurvey, updateSurvey, type IAdminSurveyDetail } from '../api/surveys-admin';
 
@@ -23,7 +23,6 @@ interface ISurveySettingsPageProps {
 export function SurveySettingsPage({ surveyId, onSurveyChanged }: ISurveySettingsPageProps): React.ReactElement {
     const [survey, setSurvey] = useState<IAdminSurveyDetail | null>(null);
     const [name, setName] = useState<string>('');
-    const [themeCode, setThemeCode] = useState<string>('default');
     const [saving, setSaving] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +33,6 @@ export function SurveySettingsPage({ surveyId, onSurveyChanged }: ISurveySetting
                 if (cancelled) return;
                 setSurvey(data);
                 setName(data.name);
-                setThemeCode(data.themeCode ?? 'default');
             })
             .catch((err: Error) => setError(err.message));
         return () => {
@@ -47,14 +45,10 @@ export function SurveySettingsPage({ surveyId, onSurveyChanged }: ISurveySetting
         setSaving(true);
         setError(null);
         try {
-            const updated = await updateSurvey(survey.id, {
-                name: name.trim(),
-                themeCode: themeCode === 'default' ? null : themeCode,
-            });
+            const updated = await updateSurvey(survey.id, { name: name.trim() });
             const detail = await getSurvey(updated.id);
             setSurvey(detail);
             setName(detail.name);
-            setThemeCode(detail.themeCode ?? 'default');
             onSurveyChanged?.(detail);
         } catch (err) {
             setError((err as Error).message);
@@ -87,18 +81,6 @@ export function SurveySettingsPage({ surveyId, onSurveyChanged }: ISurveySetting
                                 Survey ID: <Code>{survey.surveyId}</Code>. It does not change when the survey is
                                 renamed and is the value stored by the CMS survey selector.
                             </Text>
-                            <Select
-                                label="Theme"
-                                description="Theme applied when this specific survey is embedded on a page."
-                                data={[
-                                    { value: 'default', label: 'Default (Mantine)' },
-                                    { value: 'modern', label: 'Modern' },
-                                    { value: 'high-contrast', label: 'High contrast' },
-                                ]}
-                                value={themeCode}
-                                onChange={(value) => setThemeCode(value ?? 'default')}
-                                disabled={saving}
-                            />
                             {error && (
                                 <Alert color="red" title="Could not save settings">
                                     {error}
