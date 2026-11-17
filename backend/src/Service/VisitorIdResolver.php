@@ -29,6 +29,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class VisitorIdResolver
 {
     public const COOKIE_NAME = '_sh_sjs_vid';
+    public const HEADER_NAME = 'X-SurveyJs-Guest-Key';
     private const COOKIE_LIFETIME_SECONDS = 365 * 24 * 3600;
 
     public function __construct(
@@ -44,6 +45,15 @@ final class VisitorIdResolver
      */
     public function resolveFromRequest(Request $request): ?string
     {
+        // The web runtime sends its guest key as a header: the BFF drops
+        // every cookie the backend sets, so the cookie never reaches a
+        // browser behind it. The key is a random 128-bit id the browser
+        // keeps; knowing it is what makes a guest the owner of a response.
+        $header = $request->headers->get(self::HEADER_NAME);
+        if (is_string($header) && preg_match('/^[A-Fa-f0-9]{32}$/', $header) === 1) {
+            return strtoupper($header);
+        }
+
         $cookie = $request->cookies->get(self::COOKIE_NAME);
         if (!is_string($cookie) || $cookie === '') {
             return null;

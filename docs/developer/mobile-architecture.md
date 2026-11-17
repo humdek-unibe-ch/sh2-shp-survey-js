@@ -124,9 +124,9 @@ custom request header:
 Submission is identical to web — the backend
 (`SurveysPublicController::submit()`) has **no preview/test/mobile
 branch**, so a mobile (or mobile-preview) submit stores a real
-`SurveyRun`. This is guarded by
-`backend/tests/Service/SurveyResponseServiceTest.php`
-(`testMobileOriginSubmitStoresRealRunAndIgnoresPreviewHints`).
+response row (one row of the survey's data table, as for web). The submit
+service never reads the request origin; `SurveyResponseServiceTest` covers
+the submit path every client uses.
 
 ## Self-contained runtime (no CDN)
 

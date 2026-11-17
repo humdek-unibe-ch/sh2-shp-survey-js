@@ -245,25 +245,24 @@ default (theme, rich-text) or the global default (mode).
 
 ## 8. Collect responses
 
-Responses live in two places:
+Each survey has its own data table, named after the survey id
+(`sh2_surveyjs_...`). It appears in the admin **Data** screen like any
+form's data. Every response is one row there, with one column per
+question:
 
-1. **`survey_runs`** — one row per respondent submission (generated
-   `response_id`, status, `id_users`, `id_data_rows`,
-   started/completed timestamps, `progress` JSON for partial answers).
-2. **`survey_answer_links`** — one row per (run, question), linked to
-   the host's `data_cells` so the same answer is visible in the host's
-   Data Browser.
+- A participant who saved progress but has not submitted yet has a row
+  marked **started** or **updated**.
+- A submitted response is marked **finished**.
 
-The plugin's **Responses** tab on the survey detail page paginates
-through both tables, joining them so admins see the friendly
-question label rather than the raw `data_cells` row id.
+Use the **Data** screen to browse, filter and export responses (CSV,
+Excel or JSON), and to delete one.
 
-Per-response actions:
+The plugin's **Responses** tab on the survey shows the latest
+responses. Per-response actions:
 
-- **Export PDF** — requires `surveyjs.surveys.export-pdf`.
-- **Hard-delete** — only allowed when GDPR erasure is requested;
-  drops the `survey_runs` row, its links, and the underlying
-  `data_rows` / `data_cells` rows in one transaction.
+- **Export PDF** — the response printed as a page.
+- **Delete** — removes the response from the survey's data, the same as
+  deleting it in the Data screen (its history is kept).
 
 ---
 

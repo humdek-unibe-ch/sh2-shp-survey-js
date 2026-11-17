@@ -16,7 +16,8 @@ use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 
 /**
  * A survey owned by the plugin. One survey aggregates many published
- * `SurveyVersion` snapshots (one is "current") and many `SurveyRun` rows.
+ * `SurveyVersion` snapshots (one is "current"). Its responses are rows of
+ * the core data table `sh2_surveyjs_<survey id>`.
  */
 #[ORM\Entity(repositoryClass: SurveyRepository::class)]
 #[ORM\Table(name: 'surveys')]
@@ -67,10 +68,6 @@ class Survey
     #[ORM\OneToMany(mappedBy: 'survey', targetEntity: SurveyVersion::class, cascade: ['remove'])]
     private Collection $versions;
 
-    /** @var Collection<int, SurveyRun> */
-    #[ORM\OneToMany(mappedBy: 'survey', targetEntity: SurveyRun::class, cascade: ['remove'])]
-    private Collection $runs;
-
     /**
      * @param array<string, mixed> $draftDefinition
      */
@@ -82,7 +79,6 @@ class Survey
         $this->updatedAt = $this->createdAt;
         $this->setDraftDefinition($draftDefinition, null);
         $this->versions = new ArrayCollection();
-        $this->runs = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -191,12 +187,6 @@ class Survey
     public function getVersions(): Collection
     {
         return $this->versions;
-    }
-
-    /** @return Collection<int, SurveyRun> */
-    public function getRuns(): Collection
-    {
-        return $this->runs;
     }
 
     private function touch(): void

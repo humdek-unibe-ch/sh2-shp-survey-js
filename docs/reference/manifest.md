@@ -51,7 +51,7 @@ All default to the `admin` role:
 
 ## Data access
 
-- Owned tables: `surveys`, `survey_versions`, `survey_runs`, `survey_answer_links`, `survey_files`, `survey_response_drafts` (Doctrine entities `Survey`, `SurveyVersion`, `SurveyRun`, `SurveyAnswerLink`, `SurveyFile`, `SurveyResponseDraft`).
+- Owned tables: `surveys`, `survey_versions`, `survey_files` (Doctrine entities `Survey`, `SurveyVersion`, `SurveyFile`). Responses are rows of the core data tables `sh2_surveyjs_<survey id>`.
 - Owned data-table prefix: `sh2_surveyjs_`.
 - Reads host tables: `data_tables`, `data_rows`, `data_cols`, `data_cells`, `lookups`, `languages`.
 - Writes host tables: `data_tables`, `data_rows`, `data_cols`, `data_cells`.

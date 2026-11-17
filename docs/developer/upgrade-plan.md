@@ -113,6 +113,15 @@ The work ships in waves, not as one large change. Each wave:
 | 8 | Admin screens: Creator on SurveyJS 3, dashboard on Chart.js, response list and exports removed; older developer documents rewritten | plugin (web) | 1, 4, 5 |
 | 9 | Mobile | plugin (mobile), mobile app | 7 |
 
-Wave 1 is built on the branch `feature/surveyjs-3-mantine` (2026-11-16), not yet reviewed or released.
+Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 2026-11-17), not yet reviewed or released.
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
+
+### Wave 5 as built (2026-11-17)
+
+- **Store.** `SurveyResponseStore` is the only code that touches responses: one row per response in `sh2_surveyjs_<survey id>`, trigger `started` (first progress save), `updated` (later saves), `finished` (submit). Reserved columns: `response_id`, `survey_revision`, `guest_key`, `language`, `page_no`; publishing refuses a question with one of these names or a core row column (`422`).
+- **Version check (rule 2.13).** The plugin writes as a trusted system writer (`RecordWriteContext` with no expected version), like other plugin writes: the participant never edits a row by number, only through the plugin, which finds the row itself. Every save still keeps a revision; progress is saved on page change and on the optional autosave interval, so the number of revisions follows those settings.
+- **Guest key.** The visitor cookie never reached a browser: the BFF drops cookies the backend sets. The web runtime now keeps a random 128-bit guest key in `localStorage` and sends it as `X-SurveyJs-Guest-Key`; the backend still accepts the signed cookie from clients that call it directly. A row keeps the guest key only when a guest wrote it. Open point for review: this is a plugin-side choice, a core way for plugins to keep a guest identity (for example a BFF-managed cookie) would replace it.
+- **Exports.** The plugin's CSV, Excel and JSON export routes and buttons are removed in this wave already (they read the dropped tables); the response list, detail, PDF and delete stay and read the store until wave 8. The `export-*` and response permissions stay until wave 6.
+- **Lost on upgrade.** Unfinished drafts, and the revision and visitor id of earlier responses (a plugin migration may not write core tables). Earlier guest responses (stored with user 1) no longer count for guest limits. Uploads under the old default folder must be moved to `var/form-files/surveyjs` or `SURVEYJS_UPLOAD_DIR` set.
+- **Not tested here.** Mercure delivery of `response_submitted` (no hub in the local check). The route rows of the removed export routes stay in a dev database until the next plugin update re-syncs routes.

@@ -64,6 +64,30 @@ final class VisitorIdResolverTest extends TestCase
         self::assertSame(VisitorIdResolver::COOKIE_NAME, $sent->getName());
     }
 
+    public function testTheGuestKeyHeaderOfTheWebRuntimeIsTheVisitorId(): void
+    {
+        // Behind the BFF no backend cookie reaches the browser, so the web
+        // runtime sends the key it keeps itself; the same browser stays the
+        // same guest across requests.
+        $resolver = new VisitorIdResolver('test-secret');
+        $request = new Request();
+        $request->headers->set(VisitorIdResolver::HEADER_NAME, '0123456789abcdef0123456789abcdef');
+        $response = new Response();
+
+        self::assertSame('0123456789ABCDEF0123456789ABCDEF', $resolver->ensureVisitorId($request, $response));
+        self::assertSame([], $response->headers->getCookies(), 'no cookie is minted when the header names the guest');
+    }
+
+    public function testAMalformedGuestKeyHeaderIsIgnored(): void
+    {
+        $resolver = new VisitorIdResolver('test-secret');
+        foreach (['short', str_repeat('z', 32), '0123456789abcdef0123456789abcdef00'] as $value) {
+            $request = new Request();
+            $request->headers->set(VisitorIdResolver::HEADER_NAME, $value);
+            self::assertNull($resolver->resolveFromRequest($request), $value);
+        }
+    }
+
     public function testDifferentSecretsRejectEachOthersCookies(): void
     {
         $signer = new VisitorIdResolver('secret-a');

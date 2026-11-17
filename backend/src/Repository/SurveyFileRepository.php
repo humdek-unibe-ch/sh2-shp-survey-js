@@ -12,8 +12,6 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyFile;
-use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 
 /**
  * @extends ServiceEntityRepository<SurveyFile>
@@ -32,15 +30,9 @@ final class SurveyFileRepository extends ServiceEntityRepository
     }
 
     /** @return SurveyFile[] */
-    public function findByDraft(SurveyResponseDraft $draft): array
+    public function findByUploader(int $userId): array
     {
-        return $this->findBy(['draft' => $draft]);
-    }
-
-    /** @return SurveyFile[] */
-    public function findByRun(SurveyRun $run): array
-    {
-        return $this->findBy(['run' => $run]);
+        return $this->findBy(['uploadedByUserId' => $userId]);
     }
 
     public function findOneByResponseAndQuestion(string $responseId, string $questionName, string $sha256): ?SurveyFile

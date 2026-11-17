@@ -10,9 +10,8 @@ SPDX-License-Identifier: MPL-2.0
  * endpoint; subsequent updates flow over the
  * `surveys/{surveyId}/responses` realtime topic — no polling.
  *
- * The full per-response answer drill-down (FormUserInputRecord-style
- * detail panel) is deferred to a follow-up iteration; this scaffold
- * proves the runs metadata reaches the admin shell end-to-end.
+ * Each row is a response in the survey's data table, unfinished or
+ * submitted. The full list and its exports are the core data screen's.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,7 +23,6 @@ import {
     Card,
     Group,
     Loader,
-    Menu,
     Modal,
     Paper,
     Stack,
@@ -44,21 +42,19 @@ import {
 import { usePluginRealtime } from '@selfhelp/shared/plugin-sdk';
 
 import {
-    buildResponsesExportUrl,
     deleteResponse,
     fetchResponseDetail,
     fetchResponses,
+    type ISurveyResponseSummary as IResponseRow,
 } from '../api/surveys-admin';
 
-interface IResponseRow {
-    id: number;
-    responseId: string;
-    surveyId: string;
-    revision: number;
-    userId: number | null;
-    startedAt: string;
-    completedAt: string | null;
-    status: string;
+function formatAnswer(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '—';
+    return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function savedTime(row: IResponseRow): number {
+    return row.lastSavedAt ? new Date(row.lastSavedAt).getTime() : 0;
 }
 
 export interface ISurveyResponsesPageProps {
@@ -123,17 +119,15 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
 
     const sortedItems = useMemo(
         () => {
-            const all = (items ?? []).slice().sort(
-                (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-            );
+            const all = (items ?? []).slice().sort((a, b) => savedTime(b) - savedTime(a));
             if (filterQuery.trim() === '') return all;
             const needle = filterQuery.trim().toLowerCase();
             return all.filter((row) => {
                 const haystack = [
                     row.responseId,
-                    row.status,
-                    row.userId === null ? 'anon' : String(row.userId),
-                    String(row.revision),
+                    row.finished ? 'submitted' : 'in progress',
+                    row.userName ?? (row.userId === null ? 'guest' : String(row.userId)),
+                    String(row.revision ?? ''),
                 ]
                     .join(' ')
                     .toLowerCase();
@@ -142,15 +136,6 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
         },
         [filterQuery, items],
     );
-
-    const exportLinks = useMemo(() => {
-        if (!surveyId) return null;
-        return {
-            csv: buildResponsesExportUrl(surveyId, 'csv'),
-            xlsx: buildResponsesExportUrl(surveyId, 'xlsx'),
-            json: buildResponsesExportUrl(surveyId, 'json'),
-        };
-    }, [surveyId]);
 
     if (!surveyId) {
         return (
@@ -201,26 +186,6 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                         onChange={(e) => setFilterQuery(e.currentTarget.value)}
                         size="xs"
                     />
-                    {exportLinks !== null && (
-                        <Menu shadow="md" withinPortal>
-                            <Menu.Target>
-                                <Button size="xs" variant="light" leftSection={<IconDownload size={14} />}>
-                                    Export
-                                </Button>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                <Menu.Item component="a" href={exportLinks.csv} target="_blank" rel="noopener noreferrer">
-                                    CSV
-                                </Menu.Item>
-                                <Menu.Item component="a" href={exportLinks.xlsx} target="_blank" rel="noopener noreferrer">
-                                    Excel (XLSX)
-                                </Menu.Item>
-                                <Menu.Item component="a" href={exportLinks.json} target="_blank" rel="noopener noreferrer">
-                                    JSON
-                                </Menu.Item>
-                            </Menu.Dropdown>
-                        </Menu>
-                    )}
                     <Tooltip label="Reload">
                         <ActionIcon
                             variant="subtle"
@@ -251,8 +216,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                                 <Table.Th>Status</Table.Th>
                                 <Table.Th>Revision</Table.Th>
                                 <Table.Th>User</Table.Th>
-                                <Table.Th>Started</Table.Th>
-                                <Table.Th>Completed</Table.Th>
+                                <Table.Th>Last saved</Table.Th>
                                 <Table.Th style={{ width: 60 }} />
                             </Table.Tr>
                         </Table.Thead>
@@ -271,23 +235,15 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                                         <Text size="sm" ff="monospace">{row.responseId}</Text>
                                     </Table.Td>
                                     <Table.Td>
-                                        <Badge
-                                            variant="light"
-                                            color={row.status === 'completed' ? 'green' : 'yellow'}
-                                        >
-                                            {row.status}
+                                        <Badge variant="light" color={row.finished ? 'green' : 'yellow'}>
+                                            {row.finished ? 'submitted' : 'in progress'}
                                         </Badge>
                                     </Table.Td>
-                                    <Table.Td>v{row.revision}</Table.Td>
-                                    <Table.Td>{row.userId ?? <Text c="dimmed">anon</Text>}</Table.Td>
-                                    <Table.Td>
-                                        <Text size="sm">{new Date(row.startedAt).toLocaleString()}</Text>
-                                    </Table.Td>
+                                    <Table.Td>{row.revision !== null ? `v${row.revision}` : '—'}</Table.Td>
+                                    <Table.Td>{row.userName ?? row.userId ?? <Text c="dimmed">guest</Text>}</Table.Td>
                                     <Table.Td>
                                         <Text size="sm">
-                                            {row.completedAt
-                                                ? new Date(row.completedAt).toLocaleString()
-                                                : '—'}
+                                            {row.lastSavedAt ? new Date(row.lastSavedAt).toLocaleString() : '—'}
                                         </Text>
                                     </Table.Td>
                                     <Table.Td>
@@ -338,7 +294,7 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                         <Text component="span" ff="monospace">
                             {pendingDelete?.responseId}
                         </Text>{' '}
-                        also removes any draft and uploaded files associated with it. This cannot be undone.
+                        removes it from the survey&apos;s data, the same as deleting it in the data screen (its history is kept).
                     </Text>
                     <Group justify="flex-end" gap="xs">
                         <Button variant="default" onClick={() => setPendingDelete(null)} disabled={busy}>
@@ -355,28 +311,26 @@ export function SurveyResponsesPage({ surveyId }: ISurveyResponsesPageProps = {}
                     <Stack gap="sm">
                         <Group justify="space-between">
                             <Title order={5}>Response {selected.responseId}</Title>
-                            <Badge variant="light">{selected.answers.length} answers</Badge>
+                            <Badge variant="light">{Object.keys(selected.answers).length} answers</Badge>
                         </Group>
-                        {selected.answers.length === 0 ? (
+                        {Object.keys(selected.answers).length === 0 ? (
                             <Text c="dimmed" size="sm">
-                                No answer links were recorded for this run.
+                                No answers were saved for this response.
                             </Text>
                         ) : (
                             <Table verticalSpacing="xs">
                                 <Table.Thead>
                                     <Table.Tr>
                                         <Table.Th>Question</Table.Th>
-                                        <Table.Th>Type</Table.Th>
-                                    <Table.Th>Value</Table.Th>
+                                        <Table.Th>Value</Table.Th>
                                     </Table.Tr>
                                 </Table.Thead>
                                 <Table.Tbody>
-                                    {selected.answers.map((answer) => (
-                                        <Table.Tr key={answer.questionName}>
-                                            <Table.Td>{answer.questionName}</Table.Td>
-                                            <Table.Td>{answer.questionType}</Table.Td>
+                                    {Object.entries(selected.answers).map(([questionName, value]) => (
+                                        <Table.Tr key={questionName}>
+                                            <Table.Td>{questionName}</Table.Td>
                                             <Table.Td>
-                                                <Text size="sm" lineClamp={3}>{answer.value || '—'}</Text>
+                                                <Text size="sm" lineClamp={3}>{formatAnswer(value)}</Text>
                                             </Table.Td>
                                         </Table.Tr>
                                     ))}

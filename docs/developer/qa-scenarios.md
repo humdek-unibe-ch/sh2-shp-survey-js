@@ -29,7 +29,7 @@ Automated coverage:
 1. Sign in as a regular user.
 2. Open a published survey page.
 3. Complete every required question and click _Complete_.
-4. Verify a new row appears in `survey_runs` with the user's id,
+4. Verify a new `finished` row appears in the survey's data table (`sh2_surveyjs_<survey id>`) with the user's id,
    `status = completed`, and a non-null `completed_at`.
 5. Verify each answer is materialised in the host `dataTables` row
    with the SurveyJS question name as the column.
@@ -40,7 +40,7 @@ Automated coverage:
 2. Open the same survey.
 3. Observe a `_sh_sjs_vid` cookie is issued by the server.
 4. Submit the survey.
-5. Verify the new `survey_runs` row has `id_users = NULL` and the
+5. Verify the new data row has `id_users = NULL` and the
    `visitor_id` matches the cookie payload.
 
 ### 1.3 Once-per-user (authenticated)
@@ -62,12 +62,12 @@ Automated coverage:
 
 ### 1.5 Edit-mode (`?record_id=`)
 
-1. Submit a survey, capture the response id from `survey_runs`.
+1. Submit a survey, capture the `response_id` cell of its data row.
 2. Re-open with `?record_id=<id>` and (when applicable) sign in as
    the original submitter.
 3. Existing answers are pre-populated.
 4. Modify an answer and re-submit.
-5. The `survey_runs` row is updated in place; no new row is created.
+5. The data row is updated in place; no new row is created.
 
 ## 2. Auto-save and timeout
 
@@ -115,7 +115,7 @@ Automated coverage:
 2. Upload a small PNG.
 3. The answer cell contains `{ id, url, filename, mimeType,
    sizeBytes, sha256 }` (no base64).
-4. The file lives under `var/plugin-data/sh2-shp-survey-js/uploads/`.
+4. The file lives under `var/form-files/surveyjs/` (unless `SURVEYJS_UPLOAD_DIR` is set).
 
 ### 3.2 Signed download
 
@@ -259,9 +259,8 @@ Steps + expected behaviour:
 2. Click _Complete_ with the required question empty → SurveyJS shows a
    validation error and does **not** submit.
 3. Fill every required question and click _Complete_.
-4. A **real** `survey_runs` row is created (`status = completed`,
-   non-null `completed_at`) and answers materialise in the host
-   `data_tables` row — identical to a web submission (there is no
+4. A **real** data row is created in the survey's data table (trigger
+   `finished`) — identical to a web submission (there is no
    preview/test branch on the backend).
 5. The SurveyJS completion screen shows.
 6. The configured redirect is followed.
@@ -275,7 +274,7 @@ Automated coverage of each leg (runs in CI, no live stack):
 - `SUBMIT_SURVEY` → native host → `POST .../submit` (correct route,
   envelope unwrap, session-expiry mapping):
   `mobile/__tests__/api/hostApi.test.ts`.
-- `/submit` stores a real `SurveyRun` regardless of origin / preview
+- `/submit` stores a real response row regardless of origin / preview
   hints: `backend/tests/Service/SurveyResponseServiceTest.php`
   (`testMobileOriginSubmitStoresRealRunAndIgnoresPreviewHints`).
 - The preview snapshot bundles SurveyJS at the renderer contract:

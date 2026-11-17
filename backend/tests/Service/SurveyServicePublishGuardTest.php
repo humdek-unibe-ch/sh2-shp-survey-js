@@ -12,9 +12,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
+use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -127,6 +127,29 @@ final class SurveyServicePublishGuardTest extends TestCase
         self::assertSame(2, $version->getRevision(), 'removing a display-only html block must not be blocked');
     }
 
+    public function testPublishRefusesAQuestionNamedLikeASystemColumn(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        $survey->setDraftDefinition([
+            'pages' => [[
+                'name' => 'page1',
+                'elements' => [
+                    ['type' => 'text', 'name' => 'mood_score', 'title' => 'Mood score'],
+                    ['type' => 'text', 'name' => 'response_id', 'title' => 'Your id'],
+                    ['type' => 'text', 'name' => 'id_users', 'title' => 'User'],
+                ],
+            ]],
+        ], null);
+
+        try {
+            $this->buildService(completedRuns: 0)->publishDraft($survey, null);
+            self::fail('Expected a question named like a data column to be refused.');
+        } catch (\DomainException $e) {
+            self::assertSame(422, $e->getCode());
+            self::assertStringContainsString('"id_users", "response_id"', $e->getMessage(), 'every clashing name is listed');
+        }
+    }
+
     private function surveyWithPublishedQuestion(string $name, string $title): Survey
     {
         $survey = new Survey('Test', 'SV_' . strtoupper($name));
@@ -162,8 +185,8 @@ final class SurveyServicePublishGuardTest extends TestCase
         // before this is ever reached.
         $em->method('wrapInTransaction')->willReturn($this->publishedSentinel());
 
-        $runs = $this->createMock(SurveyRunRepository::class);
-        $runs->method('countCompletedForSurvey')->willReturn($completedRuns);
+        $responses = $this->createMock(SurveyResponseStore::class);
+        $responses->method('list')->willReturn(['records' => [], 'total' => $completedRuns]);
 
         $surveys = (new \ReflectionClass(SurveyRepository::class))->newInstanceWithoutConstructor();
         \assert($surveys instanceof SurveyRepository);
@@ -175,7 +198,7 @@ final class SurveyServicePublishGuardTest extends TestCase
             $surveys,
             $versions,
             $this->createMock(SurveyJsRealtimePublisher::class),
-            $runs,
+            $responses,
         );
     }
 

@@ -11,8 +11,6 @@ namespace Humdek\SurveyJsBundle\Service;
 use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyFile;
-use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
 use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -24,7 +22,8 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * Files land OUTSIDE the web root under
  * `<plugin_data_dir>/uploads/<surveyId>/<responseId>/<questionName>/<sha256>.<ext>`.
  * The base directory comes from the env `SURVEYJS_UPLOAD_DIR`; when
- * unset we fall back to `<project>/var/plugin-data/sh2-shp-survey-js/uploads`.
+ * unset it is `surveyjs/` inside the core form files directory
+ * (`selfhelp.form_file_storage_dir`, `var/form-files`), a kept volume.
  *
  * Deduplication is done by SHA-256: re-uploading the same content
  * for the same `(response_id, question_name)` only ever produces one
@@ -64,8 +63,6 @@ class SurveyFileStorage
         string $responseId,
         string $questionName,
         UploadedFile $file,
-        ?SurveyResponseDraft $draft,
-        ?SurveyRun $run,
         ?int $userId,
         ?string $visitorId,
     ): SurveyFile {
@@ -111,12 +108,6 @@ class SurveyFileStorage
             $userId,
             $visitorId,
         );
-        if ($draft !== null) {
-            $entity->setDraft($draft);
-        }
-        if ($run !== null) {
-            $entity->setRun($run);
-        }
         $this->em->persist($entity);
         $this->em->flush();
         return $entity;
@@ -142,20 +133,6 @@ class SurveyFileStorage
     public function getMaxBytes(): int
     {
         return $this->maxBytes;
-    }
-
-    /**
-     * Attach all files belonging to the supplied draft to the freshly
-     * created run + clear the draft pointer so the next promotion does
-     * not double-attach.
-     */
-    public function promoteDraftFilesToRun(SurveyResponseDraft $draft, SurveyRun $run): void
-    {
-        foreach ($this->files->findByDraft($draft) as $file) {
-            $file->setRun($run);
-            $file->setDraft(null);
-        }
-        $this->em->flush();
     }
 
     private function validateUpload(UploadedFile $file): void

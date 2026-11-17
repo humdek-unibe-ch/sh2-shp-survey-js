@@ -17,15 +17,13 @@ use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
  * question.
  *
  * Files live OUTSIDE the web root under
- * `var/plugin-data/sh2-shp-survey-js/uploads/<surveyId>/<responseId>/<questionName>/<sha256>.<ext>`.
+ * `<form files dir>/surveyjs/<surveyId>/<responseId>/<questionName>/<sha256>.<ext>`.
  * Only the relative path is recorded here; the {@see \Humdek\SurveyJsBundle\Service\SurveyFileStorage}
  * service resolves it to the absolute path and the {@see \Humdek\SurveyJsBundle\Service\SignedFileUrlService}
  * produces short-lived signed download URLs.
  *
- * The row is linked to either an in-progress draft (`id_survey_drafts`)
- * or a completed run (`id_survey_runs`). When a draft is promoted to a
- * run on completion the link is rewritten so the file stays attached
- * to its run.
+ * The row belongs to the response with the same `response_id` (a row of
+ * the survey's data table, unfinished or finished).
  *
  * `uploaded_by_user_id` OR `uploaded_by_visitor_id` records the
  * uploader identity so the download endpoint can authorise the
@@ -35,8 +33,7 @@ use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 #[ORM\Entity(repositoryClass: SurveyFileRepository::class)]
 #[ORM\Table(name: 'survey_files')]
 #[ORM\Index(columns: ['response_id'], name: 'idx_survey_files_response_id')]
-#[ORM\Index(columns: ['id_survey_runs'], name: 'idx_survey_files_survey_runs')]
-#[ORM\Index(columns: ['id_survey_response_drafts'], name: 'idx_survey_files_survey_drafts')]
+#[ORM\Index(columns: ['uploaded_by_user_id'], name: 'idx_survey_files_uploaded_by_user')]
 #[ORM\Index(columns: ['sha256'], name: 'idx_survey_files_sha256')]
 class SurveyFile
 {
@@ -48,14 +45,6 @@ class SurveyFile
     #[ORM\ManyToOne(targetEntity: Survey::class)]
     #[ORM\JoinColumn(name: 'id_surveys', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private Survey $survey;
-
-    #[ORM\ManyToOne(targetEntity: SurveyRun::class)]
-    #[ORM\JoinColumn(name: 'id_survey_runs', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
-    private ?SurveyRun $run = null;
-
-    #[ORM\ManyToOne(targetEntity: SurveyResponseDraft::class)]
-    #[ORM\JoinColumn(name: 'id_survey_response_drafts', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
-    private ?SurveyResponseDraft $draft = null;
 
     #[ORM\Column(name: 'response_id', type: 'string', length: 100)]
     private string $responseId;
@@ -127,28 +116,6 @@ class SurveyFile
         return $this->survey;
     }
 
-    public function getRun(): ?SurveyRun
-    {
-        return $this->run;
-    }
-
-    public function setRun(?SurveyRun $run): self
-    {
-        $this->run = $run;
-        return $this;
-    }
-
-    public function getDraft(): ?SurveyResponseDraft
-    {
-        return $this->draft;
-    }
-
-    public function setDraft(?SurveyResponseDraft $draft): self
-    {
-        $this->draft = $draft;
-        return $this;
-    }
-
     public function getResponseId(): string
     {
         return $this->responseId;
@@ -203,8 +170,7 @@ class SurveyFile
      * Authorisation predicate used by the download endpoint. The caller
      * is the uploader when either the authenticated user id matches
      * `uploaded_by_user_id` OR the anonymous visitor id matches
-     * `uploaded_by_visitor_id`. Admins (callers with
-     * `surveyjs.surveys.view-responses`) are checked separately at the
+     * `uploaded_by_visitor_id`. Admins are checked separately at the
      * controller layer.
      */
     public function isOwnedBy(?int $userId, ?string $visitorId): bool

@@ -17,6 +17,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { csrfHeaders } from './csrf';
+import { guestKeyHeaders } from './guestKey';
 
 export interface IRuntimeConfig {
     restartOnRefresh: boolean;
@@ -57,7 +58,7 @@ export interface IPublishedSurvey {
 }
 
 export interface ISubmitResult {
-    runId: number;
+    recordId: number;
     responseId: string;
     submittedAt: string;
 }
@@ -65,9 +66,9 @@ export interface ISubmitResult {
 export interface IDraftPayload {
     responseId: string;
     pageNo: number;
+    /** `data`: the answers so far; `locale`: the language they were given in. */
     payload: Record<string, unknown>;
-    lastSavedAt: string;
-    expiresAt: string;
+    lastSavedAt: string | null;
 }
 
 export interface IUploadedFile {
@@ -168,6 +169,7 @@ export async function fetchPublishedSurvey(
         credentials: 'include',
         headers: {
             Accept: 'application/json',
+            ...guestKeyHeaders(),
             ...runtimeConfigHeader(config),
         },
     });
@@ -194,6 +196,7 @@ export async function submitSurveyAnswers(
         credentials: 'include',
         headers: {
             Accept: 'application/json',
+            ...guestKeyHeaders(),
             'Content-Type': 'application/json',
             ...csrfHeaders(),
         },
@@ -216,7 +219,7 @@ export async function fetchDraft(
     }
     const res = await fetch(url.toString(), {
         credentials: 'include',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });
     const body = await ensureOk<{ data: IDraftPayload | null }>(res);
     return body.data;
@@ -235,6 +238,7 @@ export async function saveDraft(
         credentials: 'include',
         headers: {
             Accept: 'application/json',
+            ...guestKeyHeaders(),
             'Content-Type': 'application/json',
             ...csrfHeaders(),
         },
@@ -255,7 +259,7 @@ export async function deleteDraft(key: string, responseId?: string): Promise<voi
     const res = await fetch(url.toString(), {
         method: 'DELETE',
         credentials: 'include',
-        headers: { Accept: 'application/json', ...csrfHeaders() },
+        headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
     });
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
@@ -273,7 +277,7 @@ export async function fetchEditableResponse(
     url.searchParams.set('responseId', responseId);
     const res = await fetch(url.toString(), {
         credentials: 'include',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });
     if (res.status === 404) {
         return null;
@@ -295,6 +299,7 @@ export async function uploadSurveyFile(
         credentials: 'include',
         headers: {
             Accept: 'application/json',
+            ...guestKeyHeaders(),
             ...csrfHeaders(),
         },
         body: form,
@@ -309,7 +314,7 @@ export async function deleteSurveyFile(key: string, fileId: number): Promise<voi
         {
             method: 'DELETE',
             credentials: 'include',
-            headers: { Accept: 'application/json', ...csrfHeaders() },
+            headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
         },
     );
     if (!res.ok && res.status !== 404) {
@@ -328,6 +333,7 @@ export async function fetchChoices(
             credentials: 'include',
             headers: {
                 Accept: 'application/json',
+                ...guestKeyHeaders(),
                 ...runtimeConfigHeader(config),
             },
         },

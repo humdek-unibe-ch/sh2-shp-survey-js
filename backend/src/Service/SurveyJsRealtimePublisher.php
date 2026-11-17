@@ -10,7 +10,6 @@ namespace Humdek\SurveyJsBundle\Service;
 
 use App\Plugin\Realtime\PluginRealtimePublisherInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 
 /**
@@ -93,7 +92,7 @@ class SurveyJsRealtimePublisher
         );
     }
 
-    public function surveyResponseSubmitted(Survey $survey, SurveyRun $run, ?int $userId): void
+    public function surveyResponseSubmitted(Survey $survey, SurveyResponseRecord $record, ?int $userId): void
     {
         $this->host->publish(
             self::PLUGIN_ID,
@@ -102,10 +101,10 @@ class SurveyJsRealtimePublisher
                 'type' => 'response_submitted',
                 'id' => $survey->getId(),
                 'surveyId' => $survey->getSurveyId(),
-                'runId' => $run->getId(),
-                'responseId' => $run->getResponseId(),
+                'recordId' => $record->recordId,
+                'responseId' => $record->responseId,
                 'submittedByUserId' => $userId,
-                'submittedAt' => ($run->getCompletedAt() ?? $run->getStartedAt())->format(DATE_ATOM),
+                'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
             ],
             [
                 'audience' => 'permission',

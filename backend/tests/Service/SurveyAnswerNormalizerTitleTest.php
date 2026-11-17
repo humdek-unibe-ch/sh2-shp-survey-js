@@ -18,8 +18,8 @@ use PHPUnit\Framework\TestCase;
  * Issue #56 regression: the normalizer must emit each answer's human title
  * alongside its immutable `question.name`, so the host can store the title as
  * the mutable `data_cols.display_name` while keeping `name` as the storage
- * key. Covers exact-key resolution, the bare last-segment fallback for
- * dotted panel keys, localized title objects, and the no-title case.
+ * key. Covers exact-key resolution, complex answers kept as one cell,
+ * localized title objects, and the no-title case.
  */
 final class SurveyAnswerNormalizerTitleTest extends TestCase
 {
@@ -45,31 +45,37 @@ final class SurveyAnswerNormalizerTitleTest extends TestCase
         self::assertSame('mood_score', $cells['mood_score']['name'], 'the immutable storage key is the question name');
     }
 
-    public function testResolvesTitleForDottedPanelKeyByLastSegment(): void
+    public function testAComplexAnswerStaysOneCellUnderItsQuestionName(): void
     {
         $version = $this->version([
             'pages' => [[
                 'name' => 'p1',
-                'elements' => [[
-                    'type' => 'paneldynamic',
-                    'name' => 'household',
-                    'templateElements' => [
-                        ['type' => 'text', 'name' => 'member_name', 'title' => 'Member name'],
+                'elements' => [
+                    [
+                        'type' => 'paneldynamic',
+                        'name' => 'household',
+                        'title' => 'Household',
+                        'templateElements' => [
+                            ['type' => 'text', 'name' => 'member_name', 'title' => 'Member name'],
+                        ],
                     ],
-                    'elements' => [
-                        ['type' => 'text', 'name' => 'member_name', 'title' => 'Member name'],
-                    ],
-                ]],
+                    ['type' => 'matrix', 'name' => 'sleep', 'title' => 'Sleep'],
+                ],
             ]],
         ]);
 
-        // A nested answer flattens to the dotted key household.member_name.
+        // A row value with a space was refused by the core as a column key
+        // when answers were split into `question.row` columns (problem 13).
         $cells = $this->index($this->normalizer()->normalize($version, [
-            'household' => ['member_name' => 'Ada'],
+            'household' => [['member_name' => 'Ada']],
+            'sleep' => ['slept well' => 'yes'],
         ]));
 
-        self::assertArrayHasKey('household.member_name', $cells, 'nested answers flatten to a dotted storage key');
-        self::assertSame('Member name', $cells['household.member_name']['title'], 'the title resolves via the bare trailing question name');
+        self::assertSame(['household', 'sleep'], array_keys($cells), 'one cell per question, never one per row');
+        self::assertSame([['member_name' => 'Ada']], $cells['household']['value'], 'the panel answer is kept whole');
+        self::assertSame(['slept well' => 'yes'], $cells['sleep']['value'], 'the matrix answer is kept whole');
+        self::assertSame('matrix', $cells['sleep']['type']);
+        self::assertSame('Household', $cells['household']['title']);
     }
 
     public function testResolvesLocalizedTitleObjectPreferringDefault(): void

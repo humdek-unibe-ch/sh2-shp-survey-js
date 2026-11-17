@@ -9,17 +9,14 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
-use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
-use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
-use Humdek\SurveyJsBundle\Service\SurveyExportService;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
+use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
+use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -38,14 +35,11 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 final class SurveysAdminController
 {
     public function __construct(
-        private readonly EntityManagerInterface $em,
         private readonly SurveyRepository $surveys,
-        private readonly SurveyRunRepository $runs,
         private readonly SurveyVersionRepository $versions,
-        private readonly SurveyAnswerLinkRepository $answerLinks,
+        private readonly SurveyResponseStore $responseStore,
         private readonly SurveyService $surveyService,
         private readonly SurveyDashboardService $dashboardService,
-        private readonly SurveyExportService $exportService,
         private readonly SurveyPdfService $pdfService,
         private readonly SurveyJsRealtimePublisher $realtime,
     ) {
@@ -142,6 +136,10 @@ final class SurveysAdminController
                     'error' => $e->getMessage(),
                     'data' => $this->detail($survey),
                 ], 409);
+            }
+            // 422: a question takes a name the system uses as a column.
+            if ($e->getCode() === 422) {
+                return new JsonResponse(['error' => $e->getMessage()], 422);
             }
             throw $e;
         }
@@ -277,11 +275,9 @@ final class SurveysAdminController
     }
 
     /**
-     * List responses for a survey. Used by the admin Responses tab.
-     *
-     * Paginated; default page=1, limit=50. The full answer payload is
-     * NOT inlined here — clients should follow `/responses/{rid}` (when
-     * implemented) for the answer cells.
+     * Responses of a survey, newest first, unfinished ones included (admin
+     * Responses tab; the full list and exports are the core data screen's).
+     * Paginated; default page=1, limit=50 (the store reads at most 100).
      */
     public function responses(int $id, Request $request): JsonResponse
     {
@@ -290,38 +286,23 @@ final class SurveysAdminController
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
 
-        $page = max(1, (int) $request->query->get('page', 1));
-        $limit = min(200, max(1, (int) $request->query->get('limit', 50)));
-        $offset = ($page - 1) * $limit;
-
-        $items = $this->runs->findRecentForSurvey($survey, $limit, $offset);
-        $total = $this->runs->countForSurvey($survey);
+        $pageNo = max(1, (int) $request->query->get('page', 1));
+        $limit = min(100, max(1, (int) $request->query->get('limit', 50)));
+        $page = $this->responseStore->list($survey, ($pageNo - 1) * $limit, $limit);
 
         return new JsonResponse([
             'data' => [
-                'items' => array_map(static fn($run) => [
-                    'id' => $run->getId(),
-                    'responseId' => $run->getResponseId(),
-                    'surveyId' => $survey->getSurveyId(),
-                    'revision' => $run->getVersion()->getRevision(),
-                    'userId' => $run->getIdUser(),
-                    'startedAt' => $run->getStartedAt()->format(DATE_ATOM),
-                    'completedAt' => $run->getCompletedAt()?->format(DATE_ATOM),
-                    'status' => $run->getStatus(),
-                ], $items),
-                'page' => $page,
+                'items' => array_map(fn (SurveyResponseRecord $record): array => $this->responseSummary($survey, $record), $page['records']),
+                'page' => $pageNo,
                 'limit' => $limit,
-                'total' => $total,
+                'total' => $page['total'],
             ],
         ]);
     }
 
     /**
-     * PDF export of a single survey response. Gated by the
-     * `surveyjs.surveys.export-pdf` permission and the `pdf-export`
-     * feature flag (off by default). The actual rendering is delegated
-     * to `SurveyPdfService`, which currently returns a 501 stub —
-     * implementation follows the PDF question's roadmap.
+     * PDF of a single survey response (`SurveyPdfService`: a PDF when dompdf
+     * is installed, else a printable page).
      */
     public function responsePdf(int $id, string $rid): Response
     {
@@ -329,20 +310,17 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
-        $run = $this->resolveRun($survey, $rid);
-        if ($run === null) {
+        $record = $this->resolveResponse($survey, $rid);
+        if ($record === null) {
             return new JsonResponse(['error' => 'Response not found.'], 404);
         }
 
-        return $this->pdfService->renderResponse($survey, $run);
+        return $this->pdfService->renderResponse($survey, $record);
     }
 
     /**
-     * Delete a single response (the matching `survey_run` and its
-     * answer links). Requires `surveyjs.surveys.delete-responses`.
-     * The host data_tables row stays untouched so the CMS Data
-     * Management browser keeps its audit trail; an operator can
-     * delete it from there separately.
+     * Deletes a single response: the core soft delete of its data row (trigger
+     * `deleted`, history kept), the same as deleting it in the data screen.
      */
     public function deleteResponse(int $id, string $rid, Request $request): JsonResponse
     {
@@ -350,59 +328,15 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
-        $run = $this->resolveRun($survey, $rid);
-        if ($run === null) {
+        $record = $this->resolveResponse($survey, $rid);
+        if ($record === null) {
             return new JsonResponse(['error' => 'Response not found.'], 404);
         }
-        $responseId = $run->getResponseId();
-        $this->em->wrapInTransaction(function () use ($run): void {
-            $this->em->remove($run);
-            $this->em->flush();
-        });
+        $responseId = $record->responseId;
+        $this->responseStore->delete($survey, $record);
         $userId = is_int($request->attributes->get('_auth_user_id')) ? (int) $request->attributes->get('_auth_user_id') : null;
         $this->realtime->surveyResponseDeleted($survey, $responseId, $userId);
         return new JsonResponse(['data' => ['deleted' => true]]);
-    }
-
-    /**
-     * Server-side CSV export. Gated by
-     * `surveyjs.surveys.export-csv` at the route layer.
-     */
-    public function exportResponsesCsv(int $id): Response
-    {
-        $survey = $this->surveys->find($id);
-        if (!$survey instanceof Survey) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
-        }
-        return $this->exportService->streamCsv($survey);
-    }
-
-    /**
-     * Server-side XLSX export. Gated by
-     * `surveyjs.surveys.export-xlsx` at the route layer. Returns a
-     * 501 with an actionable error message when
-     * `phpoffice/phpspreadsheet` is not installed.
-     */
-    public function exportResponsesXlsx(int $id): Response
-    {
-        $survey = $this->surveys->find($id);
-        if (!$survey instanceof Survey) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
-        }
-        return $this->exportService->streamXlsx($survey);
-    }
-
-    /**
-     * Server-side JSON export. Gated by
-     * `surveyjs.surveys.export-json` at the route layer.
-     */
-    public function exportResponsesJson(int $id): Response
-    {
-        $survey = $this->surveys->find($id);
-        if (!$survey instanceof Survey) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
-        }
-        return $this->exportService->streamJson($survey);
     }
 
     public function responseDetail(int $id, string $rid): JsonResponse
@@ -411,27 +345,34 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
-        $run = $this->resolveRun($survey, $rid);
-        if ($run === null) {
+        $record = $this->resolveResponse($survey, $rid);
+        if ($record === null) {
             return new JsonResponse(['error' => 'Response not found.'], 404);
         }
 
         return new JsonResponse(['data' => [
-            'id' => $run->getId(),
-            'responseId' => $run->getResponseId(),
-            'surveyId' => $survey->getSurveyId(),
-            'revision' => $run->getVersion()->getRevision(),
-            'userId' => $run->getIdUser(),
-            'startedAt' => $run->getStartedAt()->format(DATE_ATOM),
-            'completedAt' => $run->getCompletedAt()?->format(DATE_ATOM),
-            'status' => $run->getStatus(),
-            'answers' => array_map(static fn ($link) => [
-                'questionName' => $link->getQuestionName(),
-                'questionType' => $link->getQuestionType(),
-                'value' => $link->getAnswerValue(),
-                'sanitizedHtml' => $link->isSanitizedHtml(),
-            ], $this->answerLinks->findForRun($run)),
+            ...$this->responseSummary($survey, $record),
+            'answers' => $record->answers,
         ]]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function responseSummary(Survey $survey, SurveyResponseRecord $record): array
+    {
+        return [
+            'id' => $record->recordId,
+            'responseId' => $record->responseId,
+            'surveyId' => $survey->getSurveyId(),
+            'revision' => $record->revision,
+            'userId' => $record->userId,
+            'userName' => $record->userName,
+            'lastSavedAt' => $record->lastChangedAt?->format(DATE_ATOM),
+            'finished' => $record->isFinished(),
+            'pageNo' => $record->pageNo,
+            'language' => $record->language,
+        ];
     }
 
     /**
@@ -450,7 +391,7 @@ final class SurveysAdminController
             'draftHash' => $survey->getDraftDefinitionSha256(),
             'draftUpdatedAt' => $survey->getDraftUpdatedAt()?->format(DATE_ATOM),
             'draftUpdatedByUserId' => $survey->getDraftUpdatedByUserId(),
-            'responseCount' => $this->runs->countForSurvey($survey),
+            'responseCount' => $this->responseStore->list($survey, 0, 1)['total'],
         ];
     }
 
@@ -520,15 +461,12 @@ final class SurveysAdminController
         return is_string($value) && $value !== '' ? $value : null;
     }
 
-    private function resolveRun(Survey $survey, string $rid): ?SurveyRun
+    /** A response of this survey by record id (digits) or response id. */
+    private function resolveResponse(Survey $survey, string $rid): ?SurveyResponseRecord
     {
-        $run = ctype_digit($rid)
-            ? $this->runs->find((int) $rid)
-            : $this->runs->findOneByResponseId($rid);
-
-        return $run !== null && $run->getSurvey()->getId() === $survey->getId()
-            ? $run
-            : null;
+        return ctype_digit($rid)
+            ? $this->responseStore->findByRecordId($survey, (int) $rid)
+            : $this->responseStore->findByResponseId($survey, $rid);
     }
 
     /**

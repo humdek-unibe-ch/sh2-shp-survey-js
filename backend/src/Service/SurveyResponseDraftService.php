@@ -8,166 +8,98 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
-use DateTimeImmutable;
-use DateTimeZone;
-use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
-use Humdek\SurveyJsBundle\Repository\SurveyResponseDraftRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 
 /**
- * In-progress survey state management.
- *
- * The legacy plugin auto-saved each page change to the host
- * `user_input` table. We keep the same UX (so participants can refresh
- * without losing data) but isolate the partial payload from the
- * canonical `survey_runs` rows so:
- *
- *   - the dashboard never shows half-filled responses,
- *   - the once-per-user guard sees the finished run only after
- *     submission completes,
- *   - draft TTL evicts abandoned attempts.
- *
- * The default TTL is 30 days, matching the proposal in the plan's
- * "remaining minor confirmations" section.
+ * Progress of a survey not yet submitted, so a participant can leave and come
+ * back (on this or another device). Progress is the response's own row in the
+ * survey's data table with trigger `started` or `updated`, the page reached
+ * and the language; submitting turns the same row `finished`
+ * ({@see SurveyResponseService}). There is no separate draft copy and no
+ * expiry: an abandoned response stays as an unfinished row the admin sees.
  */
 final class SurveyResponseDraftService
 {
-    private const DEFAULT_TTL_DAYS = 30;
-
     public function __construct(
-        private readonly EntityManagerInterface $em,
-        private readonly SurveyResponseDraftRepository $drafts,
-        private readonly SurveyRunRepository $runs,
+        private readonly SurveyAnswerNormalizer $normalizer,
+        private readonly SurveyResponseStore $responses,
+        private readonly SurveyResponseService $submissions,
     ) {
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * Saves the answers so far. A submitted response is never turned back to
+     * unfinished: progress sent for it (an edit in progress) is ignored.
+     *
+     * @param array<string, mixed> $answers
+     *
+     * @throws \DomainException when the response id belongs to someone else
      */
-    public function saveOrCreate(
+    public function save(
         Survey $survey,
         ?string $responseId,
         ?int $userId,
-        ?string $visitorId,
-        array $payload,
+        ?string $guestKey,
+        array $answers,
         int $pageNo,
-    ): SurveyResponseDraft {
+        ?string $language,
+    ): SurveyResponseRecord {
         $version = $survey->getCurrentVersion();
         if ($version === null) {
             throw new \DomainException(sprintf('Survey "%s" has no published version.', $survey->getSurveyId()));
         }
 
-        $draft = $responseId !== null && $responseId !== ''
-            ? $this->drafts->findOneByResponseId($responseId)
+        $existing = $responseId !== null && $responseId !== ''
+            ? $this->responses->findByResponseId($survey, $responseId)
             : null;
-
-        if ($draft instanceof SurveyResponseDraft) {
-            if ($draft->getSurvey()->getId() !== $survey->getId()) {
-                throw new \DomainException('Draft does not belong to this survey.');
+        if ($existing !== null) {
+            if (!$existing->belongsTo($userId, $guestKey)) {
+                throw new \DomainException('This response belongs to someone else.');
             }
-            // Optimistic-concurrency style: keep the highest page_no
-            // seen so a slower autosave does not rewind progress.
-            $draft->setPayload($payload);
-            if ($pageNo > $draft->getPageNo()) {
-                $draft->setPageNo($pageNo);
+            if ($existing->isFinished()) {
+                return $existing;
             }
-            $draft->extendExpiry($this->defaultExpiry());
-            $this->em->flush();
-            return $draft;
         }
 
-        $newResponseId = $responseId !== null && $responseId !== ''
-            ? $responseId
-            : $this->generateResponseId();
-        $draft = new SurveyResponseDraft(
+        return $this->responses->save(
             $survey,
             $version,
-            $newResponseId,
+            $this->normalizer->normalize($version, $answers),
+            $existing->responseId ?? ($responseId !== null && $responseId !== '' ? $responseId : $this->submissions->generateResponseId($survey)),
+            SurveyResponseStore::guestKeyToStore($userId, $guestKey, $existing),
+            $language ?? $existing?->language,
+            // A slower autosave must not move the participant back a page.
+            max($pageNo, $existing->pageNo ?? 0),
+            false,
+            $existing,
             $userId,
-            $visitorId,
-            $payload,
-            max(0, $pageNo),
-            $this->defaultExpiry(),
         );
-        $this->em->persist($draft);
-        $this->em->flush();
-        return $draft;
     }
 
-    public function resume(Survey $survey, ?int $userId, ?string $visitorId, ?string $responseId): ?SurveyResponseDraft
+    /**
+     * The participant's unfinished response: the named one if it is theirs,
+     * else their latest. A signed-in participant also gets back what they
+     * started as a guest on this browser.
+     */
+    public function resume(Survey $survey, ?int $userId, ?string $guestKey, ?string $responseId): ?SurveyResponseRecord
     {
         if ($responseId !== null && $responseId !== '') {
-            $draft = $this->drafts->findOneByResponseId($responseId);
-            if ($draft instanceof SurveyResponseDraft
-                && $draft->getSurvey()->getId() === $survey->getId()
-                && $this->draftBelongsTo($draft, $userId, $visitorId)
-            ) {
-                return $draft;
-            }
-            return null;
+            $record = $this->responses->findByResponseId($survey, $responseId);
+
+            return $record !== null && !$record->isFinished() && $record->belongsTo($userId, $guestKey) ? $record : null;
         }
 
-        if ($userId !== null) {
-            return $this->drafts->findLatestForUser($survey, $userId);
+        $record = $this->responses->findUnfinished($survey, $userId, $guestKey);
+        if ($record === null && $userId !== null) {
+            $record = $this->responses->findUnfinished($survey, null, $guestKey);
         }
-        if ($visitorId !== null && $visitorId !== '') {
-            return $this->drafts->findLatestForVisitor($survey, $visitorId);
-        }
-        return null;
+
+        return $record;
     }
 
-    public function discard(SurveyResponseDraft $draft): void
+    /** Throws the unfinished response away (core soft delete, trigger `deleted`). */
+    public function discard(Survey $survey, SurveyResponseRecord $record): void
     {
-        $this->em->remove($draft);
-        $this->em->flush();
-    }
-
-    public function discardByResponseId(string $responseId): void
-    {
-        $draft = $this->drafts->findOneByResponseId($responseId);
-        if ($draft instanceof SurveyResponseDraft) {
-            $this->discard($draft);
-        }
-    }
-
-    public function purgeExpired(?DateTimeImmutable $now = null): int
-    {
-        return $this->drafts->purgeExpired($now ?? new DateTimeImmutable('now', new DateTimeZone('UTC')));
-    }
-
-    private function defaultExpiry(): DateTimeImmutable
-    {
-        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))
-            ->modify('+' . self::DEFAULT_TTL_DAYS . ' days');
-    }
-
-    private function draftBelongsTo(SurveyResponseDraft $draft, ?int $userId, ?string $visitorId): bool
-    {
-        if ($userId !== null && $draft->getIdUser() === $userId) {
-            return true;
-        }
-        if ($visitorId !== null && $visitorId !== '' && $draft->getVisitorId() === $visitorId) {
-            return true;
-        }
-        // Drafts saved before the participant logged in carry the
-        // visitor id only; we still let an authenticated session
-        // claim them when no draft is bound to the user yet.
-        if ($userId !== null && $draft->getIdUser() === null && $draft->getVisitorId() !== null && $draft->getVisitorId() === $visitorId) {
-            return true;
-        }
-        return false;
-    }
-
-    private function generateResponseId(): string
-    {
-        do {
-            $candidate = 'R_' . strtoupper(bin2hex(random_bytes(8)));
-        } while (
-            $this->drafts->findOneByResponseId($candidate) !== null
-            || $this->runs->findOneByResponseId($candidate) !== null
-        );
-        return $candidate;
+        $this->responses->delete($survey, $record);
     }
 }

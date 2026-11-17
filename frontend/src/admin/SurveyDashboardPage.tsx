@@ -6,8 +6,8 @@ SPDX-License-Identifier: MPL-2.0
  * Survey dashboard.
  *
  * Mirrors the legacy plugin's two-tab dashboard: a Tabulator-backed
- * "Table" view that lists every response (sortable, filterable,
- * exportable) and a "Dashboard" tab that hosts the SurveyAnalytics
+ * "Table" view that lists every response (sortable, filterable; the
+ * export is the core data screen's) and a "Dashboard" tab that hosts the SurveyAnalytics
  * `VisualizationPanel` for per-question charts. A small header card
  * still surfaces the headline counts so operators have an immediate
  * answer to "how many responses do I have?" without scrolling.
@@ -17,16 +17,14 @@ SPDX-License-Identifier: MPL-2.0
  * persist to localStorage via the table panel.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     ActionIcon,
     Alert,
     Badge,
-    Button,
     Card,
     Group,
     Loader,
-    Menu,
     SimpleGrid,
     Stack,
     Tabs,
@@ -36,14 +34,12 @@ import {
 } from '@mantine/core';
 import {
     IconChartBar,
-    IconDownload,
     IconRefresh,
     IconTable,
 } from '@tabler/icons-react';
 import { usePluginRealtime } from '@selfhelp/shared/plugin-sdk';
 
 import {
-    buildResponsesExportUrl,
     fetchDashboard,
     fetchDashboardResults,
     type IDashboardResults,
@@ -112,15 +108,6 @@ export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}
         }
     }, [realtime.data, reload]);
 
-    const exportLinks = useMemo(() => {
-        if (!surveyId) return null;
-        return {
-            csv: buildResponsesExportUrl(surveyId, 'csv'),
-            xlsx: buildResponsesExportUrl(surveyId, 'xlsx'),
-            json: buildResponsesExportUrl(surveyId, 'json'),
-        };
-    }, [surveyId]);
-
     if (!surveyId) {
         return (
             <Card withBorder p="lg">
@@ -170,26 +157,6 @@ export function SurveyDashboardPage({ surveyId }: ISurveyDashboardPageProps = {}
                             <IconRefresh size={16} />
                         </ActionIcon>
                     </Tooltip>
-                    {exportLinks !== null && (
-                        <Menu shadow="md" withinPortal>
-                            <Menu.Target>
-                                <Button leftSection={<IconDownload size={16} />} variant="light">
-                                    Export
-                                </Button>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                <Menu.Item component="a" href={exportLinks.csv} target="_blank" rel="noopener noreferrer">
-                                    CSV
-                                </Menu.Item>
-                                <Menu.Item component="a" href={exportLinks.xlsx} target="_blank" rel="noopener noreferrer">
-                                    Excel (XLSX)
-                                </Menu.Item>
-                                <Menu.Item component="a" href={exportLinks.json} target="_blank" rel="noopener noreferrer">
-                                    JSON
-                                </Menu.Item>
-                            </Menu.Dropdown>
-                        </Menu>
-                    )}
                 </Group>
             </Group>
 

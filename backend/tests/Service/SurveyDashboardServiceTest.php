@@ -9,144 +9,110 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Tests\Service;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyAnswerLink;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
-use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
+use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
+use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Backend certification unit coverage (Slice 8C) for
- * {@see SurveyDashboardService} — the lightweight aggregations the
- * admin Dashboard tab renders without polling.
- *
- * Pure unit tests: both repositories are mocked and Doctrine ids are
- * set by reflection, so the summary + flattened-results shapes are
- * asserted against the public contract (canonical Testing Rule 17)
- * without a database.
+ * The admin Dashboard tab reads the survey's responses from the core data
+ * table ({@see SurveyResponseStore}): totals and the latest responses, and
+ * the finished responses as flat rows for the charts.
  */
 #[AllowMockObjectsWithoutExpectations]
 final class SurveyDashboardServiceTest extends TestCase
 {
-    public function testBuildSummaryAggregatesCountsAndRecentRuns(): void
+    public function testSummaryCountsFinishedAndAllResponsesAndListsTheLatest(): void
     {
-        [$survey, $version] = $this->buildSurveyWithVersion();
+        $survey = $this->survey();
+        $store = $this->createMock(SurveyResponseStore::class);
+        $store->method('list')->willReturnCallback(
+            fn (Survey $s, int $offset, int $limit, bool $finishedOnly = false): array => $finishedOnly
+                ? ['records' => [], 'total' => 3]
+                : ['records' => [
+                    $this->record(101, 'R_OPEN', 'updated', null, 'guest-1'),
+                    $this->record(100, 'R_DONE', 'finished', 7, null),
+                ], 'total' => 5],
+        );
 
-        $recent = new SurveyRun($survey, $version, 'R_1', 7, 'visitor-x');
-        $recent->setStatus(SurveyRun::STATUS_COMPLETED);
-        $recent->setIdDataRow(42);
-        $this->setEntityId($recent, 100);
+        $summary = (new SurveyDashboardService($store))->buildSummary($survey);
 
-        $runs = $this->createMock(SurveyRunRepository::class);
-        $runs->method('countCompletedForSurvey')->willReturn(3);
-        $runs->method('countForSurvey')->willReturn(5);
-        $runs->method('findRecentForSurvey')->willReturn([$recent]);
-
-        $service = new SurveyDashboardService($runs, $this->createMock(SurveyAnswerLinkRepository::class));
-        $summary = $service->buildSummary($survey);
-
-        self::assertSame(1, $summary['id']);
-        self::assertSame('SV_TEST', $summary['surveyId']);
         self::assertSame(3, $summary['completedResponses']);
         self::assertSame(5, $summary['totalResponses']);
         self::assertSame(1, $summary['currentVersionRevision']);
-
-        self::assertCount(1, $summary['recent']);
-        $row = $summary['recent'][0];
-        self::assertSame(100, $row['id']);
-        self::assertSame('R_1', $row['responseId']);
-        self::assertSame('completed', $row['status']);
-        self::assertSame(42, $row['idDataRow']);
-        self::assertSame(7, $row['idUser']);
-        self::assertSame('visitor-x', $row['visitorId']);
-        self::assertNotNull($row['completedAt'], 'a completed run must expose completedAt as an ATOM string');
-        self::assertNotFalse(\DateTimeImmutable::createFromFormat(DATE_ATOM, $row['startedAt']));
+        self::assertSame(['R_OPEN', 'R_DONE'], array_column($summary['recent'], 'responseId'));
+        self::assertSame('in_progress', $summary['recent'][0]['status']);
+        self::assertNull($summary['recent'][0]['completedAt'], 'an unfinished response has no submit time');
+        self::assertSame('guest-1', $summary['recent'][0]['visitorId']);
+        self::assertSame('completed', $summary['recent'][1]['status']);
+        self::assertSame(7, $summary['recent'][1]['idUser']);
+        self::assertSame(100, $summary['recent'][1]['idDataRow'], 'the response is its data row');
     }
 
-    public function testBuildResultsFlattensRunsWithAnswerColumnsAndDecodesJson(): void
+    public function testResultsAreFinishedResponsesAsMetaColumnsPlusAnswersUpToTheLimit(): void
     {
-        [$survey, $version] = $this->buildSurveyWithVersion(['pages' => [['name' => 'p1', 'elements' => []]]]);
+        $survey = $this->survey();
+        $store = $this->createMock(SurveyResponseStore::class);
+        $store->method('eachFinished')->willReturnCallback(function (): \Generator {
+            yield $this->record(2, 'R_2', 'finished', 9, null, ['q_text' => 'hello', 'q_matrix' => ['sleep_well' => 'yes']]);
+            yield $this->record(1, 'R_1', 'finished', null, 'guest-2', ['q_text' => 'hi']);
+        });
 
-        $run = new SurveyRun($survey, $version, 'R_2', 9, 'visitor-y');
-        $run->setStatus(SurveyRun::STATUS_COMPLETED);
-        $run->setProgress(['pageNo' => 2, 'triggerType' => 'finished']);
-        $this->setEntityId($run, 200);
-
-        $runs = $this->createMock(SurveyRunRepository::class);
-        $runs->method('findRecentForSurvey')->willReturn([$run]);
-
-        $answerLinks = $this->createMock(SurveyAnswerLinkRepository::class);
-        $answerLinks->method('findForRun')->willReturn([
-            new SurveyAnswerLink($run, 'q_text', 'text', 'hello'),
-            new SurveyAnswerLink($run, 'q_json', 'checkbox', '["a","b"]'),
-        ]);
-
-        $service = new SurveyDashboardService($runs, $answerLinks);
+        $service = new SurveyDashboardService($store);
         $results = $service->buildResults($survey);
 
         self::assertSame('SV_TEST', $results['surveyId']);
-        self::assertSame(['pages' => [['name' => 'p1', 'elements' => []]]], $results['definition']);
-        self::assertCount(1, $results['rows']);
-
+        self::assertSame($survey->getCurrentVersion()?->getDefinition(), $results['definition']);
+        self::assertCount(2, $results['rows']);
         $row = $results['rows'][0];
-        self::assertSame(200, $row['record_id']);
+        self::assertSame(2, $row['record_id']);
         self::assertSame('R_2', $row['response_id']);
-        self::assertSame(2, $row['page_no']);
         self::assertSame('finished', $row['trigger_type']);
-        self::assertSame('completed', $row['status']);
         self::assertSame(1, $row['revision']);
-        self::assertSame('hello', $row['q_text'], 'plain scalar answers pass through untouched');
-        self::assertSame(['a', 'b'], $row['q_json'], 'JSON-encoded answers are decoded into arrays for the table');
+        self::assertSame('hello', $row['q_text']);
+        self::assertSame(['sleep_well' => 'yes'], $row['q_matrix'], 'a matrix answer stays whole');
+        self::assertSame('guest-2', $results['rows'][1]['guest_key']);
+
+        self::assertCount(1, $service->buildResults($survey, 1)['rows']);
     }
 
-    public function testBuildResultsFallsBackToEmptyDefinitionAndUpdatedTriggerWithoutAVersionOrProgress(): void
+    public function testResultsWithoutAPublishedVersionUseAnEmptyDefinition(): void
     {
-        // Survey deliberately has NO current version -> definition must
-        // fall back to {pages: []}; the in-progress run with no progress
-        // payload must surface trigger_type=updated and use startedAt.
+        $survey = new Survey('Test', 'SV_NOVER');
+        $store = $this->createMock(SurveyResponseStore::class);
+        $store->method('eachFinished')->willReturnCallback(static fn (): \Generator => yield from []);
+
+        self::assertSame(['pages' => []], (new SurveyDashboardService($store))->buildResults($survey)['definition']);
+    }
+
+    private function survey(): Survey
+    {
         $survey = new Survey('Test', 'SV_TEST');
-        $version = new SurveyVersion($survey, 1, ['pages' => []], null);
-        $this->setEntityId($survey, 1);
-        $this->setEntityId($version, 11);
-
-        $run = new SurveyRun($survey, $version, 'R_3', null, 'visitor-z');
-        $this->setEntityId($run, 300);
-
-        $runs = $this->createMock(SurveyRunRepository::class);
-        $runs->method('findRecentForSurvey')->willReturn([$run]);
-
-        $service = new SurveyDashboardService($runs, $this->createMock(SurveyAnswerLinkRepository::class));
-        $results = $service->buildResults($survey);
-
-        self::assertSame(['pages' => []], $results['definition']);
-        self::assertCount(1, $results['rows']);
-        self::assertSame(0, $results['rows'][0]['page_no']);
-        self::assertSame('updated', $results['rows'][0]['trigger_type']);
-        self::assertSame('in_progress', $results['rows'][0]['status']);
+        $ref = new \ReflectionProperty(Survey::class, 'id');
+        $ref->setValue($survey, 1);
+        $survey->setCurrentVersion(new SurveyVersion($survey, 1, ['pages' => [['name' => 'p1', 'elements' => []]]], null));
+        return $survey;
     }
 
     /**
-     * @param array<string, mixed> $definition
-     * @return array{0: Survey, 1: SurveyVersion}
+     * @param array<string, mixed> $answers
      */
-    private function buildSurveyWithVersion(array $definition = ['pages' => []]): array
+    private function record(int $recordId, string $responseId, string $trigger, ?int $userId, ?string $guestKey, array $answers = []): SurveyResponseRecord
     {
-        $survey = new Survey('Test', 'SV_TEST');
-        $version = new SurveyVersion($survey, 1, $definition, null);
-        $this->setEntityId($survey, 1);
-        $this->setEntityId($version, 11);
-        $survey->setCurrentVersion($version);
-        return [$survey, $version];
-    }
-
-    private function setEntityId(object $entity, int $id): void
-    {
-        $ref = new \ReflectionClass($entity);
-        $prop = $ref->getProperty('id');
-        $prop->setAccessible(true);
-        $prop->setValue($entity, $id);
+        return new SurveyResponseRecord(
+            $recordId,
+            $userId,
+            null,
+            $trigger,
+            new \DateTimeImmutable('2026-11-17 10:00:00', new \DateTimeZone('UTC')),
+            $responseId,
+            1,
+            $guestKey,
+            'en',
+            0,
+            $answers,
+        );
     }
 }

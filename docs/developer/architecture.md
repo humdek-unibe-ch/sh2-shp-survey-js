@@ -39,28 +39,29 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | ---------------------------------------- | -------------------------------------------------------------------- |
 | `Entity\Survey`                          | Aggregate root (key slug, theme, current version pointer).           |
 | `Entity\SurveyVersion`                   | Immutable JSON definition snapshots.                                 |
-| `Entity\SurveyRun`                       | Per-submission metadata, including the FK into core `data_rows`.    |
-| `Entity\SurveyAnswerLink`                | Per-answer FK into core `data_cells` (one row per question).        |
+| `Entity\SurveyFile`                      | A file uploaded to a response (by `response_id`).                    |
 | `Service\SurveyService`                  | CRUD + publish flow with `EM::wrapInTransaction()`.                  |
-| `Service\SurveyAnswerNormalizer`         | Flattens SurveyJS JSON into cell-ready records.                      |
+| `Service\SurveyAnswerNormalizer`         | One cell per question; a complex answer stays whole (JSON).          |
 | `Service\SurveyJsHtmlSanitizer`          | Whitelist-based HTML sanitization for rich-text answers.             |
-| `Service\SurveyResponseService`          | Public submit pipeline. Writes `data_rows` via `DataTableWriterInterface`. |
-| `Service\SurveyDashboardService`         | Cheap aggregates for the dashboard.                                  |
-| `Service\SurveyJsGdprService`            | Export + delete-for-user implementations.                            |
+| `Service\SurveyResponseStore`            | The one home of responses: rows of the core data table `sh2_surveyjs_<survey id>`, written through `DataService::saveData()`, read through `DataQueryEngine`. |
+| `Service\SurveyResponseService`          | Submit: limits, then the response saved as `finished`.               |
+| `Service\SurveyResponseDraftService`     | Progress: the same row saved as `started` / `updated`, resume, discard. |
+| `Service\SurveyDashboardService`         | Totals and chart rows for the dashboard, read from the store.        |
+| `EventSubscriber\SurveyJsUserDataCleanupSubscriber` | Deletes a removed user's uploaded files (core `UserDataCleanupEvent`). |
 | `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
 | `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
 | `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpxMap` styles to the admin catalog.       |
 | `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
 | `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
 
-The migration `Version20260522063620.php` creates the four plugin tables, seeds the three permissions, and seeds the `surveyJsTheme` lookup rows. `surveys.survey_id` and `survey_runs.response_id` are generated stable external keys; shared CMS rows and generated core `data_tables` are still tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
+The plugin owns three tables: `surveys`, `survey_versions` and `survey_files`. The install migration `Version20260522063620.php` creates them (and three older ones that `Version20261117132938.php` drops again: responses now live only in the core data store). `surveys.survey_id` and the `response_id` cell of each response are generated stable external keys; shared CMS rows and generated core `data_tables` are tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
 
 ### Decoupling from the host
 
 The bundle depends on host contracts, not concrete host services:
 
 - `App\Plugin\Realtime\PluginRealtimePublisherInterface` — imported directly from the host. The CMS aliases this to its concrete `App\Plugin\Realtime\PluginRealtimePublisher` in `config/services.yaml`. The bundle ships **no** plugin-local null fallback; the host realtime layer must be present for the bundle to boot.
-- `Service\DataTableWriterInterface` (implemented by the plugin's `CoreDataTableWriter`, which writes into the host `data_tables` / `data_rows` / `data_cols` / `data_cells` tables using the declared `sh2_surveyjs_` data-table prefix).
+- `App\Service\CMS\DataService` (write and delete, rule 2.4) and `App\Service\CMS\DataQuery\DataQueryEngine` (read, rule 2.7), used only by `SurveyResponseStore`. A response is therefore an ordinary data row: actions, audit, cache, history and user cleanup work with no plugin code.
 
 ## Frontend package
 
@@ -172,14 +173,27 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
 2. The style fetches `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}` and renders the SurveyJS model.
 3. On submit, the style POSTs to `/cms-api/v1/plugins/sh2-shp-survey-js/published/{key}/submit`.
 4. `SurveysPublicController::submit()` calls `SurveyResponseService::submit()` which:
+   - checks the once-per-user and schedule limits,
    - normalizes + sanitizes the answers (`SurveyAnswerNormalizer` + `SurveyJsHtmlSanitizer`),
-   - opens a transaction,
-   - creates a `SurveyRun`,
-   - hands the normalized cell list to `DataTableWriterInterface::writeRow()` (`CoreDataTableWriter` persists a plugin-owned host data table named `sh2_surveyjs_<survey_id>`),
-   - creates one `SurveyAnswerLink` per cell with the returned `id_data_cell`,
-   - publishes `surveys/{surveyId}/responses` on Mercure,
-   - commits.
-5. The dashboard receives the SSE event and prepends the new run to its list — no polling, no manual refresh.
+   - saves the response through `SurveyResponseStore` as one row of the data table `sh2_surveyjs_<survey id>` with trigger `finished` (the participant's own unfinished row when they saved progress before),
+   - publishes `surveys/{surveyId}/responses` on Mercure.
+5. The dashboard receives the SSE event and reloads — no polling, no manual refresh.
+
+### One row per response
+
+| Moment | Row |
+|--------|-----|
+| First progress save (page change, autosave) | new row, trigger `started` |
+| Later progress saves | same row, trigger `updated` (the page reached never goes back) |
+| Submit | same row, trigger `finished`; progress sent later for it is ignored |
+| Edit of a submitted response (`editMode`) | same row, stays `finished` |
+| Discard, or delete by an admin | core soft delete, trigger `deleted` (history kept) |
+
+Besides the answers each row carries reserved columns: `response_id`, `survey_revision`, `guest_key`, `language`, `page_no`. A question may not use these names, nor the core's row columns; publishing refuses them (HTTP `422`).
+
+A signed-in participant owns their row (`id_users`). A guest's row has no owner; it carries the **guest key**, a random 128-bit id the browser keeps and sends as the `X-SurveyJs-Guest-Key` header (the host BFF drops cookies the backend sets, so the older `_sh_sjs_vid` cookie only works for clients that call the backend directly). A row keeps the guest key only when a guest wrote it, so the next person on a shared browser cannot match a signed-in participant's response. A guest who signs in keeps their unfinished response, and it becomes theirs when they save it.
+
+Uploaded files are stored under `<form files dir>/surveyjs/` (`selfhelp.form_file_storage_dir`, a kept volume), unless `SURVEYJS_UPLOAD_DIR` says otherwise.
 
 ## Storage-key contract (host issue #56)
 
@@ -188,13 +202,14 @@ identity in `data_cols`) separate from a **mutable `display_name`** (the human
 label). SurveyJS maps onto that contract as follows:
 
 - **`question.name` → `field_key`.** `SurveyAnswerNormalizer` emits each cell
-  keyed by the question name (dotted for dynamic-panel/matrix sub-keys, e.g.
-  `household.member_name`); the host treats that key as an **opaque immutable
-  literal**. `CoreDataTableWriter` passes those keys straight into
-  `DataService::saveData()`, and `SurveyAnswerLink.question_name` stores the same
-  key, so old and new responses stay comparable across versions.
+  keyed by the question name; a matrix, multiple-text or dynamic-panel answer
+  stays whole in one cell as JSON (splitting it into `question.row` columns gave
+  keys the core refuses). The host treats that key as an **opaque immutable
+  literal**. `SurveyResponseStore` passes those keys straight into
+  `DataService::saveData()`, so old and new responses stay comparable across
+  versions.
 - **`question.title` → `display_name`.** The normalizer also emits the question
-  **title** as the column label (`fieldLabels`), which `CoreDataTableWriter`
+  **title** as the column label (`fieldLabels`), which `SurveyResponseStore`
   forwards to the host as the column `display_name`. Changing a title is
   therefore a **label-only** change — it never changes the storage key and never
   forks a column. The label is carried by the `$fieldLabels` parameter of
@@ -225,15 +240,14 @@ sh2-shp-survey-js/
 ├── backend/
 │   ├── composer.json
 │   ├── src/HumdekSurveyJsBundle.php
-│   ├── src/Entity/{Survey, SurveyVersion, SurveyRun, SurveyAnswerLink}.php
-│   ├── src/Repository/{Survey…, SurveyVersion…, SurveyRun…, SurveyAnswerLink…}Repository.php
-│   ├── src/Service/{SurveyService, SurveyResponseService, SurveyDashboardService,
+│   ├── src/Entity/{Survey, SurveyVersion, SurveyFile}.php
+│   ├── src/Repository/{Survey…, SurveyVersion…, SurveyFile…}Repository.php
+│   ├── src/Service/{SurveyService, SurveyResponseStore, SurveyResponseRecord,
+│   │                SurveyResponseService, SurveyResponseDraftService, SurveyDashboardService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
-│   │                SurveyJsGdprService, SurveyJsHealthCheck,
-│   │                CoreDataTableWriter, DataTableWriterInterface,
-│   │                NullDataTableWriter, DataTableWriteResult}.php
+│   │                SurveyJsHealthCheck, SurveyFileStorage, SurveyPdfService, …}.php
 │   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
-│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic}Subscriber.php
+│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic, SurveyJsUserDataCleanup}Subscriber.php
 │   ├── src/Resources/config/services.php
 │   └── src/Migrations/Version20260522063620.php
 ├── frontend/

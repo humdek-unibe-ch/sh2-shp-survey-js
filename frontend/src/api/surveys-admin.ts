@@ -236,20 +236,25 @@ export async function duplicateSurvey(source: IAdminSurveyDetail): Promise<IAdmi
     return created;
 }
 
+/** A response as the admin endpoints list it: one row of the survey's data table. */
+export interface ISurveyResponseSummary {
+    id: number;
+    responseId: string;
+    surveyId: string;
+    revision: number | null;
+    userId: number | null;
+    userName: string | null;
+    lastSavedAt: string | null;
+    finished: boolean;
+    pageNo: number;
+    language: string | null;
+}
+
 export async function fetchResponses(
     surveyId: number,
     params: { page?: number; limit?: number } = {},
 ): Promise<{
-    items: Array<{
-        id: number;
-        responseId: string;
-        surveyId: string;
-        revision: number;
-        userId: number | null;
-        startedAt: string;
-        completedAt: string | null;
-        status: string;
-    }>;
+    items: ISurveyResponseSummary[];
     page: number;
     limit: number;
     total: number;
@@ -309,24 +314,6 @@ export async function fetchDashboardResults(
     return asJson<IDashboardResults>(res);
 }
 
-/**
- * Trigger a server-side response export (CSV / XLSX / JSON). The
- * server streams the file via `Content-Disposition: attachment`, so
- * we just open the URL in a new tab and let the browser handle the
- * download UX. Returns the URL it kicked so callers can re-use it
- * for a custom download flow.
- *
- * Each format is a distinct backend route so the host's
- * `ApiSecurityListener` can gate them by the format-specific
- * permission (`surveyjs.surveys.export-csv` / `-xlsx` / `-json`).
- */
-export function buildResponsesExportUrl(
-    surveyId: number,
-    format: 'csv' | 'xlsx' | 'json',
-): string {
-    return `${BASE}/surveys/${surveyId}/responses/export/${format}`;
-}
-
 export async function deleteResponse(surveyId: number, rid: string): Promise<void> {
     const res = await fetch(`${BASE}/surveys/${surveyId}/responses/${encodeURIComponent(rid)}`, {
         method: 'DELETE',
@@ -341,22 +328,7 @@ export async function deleteResponse(surveyId: number, rid: string): Promise<voi
 export async function fetchResponseDetail(
     surveyId: number,
     responseId: number | string,
-): Promise<{
-    id: number;
-    responseId: string;
-    surveyId: string;
-    revision: number;
-    userId: number | null;
-    startedAt: string;
-    completedAt: string | null;
-    status: string;
-    answers: Array<{
-        questionName: string;
-        questionType: string;
-        value: string;
-        sanitizedHtml: boolean;
-    }>;
-}> {
+): Promise<ISurveyResponseSummary & { answers: Record<string, unknown> }> {
     const res = await fetch(`${BASE}/surveys/${surveyId}/responses/${responseId}`, {
         credentials: 'include',
         headers: { Accept: 'application/json' },

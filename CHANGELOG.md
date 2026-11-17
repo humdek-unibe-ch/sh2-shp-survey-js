@@ -7,9 +7,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-First wave of the SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`, wave 1). Web only; mobile still ships SurveyJS 2.
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1 and 5. Web only; mobile still ships SurveyJS 2.
+
+Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **Answers in one home (wave 5).** A response is now only a row of the core
+  data table `sh2_surveyjs_<survey id>`, written through
+  `DataService::saveData()` and read through the data query engine. Progress of
+  an unsubmitted survey is the same row with trigger `started` / `updated`;
+  submitting makes it `finished`. So actions, audit, history, cache and user
+  cleanup work for survey answers as for any form, and an admin sees
+  unfinished responses in the Data screen.
+- **One cell per question.** A matrix, multiple-text or dynamic-panel answer
+  stays whole in one cell (JSON) instead of one `question.row` column per row.
+- **Guests have no owner.** A guest's response is stored with no user (it was
+  stored as user 1) and found again by its guest key: a random id the browser
+  keeps and sends as the `X-SurveyJs-Guest-Key` header. The host BFF drops
+  cookies the backend sets, so the `_sh_sjs_vid` cookie never reached a browser
+  and guest resume and guest limits did not work on web. A row keeps the guest
+  key only when a guest wrote it.
+- **Uploads move to the core form files folder.** The default upload directory
+  is now `var/form-files/surveyjs` (a kept volume: backed up, survives
+  updates) instead of `var/plugin-data/sh2-shp-survey-js/uploads` (lost on
+  update). **Upgrade step:** move existing uploads from the old folder to the
+  new one, or set `SURVEYJS_UPLOAD_DIR` to the old folder.
+- The admin Responses list and detail read the data table and show unfinished
+  responses; deleting a response is the core soft delete (history kept).
+- Publishing refuses a question named like a column the system writes
+  (`response_id`, `survey_revision`, `guest_key`, `language`, `page_no`,
+  `id_users`, ...), with HTTP `422`.
 - **SurveyJS 3.** `survey-core`, `survey-react-ui`, `survey-creator-core`,
   `survey-creator-react`, `survey-analytics` and `survey-pdf` move from 2.5.25
   to 3.2.5.
@@ -25,12 +52,33 @@ First wave of the SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`, wave 1).
   not produce duplicate HTML ids.
 
 ### Fixed
+- Submitting a survey with a matrix question failed (HTTP 400) when a row
+  value contained a space: the split columns were keys the core refuses.
+- The PDF of a response printed answers that look like HTML unsanitized; on
+  the HTML fallback (no dompdf) a guest could place markup an admin's browser
+  ran. Such answers now go through the HTML sanitizer.
+- Deleting a user now deletes the files they uploaded to surveys (listener on
+  the core `UserDataCleanupEvent`); their answers go with the core data.
 - The Designer no longer shows "N unpublished changes" on a survey nobody
   edited. SurveyJS 3 renames some properties and drops default values when it
   loads a definition, so the published version is now normalized the same way
   (in design mode) before it is compared with the Creator's JSON.
 
 ### Removed
+- **Plugin copies of the answers (wave 5).** The tables `survey_runs`,
+  `survey_answer_links` and `survey_response_drafts` and the `survey_files`
+  columns `id_survey_runs` / `id_survey_response_drafts` are dropped by
+  migration `Version20261117132938`. Submitted answers stay in the data tables.
+  Lost on purpose: the plugin's metadata about them (revision, visitor id) and
+  unfinished drafts. Responses saved by a guest before the upgrade no longer
+  count for guest limits.
+- **Plugin CSV / Excel / JSON exports** (the routes
+  `/surveys/{id}/responses/export/{csv,xlsx,json}` and their buttons): the
+  core Data screen exports every data table, Excel included (core wave 4).
+  Their permissions stay until wave 6 reworks the permissions.
+- Drafts no longer expire after 30 days; an abandoned response stays as an
+  unfinished row.
+- `SurveyJsGdprService` (never called: the host has no such hook).
 - The per-survey theme choice (Default, Modern, High contrast) in the survey
   settings, the section field `survey-js-theme` as a runtime input, and the
   Creator's Theme tab: on web a survey always looks like the site. The

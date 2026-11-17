@@ -10,20 +10,17 @@ namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyFile;
-use Humdek\SurveyJsBundle\Entity\SurveyResponseDraft;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
 use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
-use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyResponseDraftRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
 use Humdek\SurveyJsBundle\Service\SurveyDataInterpolator;
 use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
 use Humdek\SurveyJsBundle\Service\SurveyResponseDraftService;
+use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
+use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use Humdek\SurveyJsBundle\Service\VisitorIdResolver;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -42,8 +39,12 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
  * Three families of endpoints:
  *
  * 1. Definition + submission (`/published/{key}` + `/published/{key}/submit`).
- * 2. Draft lifecycle for autosave / restart-on-refresh
- *    (`/published/{key}/progress`, `/edit`).
+ * 2. Progress for autosave / resume (`/published/{key}/progress`) and
+ *    editing a submitted response (`/edit`). Progress and the submitted
+ *    response are the same row of the survey's data table.
+ *
+ * The visitor cookie is the guest key: it finds a guest's response again
+ * (a guest's row has no owner).
  * 3. File pipeline for the file / GPX / microphone question types
  *    (`/published/{key}/files`, `/files/{fileId}`).
  *
@@ -65,10 +66,8 @@ final class SurveysPublicController
         private readonly SignedFileUrlService $signedUrls,
         private readonly SurveyDataInterpolator $interpolator,
         private readonly VisitorIdResolver $visitor,
-        private readonly SurveyResponseDraftRepository $drafts,
         private readonly SurveyFileRepository $files,
-        private readonly SurveyRunRepository $runs,
-        private readonly SurveyAnswerLinkRepository $answerLinks,
+        private readonly SurveyResponseStore $responseStore,
     ) {
     }
 
@@ -98,7 +97,7 @@ final class SurveysPublicController
 
         $alreadyLocked = $this->checkLockoutStatus($survey, $userId, $visitorId, $config);
         $existingDraft = $this->draftService->resume($survey, $userId, $visitorId, null);
-        $existingRun = $this->runs->findCompletedOwnedRun($survey, $userId, $visitorId);
+        $completed = $this->responseStore->findLatestFinished($survey, $userId, $visitorId);
 
         $payload = [
             'data' => [
@@ -130,12 +129,12 @@ final class SurveysPublicController
                     'isAuthenticated' => $userId !== null,
                     'visitorId' => $visitorId,
                     'lockoutReason' => $alreadyLocked,
-                    'draft' => $existingDraft instanceof SurveyResponseDraft ? [
-                        'responseId' => $existingDraft->getResponseId(),
-                        'pageNo' => $existingDraft->getPageNo(),
-                        'lastSavedAt' => $existingDraft->getLastSavedAt()->format(DATE_ATOM),
+                    'draft' => $existingDraft !== null ? [
+                        'responseId' => $existingDraft->responseId,
+                        'pageNo' => $existingDraft->pageNo,
+                        'lastSavedAt' => $existingDraft->lastChangedAt?->format(DATE_ATOM),
                     ] : null,
-                    'completedResponseId' => $existingRun?->getResponseId(),
+                    'completedResponseId' => $completed?->responseId,
                 ],
             ],
         ];
@@ -162,8 +161,11 @@ final class SurveysPublicController
         $response = new JsonResponse();
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
 
+        $progress = is_array($enforce['progress'] ?? null) ? $enforce['progress'] : [];
+        $language = is_string($progress['locale'] ?? null) && $progress['locale'] !== '' ? $progress['locale'] : null;
+
         try {
-            $run = $this->responseService->submit($survey, $answers, $userId, $visitorId, $enforce);
+            $record = $this->responseService->submit($survey, $answers, $userId, $visitorId, $enforce, $language);
         } catch (SurveySubmissionRejectedException $e) {
             $status = match ($e->reason) {
                 SurveySubmissionRejectedException::REASON_AUTH_REQUIRED => 401,
@@ -180,9 +182,9 @@ final class SurveysPublicController
         }
 
         $response->setData(['data' => [
-            'runId' => $run->getId(),
-            'responseId' => $run->getResponseId(),
-            'submittedAt' => ($run->getCompletedAt() ?? $run->getStartedAt())->format(DATE_ATOM),
+            'recordId' => $record->recordId,
+            'responseId' => $record->responseId,
+            'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
         ]]);
         $response->setStatusCode(201);
         return $response;
@@ -205,7 +207,7 @@ final class SurveysPublicController
             is_string($responseId) ? $responseId : null,
         );
         $response->setData([
-            'data' => $draft instanceof SurveyResponseDraft ? $this->draftPayload($draft) : null,
+            'data' => $draft !== null ? $this->draftPayload($draft) : null,
         ]);
         return $response;
     }
@@ -226,15 +228,16 @@ final class SurveysPublicController
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
         $responseId = is_string($body['responseId'] ?? null) ? $body['responseId'] : null;
         $pageNo = (int) ($body['pageNo'] ?? 0);
+        $answers = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $language = is_string($payload['locale'] ?? null) && $payload['locale'] !== '' ? $payload['locale'] : null;
 
-        $draft = $this->draftService->saveOrCreate(
-            $survey,
-            $responseId,
-            $userId,
-            $visitorId,
-            $payload,
-            $pageNo,
-        );
+        try {
+            $draft = $this->draftService->save($survey, $responseId, $userId, $visitorId, $answers, $pageNo, $language);
+        } catch (\DomainException $e) {
+            $response->setData(['error' => $e->getMessage()]);
+            $response->setStatusCode(403);
+            return $response;
+        }
         $response->setData(['data' => $this->draftPayload($draft)]);
         return $response;
     }
@@ -255,8 +258,8 @@ final class SurveysPublicController
             $visitorId,
             is_string($responseId) ? $responseId : null,
         );
-        if ($draft instanceof SurveyResponseDraft) {
-            $this->draftService->discard($draft);
+        if ($draft !== null) {
+            $this->draftService->discard($survey, $draft);
         }
         return $response;
     }
@@ -276,21 +279,17 @@ final class SurveysPublicController
             $response->setStatusCode(422);
             return $response;
         }
-        $run = $this->runs->findCompletedOwnedRun($survey, $userId, $visitorId, $responseId);
-        if ($run === null) {
+        $record = $this->responseStore->findByResponseId($survey, $responseId);
+        if ($record === null || !$record->isFinished() || !$record->belongsTo($userId, $visitorId)) {
             $response->setData(['error' => 'Not found.']);
             $response->setStatusCode(404);
             return $response;
         }
-        $answers = [];
-        foreach ($this->answerLinks->findForRun($run) as $link) {
-            $answers[$link->getQuestionName()] = $this->maybeDecode($link->getAnswerValue());
-        }
         $response->setData([
             'data' => [
-                'responseId' => $run->getResponseId(),
-                'submittedAt' => $run->getCompletedAt()?->format(DATE_ATOM),
-                'answers' => $answers,
+                'responseId' => $record->responseId,
+                'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
+                'answers' => $record->answers,
             ],
         ]);
         return $response;
@@ -319,20 +318,12 @@ final class SurveysPublicController
             return $response;
         }
 
-        $draft = $this->drafts->findOneByResponseId($responseId);
-        $run = $this->runs->findOneByResponseId($responseId);
-        $isAdmin = $this->hasAdminViewResponses($request);
-
-        // Equivalent safe rule for the seeded
-        // `surveyjs.surveys.upload-files` permission: the caller
-        // must already own a draft or completed run on this survey
-        // identified by `responseId`. This blocks anonymous
-        // attackers from injecting files into other participants'
-        // drafts/runs while still letting legitimate anonymous
-        // participants upload after their first autosave creates a
-        // draft.
-        if (!$isAdmin) {
-            if ($draft === null && $run === null) {
+        // The caller must own a response of this survey with that id (saved as
+        // progress at least once), so nobody can add files to another
+        // participant's response.
+        if (!$this->hasAdminViewResponses($request)) {
+            $record = $this->responseStore->findByResponseId($survey, $responseId);
+            if ($record === null) {
                 $response->setData([
                     'error' => 'Cannot upload before starting the survey. Save the first page before uploading files.',
                     'reason' => SurveyFileException::REASON_FORBIDDEN,
@@ -340,22 +331,7 @@ final class SurveysPublicController
                 $response->setStatusCode(403);
                 return $response;
             }
-            if ($draft !== null && $draft->getSurvey()->getId() !== $survey->getId()) {
-                $response->setData(['error' => 'Draft does not belong to this survey.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
-                $response->setStatusCode(403);
-                return $response;
-            }
-            if ($run !== null && $run->getSurvey()->getId() !== $survey->getId()) {
-                $response->setData(['error' => 'Run does not belong to this survey.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
-                $response->setStatusCode(403);
-                return $response;
-            }
-            if ($draft !== null && !$this->draftBelongsTo($draft, $userId, $visitorId)) {
-                $response->setData(['error' => 'You do not own this draft.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
-                $response->setStatusCode(403);
-                return $response;
-            }
-            if ($draft === null && $run !== null && !$this->runBelongsTo($run, $userId, $visitorId)) {
+            if (!$record->belongsTo($userId, $visitorId)) {
                 $response->setData(['error' => 'You do not own this response.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
                 $response->setStatusCode(403);
                 return $response;
@@ -368,8 +344,6 @@ final class SurveysPublicController
                 $responseId,
                 $questionName,
                 $uploaded,
-                $draft,
-                $run,
                 $userId,
                 $visitorId,
             );
@@ -555,22 +529,12 @@ final class SurveysPublicController
             );
         }
 
-        $existing = null;
-        if ($userId !== null) {
-            $existing = $this->runs->findLatestCompletedForUser(
-                $survey,
-                $userId,
-                $oncePerSchedule ? $windowStart : null,
-                $oncePerSchedule ? $windowEnd : null,
-            );
-        }
-        if ($existing === null && $visitorId !== null && $visitorId !== '') {
-            $existing = $this->runs->findLatestCompletedForVisitor(
-                $survey,
-                $visitorId,
-                $oncePerSchedule ? $windowStart : null,
-                $oncePerSchedule ? $windowEnd : null,
-            );
+        $from = $oncePerSchedule ? $windowStart : null;
+        $to = $oncePerSchedule ? $windowEnd : null;
+        $existing = $this->responseStore->findLatestFinished($survey, $userId, $visitorId, $from, $to);
+        if ($existing === null && $userId !== null) {
+            // A response sent as a guest before signing in counts too.
+            $existing = $this->responseStore->findLatestFinished($survey, null, $visitorId, $from, $to);
         }
         if ($existing === null) {
             return null;
@@ -579,8 +543,8 @@ final class SurveysPublicController
             'reason' => $oncePerUser
                 ? SurveySubmissionRejectedException::REASON_ONCE_PER_USER
                 : SurveySubmissionRejectedException::REASON_WINDOW_EXHAUSTED,
-            'responseId' => $existing->getResponseId(),
-            'submittedAt' => $existing->getCompletedAt()?->format(DATE_ATOM),
+            'responseId' => $existing->responseId,
+            'submittedAt' => $existing->lastChangedAt?->format(DATE_ATOM),
         ];
     }
 
@@ -657,14 +621,13 @@ final class SurveysPublicController
     /**
      * @return array<string, mixed>
      */
-    private function draftPayload(SurveyResponseDraft $draft): array
+    private function draftPayload(SurveyResponseRecord $draft): array
     {
         return [
-            'responseId' => $draft->getResponseId(),
-            'pageNo' => $draft->getPageNo(),
-            'payload' => $draft->getPayload(),
-            'lastSavedAt' => $draft->getLastSavedAt()->format(DATE_ATOM),
-            'expiresAt' => $draft->getExpiresAt()->format(DATE_ATOM),
+            'responseId' => $draft->responseId,
+            'pageNo' => $draft->pageNo,
+            'payload' => ['data' => $draft->answers, 'locale' => $draft->language],
+            'lastSavedAt' => $draft->lastChangedAt?->format(DATE_ATOM),
         ];
     }
 
@@ -693,15 +656,6 @@ final class SurveysPublicController
         ];
     }
 
-    private function maybeDecode(string $value): mixed
-    {
-        if ($value === '' || ($value[0] !== '{' && $value[0] !== '[')) {
-            return $value;
-        }
-        $decoded = json_decode($value, true);
-        return $decoded ?? $value;
-    }
-
     private function userId(Request $request): ?int
     {
         $payload = $request->attributes->get('_jwt_payload');
@@ -723,42 +677,6 @@ final class SurveysPublicController
         }
         $roles = $payload['roles'] ?? null;
         if (is_array($roles) && in_array('admin', $roles, true)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Mirrors {@see \Humdek\SurveyJsBundle\Service\SurveyResponseDraftService::draftBelongsTo()}
-     * for the public upload / file routes: a draft "belongs to" the
-     * caller when the authenticated user id matches, OR the signed
-     * visitor cookie matches, OR the draft started anonymously and
-     * the same visitor cookie is presented after login.
-     */
-    private function draftBelongsTo(SurveyResponseDraft $draft, ?int $userId, ?string $visitorId): bool
-    {
-        if ($userId !== null && $draft->getIdUser() === $userId) {
-            return true;
-        }
-        if ($visitorId !== null && $visitorId !== '' && $draft->getVisitorId() === $visitorId) {
-            return true;
-        }
-        if ($userId !== null
-            && $draft->getIdUser() === null
-            && $draft->getVisitorId() !== null
-            && $draft->getVisitorId() === $visitorId
-        ) {
-            return true;
-        }
-        return false;
-    }
-
-    private function runBelongsTo(SurveyRun $run, ?int $userId, ?string $visitorId): bool
-    {
-        if ($userId !== null && $run->getIdUser() === $userId) {
-            return true;
-        }
-        if ($visitorId !== null && $visitorId !== '' && $run->getVisitorId() === $visitorId) {
             return true;
         }
         return false;

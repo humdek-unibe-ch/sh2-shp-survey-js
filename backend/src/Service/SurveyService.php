@@ -12,7 +12,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
-use Humdek\SurveyJsBundle\Repository\SurveyRunRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 
 /**
@@ -35,7 +34,7 @@ final class SurveyService
         private readonly SurveyRepository $surveys,
         private readonly SurveyVersionRepository $versions,
         private readonly SurveyJsRealtimePublisher $realtime,
-        private readonly SurveyRunRepository $runs,
+        private readonly SurveyResponseStore $responses,
     ) {
     }
 
@@ -91,6 +90,7 @@ final class SurveyService
         // question would orphan or fragment its host data column, so block
         // the publish (title-only edits and new questions stay allowed).
         $this->assertNoRenamedAnsweredQuestions($survey, $definition);
+        $this->assertNoReservedQuestionNames($definition);
 
         return $this->em->wrapInTransaction(function () use ($survey, $definition, $userId): SurveyVersion {
             $revision = $this->versions->nextRevision($survey);
@@ -148,7 +148,7 @@ final class SurveyService
         if ($current === null) {
             return;
         }
-        if ($this->runs->countCompletedForSurvey($survey) === 0) {
+        if ($this->responses->list($survey, 0, 1)['total'] === 0) {
             return;
         }
 
@@ -167,6 +167,31 @@ final class SurveyService
                 409
             );
         }
+    }
+
+    /**
+     * A question's name is its column in the survey's data table, so it may
+     * not take a column the plugin or the core writes itself.
+     *
+     * @param array<string, mixed> $definition
+     *
+     * @throws \DomainException (code 422) naming the clashing questions
+     */
+    private function assertNoReservedQuestionNames(array $definition): void
+    {
+        $reserved = [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS];
+        $clashes = array_values(array_intersect(array_keys($this->collectQuestionNames($definition)), $reserved));
+        if ($clashes === []) {
+            return;
+        }
+        sort($clashes);
+        throw new \DomainException(
+            sprintf(
+                'Cannot publish: the question name(s) "%s" are used by the system. Give these questions another name.',
+                implode('", "', $clashes)
+            ),
+            422
+        );
     }
 
     /**

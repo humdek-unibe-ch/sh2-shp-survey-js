@@ -306,7 +306,8 @@ the survey natively (instead of falling back to "Open on web"):
    rebuilds, bundling `@selfhelp/sh2-shp-survey-js-mobile` at that
    version (it must also carry `react-native-webview`).
 3. Verify in CMS mobile preview: fill → validate → submit → a real
-   `SurveyRun` is created → completion shown → redirect handled.
+   response row is created in the survey's data table → completion shown →
+   redirect handled.
 >
 > **Where to keep credentials?** Run `npm login` once on the developer
 > machine for manual publishes; for CI use the `NPM_TOKEN` secret above.

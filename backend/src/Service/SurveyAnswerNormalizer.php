@@ -16,8 +16,8 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
  * understands.
  *
  * The normalizer:
- *   - flattens nested panels / paneldynamic into dotted keys
- *     (`page.panel.question`);
+ *   - keeps one cell per question (a matrix, multiple-text or dynamic
+ *     panel answer stays whole and is stored as JSON);
  *   - applies HTML sanitization for `rich-text` answers via the
  *     injected `SurveyJsHtmlSanitizer`;
      *   - encodes file uploads as a JSON pointer object that downstream
@@ -48,13 +48,15 @@ final class SurveyAnswerNormalizer
         $questionTypes = $this->indexQuestionTypes($definition);
         $questionTitles = $this->indexQuestionTitles($definition);
         $out = [];
-        foreach ($this->flatten($answers) as $name => $value) {
-            $type = $questionTypes[$name] ?? 'text';
-            // The immutable storage key is `name` (possibly a dotted
-            // panel path); the human label is resolved by the exact key
-            // first, then by the bare trailing question.name segment
-            // (SurveyJS question names are unique across a survey).
-            $title = $questionTitles[$name] ?? $questionTitles[$this->lastSegment($name)] ?? null;
+        // One cell per question, keyed by the immutable question.name (unique
+        // across a survey). A complex answer (matrix, multiple text, dynamic
+        // panel) stays whole and is stored as JSON in its cell: splitting it
+        // into `question.row` columns gave keys the core refuses (a row value
+        // with a space) and changed shape when rows changed.
+        foreach ($answers as $name => $value) {
+            $name = (string) $name;
+            $type = $questionTypes[$name] ?? $this->bareType($questionTypes, $name);
+            $title = $questionTitles[$name] ?? null;
             $sanitizedHtml = false;
             if ($type === 'rich-text' && is_string($value)) {
                 $value = $this->sanitizer->sanitize($value);
@@ -108,8 +110,7 @@ final class SurveyAnswerNormalizer
     /**
      * Collect a flat `question.name => title` map for every titled element in
      * the survey definition. Keyed by the bare element name (NOT the page/panel
-     * path) because SurveyJS question names are unique across a whole survey and
-     * the answer flattening only nests dynamic-panel keys.
+     * path) because SurveyJS question names are unique across a whole survey.
      *
      * @param array<string, mixed> $node
      * @return array<string, string>
@@ -163,41 +164,19 @@ final class SurveyAnswerNormalizer
     }
 
     /**
-     * The trailing segment of a dotted normalized key (`panel.question` ->
-     * `question`); returns the key unchanged when it has no dot.
+     * The type of a question whose key in the type index carries its page or
+     * panel path (`page1.q1`): question names are unique, so the bare name
+     * finds it.
+     *
+     * @param array<string, string> $questionTypes
      */
-    private function lastSegment(string $key): string
+    private function bareType(array $questionTypes, string $name): string
     {
-        $pos = strrpos($key, '.');
-        return $pos === false ? $key : substr($key, $pos + 1);
-    }
-
-    /**
-     * @param array<string|int, mixed> $value
-     * @return array<string, mixed>
-     */
-    private function flatten(array $value, string $prefix = ''): array
-    {
-        $out = [];
-        foreach ($value as $key => $entry) {
-            $next = $prefix === '' ? (string) $key : $prefix . '.' . $key;
-            if (is_array($entry) && $this->isAssoc($entry)) {
-                $out = array_merge($out, $this->flatten($entry, $next));
-            } else {
-                $out[$next] = $entry;
+        foreach ($questionTypes as $path => $type) {
+            if ($path === $name || str_ends_with($path, '.' . $name)) {
+                return $type;
             }
         }
-        return $out;
-    }
-
-    /**
-     * @param array<int|string, mixed> $value
-     */
-    private function isAssoc(array $value): bool
-    {
-        if ($value === []) {
-            return false;
-        }
-        return array_keys($value) !== range(0, count($value) - 1);
+        return 'text';
     }
 }

@@ -9,9 +9,6 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Service;
 
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyAnswerLink;
-use Humdek\SurveyJsBundle\Entity\SurveyRun;
-use Humdek\SurveyJsBundle\Repository\SurveyAnswerLinkRepository;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -35,17 +32,17 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class SurveyPdfService
 {
-    public function __construct(private readonly SurveyAnswerLinkRepository $answerLinks)
+    public function __construct(private readonly SurveyJsHtmlSanitizer $sanitizer)
     {
     }
 
-    public function renderResponse(Survey $survey, SurveyRun $run): Response
+    public function renderResponse(Survey $survey, SurveyResponseRecord $record): Response
     {
-        $html = $this->buildHtml($survey, $run);
+        $html = $this->buildHtml($survey, $record);
         $filenameBase = sprintf(
             '%s_%s_%s',
             $survey->getSurveyId(),
-            $run->getResponseId(),
+            $record->responseId,
             date('Y_m_d-H_i'),
         );
 
@@ -55,25 +52,27 @@ final class SurveyPdfService
         return $this->renderHtmlFallback($html, $filenameBase);
     }
 
-    private function buildHtml(Survey $survey, SurveyRun $run): string
+    private function buildHtml(Survey $survey, SurveyResponseRecord $record): string
     {
         $answers = '';
-        foreach ($this->answerLinks->findForRun($run) as $link) {
-            /** @var SurveyAnswerLink $link */
+        foreach ($record->answers as $questionName => $value) {
             $answers .= sprintf(
                 '<tr><th style="text-align:left;padding:6px;border:1px solid #ddd;background:#f4f4f4;width:35%%;">%s</th>'
                 . '<td style="padding:6px;border:1px solid #ddd;">%s</td></tr>',
-                htmlspecialchars($link->getQuestionName(), ENT_QUOTES | ENT_HTML5),
-                $this->formatValue($link->getAnswerValue()),
+                htmlspecialchars($questionName, ENT_QUOTES | ENT_HTML5),
+                $this->formatValue($value),
             );
         }
-        $completed = $run->getCompletedAt()?->format('Y-m-d H:i:s') ?? '—';
-        $started = $run->getStartedAt()->format('Y-m-d H:i:s');
-        $user = $run->getIdUser() !== null ? sprintf('user #%d', $run->getIdUser()) : ($run->getVisitorId() ?? 'anonymous');
+        $saved = $record->lastChangedAt?->format('Y-m-d H:i:s') ?? '—';
+        $state = $record->isFinished() ? 'Submitted' : 'Last saved (not submitted)';
+        $user = htmlspecialchars($record->userName ?? ($record->userId !== null ? sprintf('user #%d', $record->userId) : 'guest'), ENT_QUOTES | ENT_HTML5);
+        $name = htmlspecialchars($survey->getName(), ENT_QUOTES | ENT_HTML5);
+        $responseId = htmlspecialchars($record->responseId, ENT_QUOTES | ENT_HTML5);
+        $revision = $record->revision ?? '—';
 
         return <<<HTML
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>{$survey->getName()} · {$run->getResponseId()}</title>
+<html lang="en"><head><meta charset="utf-8"><title>{$name} · {$responseId}</title>
 <style>
     body { font-family: Helvetica, Arial, sans-serif; color: #222; margin: 24px; }
     h1 { font-size: 18px; margin-bottom: 4px; }
@@ -83,14 +82,14 @@ final class SurveyPdfService
     th, td { vertical-align: top; }
     @media print { body { margin: 12mm; } }
 </style></head><body>
-<h1>{$survey->getName()}</h1>
+<h1>{$name}</h1>
 <div class="meta">
     Survey ID: <code>{$survey->getSurveyId()}</code> ·
-    Revision: v{$run->getVersion()->getRevision()} ·
-    Response: <code>{$run->getResponseId()}</code>
+    Revision: v{$revision} ·
+    Response: <code>{$responseId}</code>
 </div>
 <div class="meta">
-    Submitted: {$completed} · Started: {$started} · By: {$user}
+    {$state}: {$saved} · By: {$user}
 </div>
 <h2>Answers</h2>
 <table>
@@ -100,22 +99,23 @@ final class SurveyPdfService
 HTML;
     }
 
-    private function formatValue(string $value): string
+    /** An answer as the store returns it: text, or a decoded JSON answer. */
+    private function formatValue(mixed $value): string
     {
+        if (is_array($value)) {
+            $pretty = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            return '<pre style="white-space:pre-wrap;font-family:monospace;font-size:11px;">'
+                . htmlspecialchars((string) $pretty, ENT_QUOTES | ENT_HTML5)
+                . '</pre>';
+        }
+        $value = is_scalar($value) ? (string) $value : '';
         if ($value === '') {
             return '<em style="color:#888;">empty</em>';
         }
-        if ($value[0] === '{' || $value[0] === '[') {
-            $decoded = json_decode($value, true);
-            if (is_array($decoded)) {
-                $pretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                return '<pre style="white-space:pre-wrap;font-family:monospace;font-size:11px;">'
-                    . htmlspecialchars((string) $pretty, ENT_QUOTES | ENT_HTML5)
-                    . '</pre>';
-            }
-        }
+        // Any answer may hold markup (a guest can type it), so it is cleaned,
+        // never printed raw: the HTML fallback is served as a page.
         if ($this->looksLikeHtml($value)) {
-            return $value;
+            return $this->sanitizer->sanitize($value);
         }
         return nl2br(htmlspecialchars($value, ENT_QUOTES | ENT_HTML5));
     }
