@@ -16,6 +16,7 @@ use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
 use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
+use Humdek\SurveyJsBundle\Service\SurveyAccessService;
 use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
 use Humdek\SurveyJsBundle\Service\SurveyResponseDraftService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
@@ -67,6 +68,7 @@ final class SurveysPublicController
         private readonly SurveyFileStorage $fileStorage,
         private readonly SignedFileUrlService $signedUrls,
         private readonly SurveySectionResolver $sections,
+        private readonly SurveyAccessService $access,
         private readonly VisitorIdResolver $visitor,
         private readonly SurveyFileRepository $files,
         private readonly SurveyResponseStore $responseStore,
@@ -360,7 +362,7 @@ final class SurveysPublicController
         // The caller must own a response of this survey with that id (saved as
         // progress at least once), so nobody can add files to another
         // participant's response.
-        if (!$this->hasAdminViewResponses($request)) {
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::UPDATE)) {
             $record = $this->responseStore->findByResponseId($survey, $responseId);
             if ($record === null) {
                 $response->setData([
@@ -419,7 +421,7 @@ final class SurveysPublicController
         $userId = $this->userId($request);
         $response = new JsonResponse(['data' => ['deleted' => true]]);
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
-        $isAdmin = $this->hasAdminViewResponses($request);
+        $isAdmin = $this->access->canOnResponses($survey, SurveyAccessService::DELETE);
         if (!$file->isOwnedBy($userId, $visitorId) && !$isAdmin) {
             $response->setData(['error' => 'Forbidden.']);
             $response->setStatusCode(403);
@@ -438,7 +440,7 @@ final class SurveysPublicController
         $userId = $this->userId($request);
         $response = new JsonResponse();
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
-        $isAdmin = $this->hasAdminViewResponses($request);
+        $isAdmin = $this->access->canOnResponses($file->getSurvey(), SurveyAccessService::READ);
 
         $signature = $request->query->get(SignedFileUrlService::QUERY_SIGNATURE);
         $expires = (int) $request->query->get(SignedFileUrlService::QUERY_EXPIRES);
@@ -597,23 +599,6 @@ final class SurveysPublicController
             return (int) $payload['id_users'];
         }
         return null;
-    }
-
-    private function hasAdminViewResponses(Request $request): bool
-    {
-        $payload = $request->attributes->get('_jwt_payload');
-        if (!is_array($payload)) {
-            return false;
-        }
-        $perms = $payload['permissions'] ?? null;
-        if (is_array($perms) && in_array('surveyjs.surveys.view-responses', $perms, true)) {
-            return true;
-        }
-        $roles = $payload['roles'] ?? null;
-        if (is_array($roles) && in_array('admin', $roles, true)) {
-            return true;
-        }
-        return false;
     }
 
     private function resolveSurvey(string $key): ?Survey

@@ -91,57 +91,29 @@
     },
     "permissions": [
         {
-            "key": "surveyjs.surveys.manage",
-            "description": "Create, edit, publish, delete surveys.",
+            "key": "surveyjs.survey.create",
+            "description": "Create surveys. The creator's roles that hold this permission get all four rights on the new survey.",
             "defaultRoles": [
                 "admin"
             ]
         },
         {
-            "key": "surveyjs.surveys.view-responses",
-            "description": "View survey responses + dashboard.",
+            "key": "surveyjs.survey.update",
+            "description": "Edit the surveys a role has the update grant on (Creator, settings, versions). Their dashboard and responses also need the grant on the survey's data table.",
             "defaultRoles": [
                 "admin"
             ]
         },
         {
-            "key": "surveyjs.surveys.export-pdf",
-            "description": "Export survey responses as PDF.",
+            "key": "surveyjs.survey.publish",
+            "description": "Publish or restore a version of a survey the role has the update grant on.",
             "defaultRoles": [
                 "admin"
             ]
         },
         {
-            "key": "surveyjs.surveys.delete-responses",
-            "description": "Delete individual survey responses.",
-            "defaultRoles": [
-                "admin"
-            ]
-        },
-        {
-            "key": "surveyjs.surveys.export-csv",
-            "description": "Export survey responses as CSV.",
-            "defaultRoles": [
-                "admin"
-            ]
-        },
-        {
-            "key": "surveyjs.surveys.export-xlsx",
-            "description": "Export survey responses as Excel (XLSX).",
-            "defaultRoles": [
-                "admin"
-            ]
-        },
-        {
-            "key": "surveyjs.surveys.export-json",
-            "description": "Export survey responses as JSON.",
-            "defaultRoles": [
-                "admin"
-            ]
-        },
-        {
-            "key": "surveyjs.surveys.upload-files",
-            "description": "Upload files attached to public survey submissions (file/GPX/microphone questions).",
+            "key": "surveyjs.survey.delete",
+            "description": "Delete the surveys a role has the delete grant on.",
             "defaultRoles": [
                 "admin"
             ]
@@ -176,12 +148,12 @@
         {
             "key": "surveys/{surveyId}/responses",
             "description": "Realtime stream of new survey responses. New entries arrive without polling.",
-            "requiredPermission": "surveyjs.surveys.view-responses"
+            "requiredPermission": "surveyjs.survey.update"
         },
         {
             "key": "surveys/{surveyId}/editing",
             "description": "Collaborative-edit presence + save notifications for the Survey Creator.",
-            "requiredPermission": "surveyjs.surveys.manage"
+            "requiredPermission": "surveyjs.survey.update"
         }
     ],
     "featureFlags": [
@@ -241,6 +213,17 @@
                         "value": "High contrast"
                     }
                 ]
+            },
+            {
+                "typeCode": "resourceTypes",
+                "ownership": "plugin_extendable",
+                "entries": [
+                    {
+                        "code": "surveyjs_survey",
+                        "value": "Surveys",
+                        "description": "SurveyJS surveys: who may see, edit, publish and delete each survey."
+                    }
+                ]
             }
         ]
     },
@@ -262,7 +245,7 @@
         {
             "slug": "surveys",
             "label": "SurveyJS",
-            "permission": "surveyjs.surveys.manage",
+            "permission": "surveyjs.survey.update",
             "icon": "tabler-clipboard-list"
         }
     ],
@@ -274,7 +257,12 @@
             "methods": [
                 "GET"
             ],
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_create",
@@ -283,7 +271,7 @@
             "methods": [
                 "POST"
             ],
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.create"
         },
         {
             "name": "surveyjs_admin_get",
@@ -295,7 +283,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_update",
@@ -307,7 +300,7 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.update"
         },
         {
             "name": "surveyjs_admin_delete",
@@ -319,7 +312,7 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.delete"
         },
         {
             "name": "surveyjs_admin_draft_save",
@@ -331,7 +324,7 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.update"
         },
         {
             "name": "surveyjs_admin_versions_create",
@@ -343,7 +336,7 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.publish"
         },
         {
             "name": "surveyjs_admin_versions_list",
@@ -355,7 +348,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_versions_restore",
@@ -368,7 +366,7 @@
                 "id": "\\d+",
                 "versionId": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permission": "surveyjs.survey.publish"
         },
         {
             "name": "surveyjs_admin_versions_get",
@@ -381,7 +379,12 @@
                 "id": "\\d+",
                 "versionId": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_presence",
@@ -393,7 +396,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_dashboard",
@@ -405,7 +413,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.view-responses"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_dashboard_results",
@@ -417,7 +430,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.view-responses"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_responses",
@@ -429,7 +447,12 @@
             "requirements": {
                 "id": "\\d+"
             },
-            "permission": "surveyjs.surveys.view-responses"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_response_detail",
@@ -442,7 +465,12 @@
                 "id": "\\d+",
                 "rid": "[A-Za-z0-9_-]+"
             },
-            "permission": "surveyjs.surveys.view-responses"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_response_pdf",
@@ -455,7 +483,12 @@
                 "id": "\\d+",
                 "rid": "[A-Za-z0-9_-]+"
             },
-            "permission": "surveyjs.surveys.export-pdf"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_response_delete",
@@ -468,7 +501,12 @@
                 "id": "\\d+",
                 "rid": "[A-Za-z0-9_-]+"
             },
-            "permission": "surveyjs.surveys.delete-responses"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_license_key",
@@ -477,7 +515,12 @@
             "methods": [
                 "GET"
             ],
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_admin_health",
@@ -486,7 +529,12 @@
             "methods": [
                 "GET"
             ],
-            "permission": "surveyjs.surveys.manage"
+            "permissions": [
+                "surveyjs.survey.create",
+                "surveyjs.survey.update",
+                "surveyjs.survey.publish",
+                "surveyjs.survey.delete"
+            ]
         },
         {
             "name": "surveyjs_public_published",

@@ -40,14 +40,24 @@ All default to the `admin` role:
 
 | Key | Allows |
 | --- | --- |
-| `surveyjs.surveys.manage` | Create, edit, publish, delete surveys. |
-| `surveyjs.surveys.view-responses` | View responses + dashboard. |
-| `surveyjs.surveys.export-pdf` | Export responses as PDF. |
-| `surveyjs.surveys.delete-responses` | Delete individual responses. |
-| `surveyjs.surveys.export-csv` | Export responses as CSV. |
-| `surveyjs.surveys.export-xlsx` | Export responses as Excel. |
-| `surveyjs.surveys.export-json` | Export responses as JSON. |
-| `surveyjs.surveys.upload-files` | Upload files attached to public submissions. |
+| `surveyjs.survey.create` | Create surveys. The creator's roles that hold it get all four rights on the new survey. |
+| `surveyjs.survey.update` | Edit the surveys the role has the update grant on. |
+| `surveyjs.survey.publish` | Publish or restore a version of a survey the role may update. |
+| `surveyjs.survey.delete` | Delete the surveys the role has the delete grant on. |
+
+A permission says what a role may do at all; the grant says on which surveys.
+Surveys are the data-access resource type `surveyjs_survey` (declared under
+`lookups`), granted per role on the "Permissions for role" screen like pages,
+data tables and assets. The admin role may do everything and gets no grants.
+
+Who may see, export or delete a survey's answers is the grant on its data
+table (`sh2_surveyjs_<survey id>`), through the core data screens; the plugin's
+dashboard, responses and PDF need one of the four permissions plus that grant.
+When the data table is created, the roles that may edit the survey get a grant
+on it; after that the two grants are independent.
+
+Placing a survey on a page needs the update right on the page and a view grant
+on the survey, checked on section save and import (core H7).
 
 ## Data access
 
@@ -62,8 +72,8 @@ Submissions land in the host `data_tables` / `data_rows` / `data_cols` / `data_c
 
 | Topic | Required permission |
 | --- | --- |
-| `surveys/{surveyId}/responses` | `surveyjs.surveys.view-responses` |
-| `surveys/{surveyId}/editing` | `surveyjs.surveys.manage` |
+| `surveys/{surveyId}/responses` | `surveyjs.survey.update` |
+| `surveys/{surveyId}/editing` | `surveyjs.survey.update` |
 
 ## Feature flags
 
@@ -80,11 +90,12 @@ Submissions land in the host `data_tables` / `data_rows` / `data_cols` / `data_c
 ## Lookups
 
 Plugin-owned lookup group `surveyJsTheme`: `default`, `modern`, `high-contrast`.
+Entry `surveyjs_survey` in the core lookup `resourceTypes` (data access, H6).
 
 ## Styles and admin pages
 
 - Styles: `surveyjs` (embeds a published survey) and `gpxMap` (standalone GPX map renderer). Both are `frontendStyles` and cannot have children; grouped under the plugin's `Plugin: SurveyJS` style group.
-- Admin page: slug `surveys`, label `SurveyJS`, permission `surveyjs.surveys.manage`, icon `tabler-clipboard-list`.
+- Admin page: slug `surveys`, label `SurveyJS`, permission `surveyjs.survey.update`, icon `tabler-clipboard-list`.
 
 ## API routes
 
@@ -92,15 +103,15 @@ Admin routes are mounted under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/...`
 
 | Group | Base path | Permission |
 | --- | --- | --- |
-| Surveys CRUD + drafts | `/admin/.../surveys[/{id}]` | `surveyjs.surveys.manage` |
-| Versions (create/list/get/restore) | `/admin/.../surveys/{id}/versions` | `surveyjs.surveys.manage` |
-| Presence | `/admin/.../surveys/{id}/presence` | `surveyjs.surveys.manage` |
-| Dashboard + responses | `/admin/.../surveys/{id}/dashboard`, `/responses` | `surveyjs.surveys.view-responses` |
-| Response PDF | `/admin/.../responses/{rid}/pdf` | `surveyjs.surveys.export-pdf` |
-| Response delete | `/admin/.../responses/{rid}` (DELETE) | `surveyjs.surveys.delete-responses` |
-| Bulk export (csv/xlsx/json) | `/admin/.../responses/export/{format}` | `surveyjs.surveys.export-{format}` |
-| License key + health | `/admin/.../license-key`, `/health` | `surveyjs.surveys.manage` |
-| Public survey (published/submit/progress/edit/files/choices) | `/plugins/.../published/{key}/...` | public (no route permission) |
+| List, read, versions, presence | `/admin/.../surveys[/{id}]`, `/versions` (GET) | any `surveyjs.survey.*` + read grant |
+| Create | `/admin/.../surveys` (POST) | `surveyjs.survey.create` |
+| Edit, draft | `/admin/.../surveys/{id}` (PUT), `/draft` | `surveyjs.survey.update` + update grant |
+| Publish, restore | `/admin/.../surveys/{id}/versions` (POST), `/restore` | `surveyjs.survey.publish` + update grant |
+| Delete | `/admin/.../surveys/{id}` (DELETE) | `surveyjs.survey.delete` + delete grant |
+| Dashboard, responses, PDF | `/admin/.../surveys/{id}/dashboard`, `/responses` | any `surveyjs.survey.*` + read grant on the data table |
+| Response delete | `/admin/.../responses/{rid}` (DELETE) | any `surveyjs.survey.*` + delete grant on the data table |
+| License key + health | `/admin/.../license-key`, `/health` | any `surveyjs.survey.*` |
+| Public survey (published/submit/progress/edit/files) | `/plugins/.../published/{key}/...` | public; the core section check decides (page, section) |
 
 The health endpoint (`/admin/plugins/sh2-shp-survey-js/health`, service `humdek.surveyjs.health_check`) backs the manifest `health` declaration.
 

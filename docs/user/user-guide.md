@@ -269,8 +269,8 @@ responses. Per-response actions:
 ## 9. Display responses on a page
 
 The plugin contributes a second style: **`surveyjsAnswers`**, which
-renders a respondent's own answers (or, with the
-`surveyjs.surveys.view-responses` permission, every response). Drop
+renders a respondent's own answers (or, with the read grant on the
+survey's data table, every response). Drop
 it on any page to give respondents a "Here's what you answered"
 view.
 
@@ -287,18 +287,26 @@ Common fields:
 
 ## 10. Permissions reference
 
-The plugin seeds three permissions in its install migration:
+Four permissions say what a role may do with surveys at all:
 
-| Permission                          | Granted via roles                |
-|-------------------------------------|----------------------------------|
-| `surveyjs.surveys.manage`           | Survey authors / admins          |
-| `surveyjs.surveys.view-responses`   | Researchers / data analysts      |
-| `surveyjs.surveys.export-pdf`       | Researchers (optional)           |
+| Permission                | Lets a role                                      |
+|---------------------------|--------------------------------------------------|
+| `surveyjs.survey.create`  | create surveys                                   |
+| `surveyjs.survey.update`  | edit surveys                                     |
+| `surveyjs.survey.publish` | publish a new version or restore an old one      |
+| `surveyjs.survey.delete`  | delete surveys                                   |
 
-Bind them through the host's **Admin → User Management → Roles**
-page. The plugin's UI gates every action on these — for example, the
-**Versions → Make current** button only shows when the user has
-`surveyjs.surveys.manage`.
+Which surveys a role may use is set separately: open **Admin → Roles**,
+choose **Surveys permissions** in the role's menu and tick the rights
+per survey, like pages and data tables. When you create a survey, your
+roles that may create surveys get every right on it.
+
+Who may see a survey's answers is set on its data table in the same
+screen (**Data tables permissions**). The roles that could edit the
+survey get that right when the first answer arrives.
+
+To put a survey on a page you need to be allowed to edit the page and
+to see the survey.
 
 ---
 

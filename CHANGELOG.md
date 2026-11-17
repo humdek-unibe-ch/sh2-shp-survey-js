@@ -7,15 +7,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5 and 6a. Web only; mobile still ships SurveyJS 2.
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6a and 6b. Web only; mobile still ships SurveyJS 2.
 
-**Needs** a core with the section access check and section variables (H4, H1)
-and a frontend that passes `page` to plugin styles (`PluginStyleHost`); set the
+**Needs** a core with the section access check and section variables (H4, H1),
+plugin resource types and the section field check (H6, H7), and a frontend
+that passes `page` to plugin styles (`PluginStyleHost`); set the
 `supports.core` / `compatibility.selfhelp` floors at release.
 
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **Survey permissions and grants (wave 6b).** Four permissions,
+  `surveyjs.survey.create`, `.update`, `.publish`, `.delete`, replace
+  `surveyjs.surveys.manage`. A survey is the data-access resource type
+  `surveyjs_survey` (H6): every admin action checks the permission and the
+  grant on that survey; the list shows only readable surveys. The creator's
+  roles that hold `create` get all four rights on a new survey. Publishing
+  needs `publish` plus the update grant.
+- **Answers' access is the data table's (wave 6b).** The dashboard, responses,
+  PDF and response delete need the grant on the survey's data table; the roles
+  that may edit the survey get it when the table is created. A file
+  upload/download by staff checks the same grant.
+- **Placing a survey needs a view grant on it (wave 6b),** checked on section
+  save and import through the core event of H7.
 - **The server decides, the client draws (wave 6a).** Every public call names
   the page and the section (`page_id`, `section_id`, `language_id`, `preview`,
   `route[...]`). The core checks the caller may use that section (page access,
@@ -90,6 +104,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   (in design mode) before it is compared with the Creator's JSON.
 
 ### Removed
+- **Old permissions (wave 6b):** `surveyjs.surveys.manage`, `view-responses`,
+  `export-pdf`, `delete-responses`, `export-csv`, `export-xlsx`, `export-json`
+  and `upload-files` (unused). The installer removes them on update; roles
+  that held them need the new permissions and survey grants.
 - **Client-sent configuration (wave 6a):** the `X-SurveyJs-Runtime-Config`
   header, the `enforce` limits and the `config` parameter are no longer read;
   `dynamic_replacement` and the `data_config` token map are replaced by core

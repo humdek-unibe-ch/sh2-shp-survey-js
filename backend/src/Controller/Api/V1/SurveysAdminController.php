@@ -12,6 +12,7 @@ use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
+use Humdek\SurveyJsBundle\Service\SurveyAccessService;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
@@ -27,9 +28,10 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
  * Admin Surveys API.
  *
  * Wired through manifest-declared routes (host's `ApiRouteLoader`
- * resolves them at runtime). Permission gating is enforced by the
- * host `ApiSecurityListener`; this controller does NOT re-check
- * permissions.
+ * resolves them at runtime). The host `ApiSecurityListener` checks the
+ * route permission (`surveyjs.survey.*`); each action then checks the
+ * caller's grant on that survey ({@see SurveyAccessService}), or for its
+ * answers the grant on the survey's data table.
  */
 #[AsController]
 final class SurveysAdminController
@@ -41,13 +43,18 @@ final class SurveysAdminController
         private readonly SurveyService $surveyService,
         private readonly SurveyDashboardService $dashboardService,
         private readonly SurveyPdfService $pdfService,
+        private readonly SurveyAccessService $access,
         private readonly SurveyJsRealtimePublisher $realtime,
     ) {
     }
 
     public function list(): JsonResponse
     {
-        $items = $this->surveys->findAllActive();
+        $readable = $this->access->readableSurveyIdsOrNull();
+        $items = array_values(array_filter(
+            $this->surveys->findAllActive(),
+            static fn (Survey $survey): bool => $readable === null || in_array((int) $survey->getId(), $readable, true),
+        ));
         return new JsonResponse([
             'data' => array_map(fn (Survey $survey) => $this->summarize($survey), $items),
         ]);
@@ -63,6 +70,7 @@ final class SurveysAdminController
             return new JsonResponse(['error' => 'name is required.'], 422);
         }
         $survey = $this->surveyService->createSurvey(trim($name), $definition, $userId);
+        $this->access->grantCreatorRoles($survey);
         return new JsonResponse(['data' => $this->summarize($survey)], 201);
     }
 
@@ -72,6 +80,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->can($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         return new JsonResponse(['data' => $this->detail($survey)]);
     }
 
@@ -80,6 +91,9 @@ final class SurveysAdminController
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->can($survey, SurveyAccessService::UPDATE)) {
+            return $this->forbidden();
         }
         $body = $this->decode($request);
         if (isset($body['name'])) {
@@ -102,6 +116,10 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->can($survey, SurveyAccessService::DELETE)) {
+            return $this->forbidden();
+        }
+        $this->access->revokeAll($survey);
         $this->surveyService->delete($survey);
         return new JsonResponse(['data' => ['deleted' => true]]);
     }
@@ -111,6 +129,9 @@ final class SurveysAdminController
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->can($survey, SurveyAccessService::UPDATE)) {
+            return $this->forbidden();
         }
         $body = $this->decode($request);
         $userId = $this->userId($request);
@@ -158,6 +179,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->can($survey, SurveyAccessService::UPDATE)) {
+            return $this->forbidden();
+        }
         $body = $this->decode($request);
         $definition = is_array($body['definition'] ?? null) ? $body['definition'] : null;
         if (!is_array($definition)) {
@@ -190,6 +214,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->can($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         return new JsonResponse(['data' => array_map(
             fn (SurveyVersion $version) => $this->versionSummary($version),
             $this->versions->findForSurvey($survey),
@@ -202,6 +229,9 @@ final class SurveysAdminController
         $version = $this->versions->find($versionId);
         if (!$survey instanceof Survey || !$version instanceof SurveyVersion) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->can($survey, SurveyAccessService::UPDATE)) {
+            return $this->forbidden();
         }
         $this->surveyService->restoreVersion($survey, $version, $this->userId($request));
         return new JsonResponse(['data' => $this->detail($survey)]);
@@ -221,6 +251,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey || !$version instanceof SurveyVersion) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->can($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         if ($version->getSurvey()->getId() !== $survey->getId()) {
             return new JsonResponse(['error' => 'Version does not belong to this survey.'], 400);
         }
@@ -235,6 +268,9 @@ final class SurveysAdminController
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->can($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
         }
         $body = $this->decode($request);
         $state = (string) ($body['state'] ?? 'editing');
@@ -255,6 +291,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         return new JsonResponse(['data' => $this->dashboardService->buildSummary($survey)]);
     }
 
@@ -270,6 +309,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         $limit = min(20000, max(1, (int) $request->query->get('limit', 5000)));
         return new JsonResponse(['data' => $this->dashboardService->buildResults($survey, $limit)]);
     }
@@ -284,6 +326,9 @@ final class SurveysAdminController
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
         }
 
         $pageNo = max(1, (int) $request->query->get('page', 1));
@@ -310,6 +355,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
+        }
         $record = $this->resolveResponse($survey, $rid);
         if ($record === null) {
             return new JsonResponse(['error' => 'Response not found.'], 404);
@@ -328,6 +376,9 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
         }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::DELETE)) {
+            return $this->forbidden();
+        }
         $record = $this->resolveResponse($survey, $rid);
         if ($record === null) {
             return new JsonResponse(['error' => 'Response not found.'], 404);
@@ -344,6 +395,9 @@ final class SurveysAdminController
         $survey = $this->surveys->find($id);
         if (!$survey instanceof Survey) {
             return new JsonResponse(['error' => 'Not found.'], 404);
+        }
+        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+            return $this->forbidden();
         }
         $record = $this->resolveResponse($survey, $rid);
         if ($record === null) {
@@ -391,7 +445,10 @@ final class SurveysAdminController
             'draftHash' => $survey->getDraftDefinitionSha256(),
             'draftUpdatedAt' => $survey->getDraftUpdatedAt()?->format(DATE_ATOM),
             'draftUpdatedByUserId' => $survey->getDraftUpdatedByUserId(),
-            'responseCount' => $this->responseStore->list($survey, 0, 1)['total'],
+            // A count of answers is answers' data: only with the data-table grant.
+            'responseCount' => $this->access->canOnResponses($survey, SurveyAccessService::READ)
+                ? $this->responseStore->list($survey, 0, 1)['total']
+                : null,
         ];
     }
 
@@ -459,6 +516,11 @@ final class SurveysAdminController
     private function stringOrNull(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function forbidden(): JsonResponse
+    {
+        return new JsonResponse(['error' => 'You have no grant on this survey.'], 403);
     }
 
     /** A response of this survey by record id (digits) or response id. */

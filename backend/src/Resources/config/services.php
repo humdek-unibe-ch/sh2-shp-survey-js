@@ -10,8 +10,10 @@ use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysAdminController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysHealthController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysLicenseController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysPublicController;
+use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsDataAccessResourcesSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsLookupRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsRealtimeTopicSubscriber;
+use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsSectionBindingSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsStyleRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsUserDataCleanupSubscriber;
 use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
@@ -111,4 +113,6 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsLookupRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsRealtimeTopicSubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsUserDataCleanupSubscriber::class)->tag('kernel.event_subscriber');
+    $services->set(SurveyJsDataAccessResourcesSubscriber::class)->tag('kernel.event_subscriber');
+    $services->set(SurveyJsSectionBindingSubscriber::class)->tag('kernel.event_subscriber');
 };

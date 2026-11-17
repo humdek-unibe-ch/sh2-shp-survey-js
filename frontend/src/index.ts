@@ -106,7 +106,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
             {
                 slug: 'surveys',
                 title: 'SurveyJS',
-                permission: 'surveyjs.surveys.manage',
+                permission: 'surveyjs.survey.update',
                 component: SurveyAdminPage as never,
             },
         ],
@@ -116,7 +116,7 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 label: 'SurveyJS',
                 icon: 'tabler-clipboard-list',
                 href: '/admin/plugins-host/sh2-shp-survey-js/surveys',
-                permission: 'surveyjs.surveys.manage',
+                permission: 'surveyjs.survey.update',
                 position: { section: 'admin', order: 300 },
             },
         ],
@@ -140,11 +140,11 @@ export const register = (api: IPluginApi): IPluginRegistration => {
         realtimeTopics: [
             {
                 key: 'surveys/{surveyId}/editing',
-                requiredPermission: 'surveyjs.surveys.manage',
+                requiredPermission: 'surveyjs.survey.update',
             },
             {
                 key: 'surveys/{surveyId}/responses',
-                requiredPermission: 'surveyjs.surveys.view-responses',
+                requiredPermission: 'surveyjs.survey.update',
             },
         ],
         healthChecks: [

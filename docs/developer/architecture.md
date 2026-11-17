@@ -162,7 +162,7 @@ The mobile package exports `registerMobile()` which contributes a read-only `sur
 
 Two topics scoped under `selfhelp/plugin/sh2-shp-survey-js/`:
 
-- `surveys/{surveyId}/editing` — collaborative-edit presence + "version_published" notifications. Required permission: `surveyjs.surveys.manage`.
+- `surveys/{surveyId}/editing` — collaborative-edit presence + "version_published" notifications. Required permission: `surveyjs.survey.update`.
 - `surveys/{surveyId}/responses` — new-response stream consumed by the dashboard. Required permission: `surveyjs.surveys.view-responses`.
 
 No polling. The dashboard fetches an initial snapshot once and listens for SSE updates after that.

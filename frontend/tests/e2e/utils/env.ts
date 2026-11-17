@@ -7,7 +7,7 @@ SPDX-License-Identifier: MPL-2.0
  *
  * Everything is env-driven so the same spec runs against any QA stack
  * without hard-coded hosts/paths (canonical Testing Rule 14). The admin
- * account must hold `surveyjs.surveys.manage` to reach the Creator. The
+ * account must hold `surveyjs.survey.update` to reach the Creator. The
  * spec self-skips unless the required QA admin env is present, so
  * `npm run test:e2e` is safe on a machine without a stack.
  */

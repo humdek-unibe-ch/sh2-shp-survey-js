@@ -33,13 +33,13 @@ final class SurveyJsRealtimeTopicSubscriber implements EventSubscriberInterface
             pluginId: self::PLUGIN_ID,
             key: 'surveys/{surveyId}/editing',
             description: 'Collaborative-edit presence + save notifications for the Survey Creator.',
-            requiredPermission: 'surveyjs.surveys.manage',
+            requiredPermission: 'surveyjs.survey.update',
         );
         $event->addTopic(
             pluginId: self::PLUGIN_ID,
             key: 'surveys/{surveyId}/responses',
             description: 'Realtime stream of new survey responses. New entries arrive without polling.',
-            requiredPermission: 'surveyjs.surveys.view-responses',
+            requiredPermission: 'surveyjs.survey.update',
         );
     }
 }

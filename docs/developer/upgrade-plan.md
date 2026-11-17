@@ -117,6 +117,13 @@ Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
 
+### Wave 6b as built (2026-11-17)
+
+- **Permissions and grants.** `SurveyAccessService` checks the grant on a survey (resource type `surveyjs_survey`, declared in the manifest's `lookups`, H6) after the route permission; the list is filtered by read grants; creating grants the creator's roles that hold `create` (admin excluded); deleting revokes the survey's grants. `SurveyJsDataAccessResourcesSubscriber` lists the surveys on the role screen.
+- **Answers.** Dashboard, responses, PDF, response delete and staff file access check the grant on the survey's data table. When `SurveyResponseStore` creates the table, the roles with the update grant on the survey get full rights on it (F15).
+- **Placing.** Needed a core hook: H7, `SectionFieldBindingEvent`, dispatched by `SectionTableBindingGuard` on section save and import. `SurveyJsSectionBindingSubscriber` refuses a survey the editor may not see. H7 is not in section 5 above; added during the build.
+- **Known limits.** A plugin route may only use the plugin's own permissions, so a role that may read a survey's data table but holds none of the four survey permissions uses the core data screens, not the plugin dashboard. The creator grant and the data-table grant were not run live with a non-admin account; unit tests cover the checks, the core tests cover H7.
+
 ### Wave 6a as built (2026-11-17)
 
 - **Calls name page and section.** The host passes `page` (`id`, `languageId`, `preview`, `routeParams`) to plugin styles through `PluginStyleHost` (frontend, shared SDK `IPluginStylePage`); the runtime sends them as query parameters on every public call. `SurveySectionResolver` runs the core check (H4) and reads the settings; the timezone is the participant's, else the CMS default. Variables come from H1; `dynamic_replacement`, the client config header and the `choices` endpoint are gone.

@@ -168,7 +168,7 @@ namespace App\Entity {
 namespace App\Service\Core {
     if (!\class_exists(LookupService::class, false)) {
         /** Mirrors the host lookup codes the plugin writes. */
-        final class LookupService
+        class LookupService
         {
             public const DATA_REVISION_SOURCES_FORM = 'form';
             public const DATA_REVISION_SOURCES_SYSTEM = 'system';
@@ -176,6 +176,13 @@ namespace App\Service\Core {
             public const ACTION_TRIGGER_TYPES_FINISHED = 'finished';
             public const ACTION_TRIGGER_TYPES_UPDATED = 'updated';
             public const TRANSACTION_BY_BY_USER = 'by_user';
+            public const RESOURCE_TYPES = 'resourceTypes';
+            public const RESOURCE_TYPES_DATA_TABLE = 'data_table';
+
+            public function getLookupIdByCode(string $typeCode, string $lookupCode): ?int
+            {
+                return null;
+            }
         }
     }
 }
@@ -363,6 +370,11 @@ namespace App\Entity {
     if (!\class_exists(User::class, false)) {
         class User
         {
+            public function getId(): ?int
+            {
+                return null;
+            }
+
             public function getTimezone(): ?Lookup
             {
                 return null;
@@ -452,6 +464,136 @@ namespace App\Service\CMS\Effective {
             public function variables(PublicSectionScope $scope, int $languageId, array $routeParams = []): array
             {
                 return [];
+            }
+        }
+    }
+}
+
+namespace App\Entity {
+    if (!\class_exists(Role::class, false)) {
+        class Role
+        {
+            public function getId(): ?int
+            {
+                return null;
+            }
+
+            public function getName(): string
+            {
+                return '';
+            }
+        }
+    }
+    if (!\class_exists(RoleDataAccess::class, false)) {
+        class RoleDataAccess
+        {
+            public function getId(): ?int
+            {
+                return null;
+            }
+
+            public function getRole(): Role
+            {
+                return new Role();
+            }
+
+            public function getCrudPermissions(): int
+            {
+                return 0;
+            }
+        }
+    }
+}
+
+namespace App\Service\Security {
+    if (!\class_exists(DataAccessSecurityService::class, false)) {
+        /** Mirrors the host data-access checks (role_data_access grants). */
+        class DataAccessSecurityService
+        {
+            public const PERMISSION_CREATE = 1;
+            public const PERMISSION_READ = 2;
+            public const PERMISSION_UPDATE = 4;
+            public const PERMISSION_DELETE = 8;
+            public const ADMIN_ROLE_NAME = 'admin';
+
+            public function hasPermission(int $userId, string $resourceType, int $resourceId, int $requiredPermission): bool
+            {
+                return false;
+            }
+
+            public function userHasAdminRole(int $userId): bool
+            {
+                return false;
+            }
+        }
+    }
+}
+
+namespace App\Service\CMS\Admin {
+    if (!\class_exists(AdminDataAccessService::class, false)) {
+        /** Mirrors the one host writer of role_data_access grants. */
+        class AdminDataAccessService
+        {
+            public function addRolePermission(int $roleId, \stdClass $permissionData): \App\Entity\RoleDataAccess
+            {
+                return new \App\Entity\RoleDataAccess();
+            }
+
+            public function deleteRolePermission(int $roleId, int $permissionId): void
+            {
+            }
+        }
+    }
+}
+
+namespace App\Plugin\Event {
+    if (!\class_exists(DataAccessResourcesEvent::class, false)) {
+        final class DataAccessResourcesEvent extends \Symfony\Contracts\EventDispatcher\Event
+        {
+            /** @var array<int, array{id: int, name: string, description: string|null}> */
+            private array $resources = [];
+
+            public function __construct(public readonly string $resourceTypeCode)
+            {
+            }
+
+            public function addResource(int $id, string $name, ?string $description = null): void
+            {
+                $this->resources[$id] = ['id' => $id, 'name' => $name, 'description' => $description];
+            }
+
+            /** @return list<array{id: int, name: string, description: string|null}> */
+            public function getResources(): array
+            {
+                $resources = array_values($this->resources);
+                usort($resources, static fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
+                return $resources;
+            }
+        }
+    }
+    if (!\class_exists(SectionFieldBindingEvent::class, false)) {
+        /** Mirrors the host event of H7 (a section field value being authored). */
+        final class SectionFieldBindingEvent extends \Symfony\Contracts\EventDispatcher\Event
+        {
+            public function __construct(
+                public readonly string $fieldName,
+                public readonly ?string $fieldTypeName,
+                public readonly string $value,
+                public readonly int $userId,
+            ) {
+            }
+
+            private ?string $denial = null;
+
+            public function deny(string $reason): void
+            {
+                $this->denial ??= $reason;
+            }
+
+            public function getDenial(): ?string
+            {
+                return $this->denial;
             }
         }
     }

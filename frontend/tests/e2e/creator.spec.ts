@@ -4,7 +4,7 @@ SPDX-License-Identifier: MPL-2.0
 */
 /**
  * Golden workflow (web): the SurveyJS Creator admin page loads and is
- * editable for an admin who holds `surveyjs.surveys.manage`
+ * editable for an admin who holds `surveyjs.survey.update`
  * (plan Slice 8D; golden workflow §19.5 "Survey lifecycle").
  *
  * Exercises the real host frontend with this plugin mounted:

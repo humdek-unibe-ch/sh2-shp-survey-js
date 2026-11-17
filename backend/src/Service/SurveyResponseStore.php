@@ -65,6 +65,7 @@ class SurveyResponseStore
         private readonly EntityManagerInterface $em,
         private readonly DataService $dataService,
         private readonly DataQueryEngine $queries,
+        private readonly SurveyAccessService $access,
     ) {
     }
 
@@ -346,6 +347,7 @@ class SurveyResponseStore
         }
         $this->em->persist($table);
         $this->em->flush();
+        $this->access->grantDataTableToSurveyEditors($survey, $table);
     }
 
     private static function stringify(mixed $value): string
