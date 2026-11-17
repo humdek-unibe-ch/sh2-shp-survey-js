@@ -1,0 +1,18 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Save survey progress",
+    "type": "object",
+    "required": ["payload"],
+    "additionalProperties": false,
+    "properties": {
+        "responseId": {"type": ["string", "null"], "maxLength": 100},
+        "pageNo": {"type": "integer", "minimum": 0},
+        "payload": {
+            "type": "object",
+            "properties": {
+                "data": {"type": "object", "description": "The answers so far."},
+                "locale": {"type": ["string", "null"], "maxLength": 32}
+            }
+        }
+    }
+}

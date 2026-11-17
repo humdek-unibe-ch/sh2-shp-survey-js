@@ -1,0 +1,12 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Publish a survey version",
+    "description": "Publishes the saved draft, or the given definition after saving it as the draft.",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "definition": {"type": "object"},
+        "expectedDraftHash": {"type": ["string", "null"], "maxLength": 64},
+        "force": {"type": "boolean"}
+    }
+}

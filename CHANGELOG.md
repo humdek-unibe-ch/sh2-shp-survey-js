@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6a and 6b. Web only; mobile still ships SurveyJS 2.
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5 and 6. Web only; mobile still ships SurveyJS 2.
 
 **Needs** a core with the section access check and section variables (H4, H1),
 plugin resource types and the section field check (H6, H7), and a frontend
@@ -17,6 +17,13 @@ that passes `page` to plugin styles (`PluginStyleHost`); set the
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **Standard envelope and request schemas (wave 6c).** Every reply of the
+  plugin's API is the SelfHelp envelope (`status`, `message`, `error`,
+  `logged_in`, `meta`, `data`); a refusal's reason is `data.reason`. Every
+  write request (submit, progress, survey create, update, draft, publish,
+  presence) is checked against a JSON Schema the plugin ships under
+  `backend/src/Resources/schemas/requests/`; a body that breaks it gets 400
+  with the field errors. Needs `justinrainbow/json-schema` (the host has it).
 - **Survey permissions and grants (wave 6b).** Four permissions,
   `surveyjs.survey.create`, `.update`, `.publish`, `.delete`, replace
   `surveyjs.surveys.manage`. A survey is the data-access resource type

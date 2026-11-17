@@ -149,7 +149,9 @@ async function ensureOk<T>(res: Response): Promise<T> {
         } catch {
             // body may not be JSON; leave null
         }
-        const reason = (body as { reason?: string } | null)?.reason;
+        // The SelfHelp envelope carries a refusal's reason as `data.reason`.
+        const envelope = body as { reason?: string; data?: { reason?: string } | null } | null;
+        const reason = envelope?.data?.reason ?? envelope?.reason;
         const err = new Error(`HTTP ${res.status}`) as ISubmissionError;
         err.status = res.status;
         err.reason = reason;

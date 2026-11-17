@@ -11,6 +11,7 @@ namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 use Humdek\SurveyJsBundle\Service\SurveyJsHealthCheck;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\AsController;
+use Humdek\SurveyJsBundle\Service\SurveyJsApi;
 
 /**
  * Health endpoint surfaced both for the plugin doctor command and
@@ -21,11 +22,12 @@ final class SurveysHealthController
 {
     public function __construct(
         private readonly SurveyJsHealthCheck $check,
+        private readonly SurveyJsApi $api,
     ) {
     }
 
     public function __invoke(): JsonResponse
     {
-        return new JsonResponse(['data' => $this->check->check()]);
+        return $this->api->success($this->check->check());
     }
 }

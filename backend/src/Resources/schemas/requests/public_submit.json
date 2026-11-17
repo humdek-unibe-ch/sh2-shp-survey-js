@@ -1,0 +1,25 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Submit a survey response",
+    "description": "Which response this is and where the participant stands. Every limit comes from the section, never from this request.",
+    "type": "object",
+    "required": ["answers"],
+    "additionalProperties": false,
+    "properties": {
+        "answers": {"type": "object", "description": "SurveyJS answers keyed by question name."},
+        "enforce": {
+            "type": "object",
+            "properties": {
+                "responseId": {"type": ["string", "null"], "maxLength": 100},
+                "editMode": {"type": "boolean"},
+                "progress": {
+                    "type": "object",
+                    "properties": {
+                        "pageNo": {"type": "integer", "minimum": 0},
+                        "locale": {"type": ["string", "null"], "maxLength": 32}
+                    }
+                }
+            }
+        }
+    }
+}

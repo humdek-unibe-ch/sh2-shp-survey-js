@@ -1,0 +1,12 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Save a survey draft",
+    "type": "object",
+    "required": ["definition"],
+    "additionalProperties": false,
+    "properties": {
+        "definition": {"type": "object"},
+        "expectedDraftHash": {"type": ["string", "null"], "maxLength": 64},
+        "force": {"type": "boolean"}
+    }
+}

@@ -195,6 +195,10 @@ A signed-in participant owns their row (`id_users`). A guest's row has no owner;
 
 Uploaded files are stored under `<form files dir>/surveyjs/` (`selfhelp.form_file_storage_dir`, a kept volume), unless `SURVEYJS_UPLOAD_DIR` says otherwise.
 
+## Replies and requests
+
+Every reply is the standard SelfHelp envelope (`status`, `message`, `error`, `logged_in`, `meta`, `data`), built by `SurveyJsApi` with the core's `ApiResponseFormatter`; a refusal's machine-readable reason is `data.reason` (for example `already_submitted_once`, `not_active`, `authentication_required`). Every write request is checked against a JSON Schema in `backend/src/Resources/schemas/requests/` before the action runs; a body that breaks it gets 400 with the field errors.
+
 ## Storage-key contract (host issue #56)
 
 The host stores form/survey data by an **immutable `field_key`** (the column

@@ -117,6 +117,10 @@ Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
 
+### Wave 6c as built (2026-11-17)
+
+- `SurveyJsApi` writes every reply as the core envelope (core `ApiResponseFormatter`) into the response the controller holds, so the guest cookie and the licence header stay; a refusal's reason is `data.reason`. Write requests are checked with `justinrainbow/json-schema` against the plugin's own schemas (`Resources/schemas/requests/`), since the core validator reads only the core's schema folder. Response schemas are not written yet.
+
 ### Wave 6b as built (2026-11-17)
 
 - **Permissions and grants.** `SurveyAccessService` checks the grant on a survey (resource type `surveyjs_survey`, declared in the manifest's `lookups`, H6) after the route permission; the list is filtered by read grants; creating grants the creator's roles that hold `create` (admin excluded); deleting revokes the survey's grants. `SurveyJsDataAccessResourcesSubscriber` lists the surveys on the role screen.
@@ -128,7 +132,7 @@ Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Drop
 
 - **Calls name page and section.** The host passes `page` (`id`, `languageId`, `preview`, `routeParams`) to plugin styles through `PluginStyleHost` (frontend, shared SDK `IPluginStylePage`); the runtime sends them as query parameters on every public call. `SurveySectionResolver` runs the core check (H4) and reads the settings; the timezone is the participant's, else the CMS default. Variables come from H1; `dynamic_replacement`, the client config header and the `choices` endpoint are gone.
 - **Still on the client:** the `timeout` countdown. Its value now comes from the section, but the server cannot check it yet: a row's timestamp is its last change, and the start of a response is only in core data history. Open point.
-- **Not yet:** survey files are still served by signed URL, not through page and section (F165); schemas and the standard envelope are wave 6c.
+- **Not yet:** survey files are still served by signed URL, not through page and section (F165).
 
 ### Wave 5 as built (2026-11-17)
 

@@ -598,3 +598,24 @@ namespace App\Plugin\Event {
         }
     }
 }
+
+namespace App\Service\Core {
+    if (!\class_exists(ApiResponseFormatter::class, false)) {
+        /** Mirrors the host envelope builder (`status`, `message`, `error`, `logged_in`, `meta`, `data`). */
+        class ApiResponseFormatter
+        {
+            public function formatSuccess(mixed $data = null, ?string $responseSchemaName = null, int $status = 200, bool $isLoggedIn = false, bool $skipNormalization = false): \Symfony\Component\HttpFoundation\JsonResponse
+            {
+                return new \Symfony\Component\HttpFoundation\JsonResponse(['status' => $status, 'message' => 'OK', 'error' => null, 'logged_in' => $isLoggedIn, 'meta' => [], 'data' => $data], $status);
+            }
+
+            /**
+             * @param list<string>|null $validationErrors
+             */
+            public function formatError(string $error, int $status = 400, mixed $data = null, ?array $validationErrors = null): \Symfony\Component\HttpFoundation\JsonResponse
+            {
+                return new \Symfony\Component\HttpFoundation\JsonResponse(['status' => $status, 'message' => 'Error', 'error' => $error, 'logged_in' => false, 'meta' => [], 'data' => $data, 'validation' => $validationErrors], $status);
+            }
+        }
+    }
+}

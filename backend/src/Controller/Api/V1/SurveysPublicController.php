@@ -31,6 +31,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\HttpKernel\Attribute\AsController;
+use Humdek\SurveyJsBundle\Service\SurveyJsApi;
 
 /**
  * Public Surveys API used by the runtime `surveyjs` style.
@@ -63,6 +64,7 @@ final class SurveysPublicController
     public function __construct(
         private readonly ?string $licenseKey,
         private readonly SurveyRepository $surveys,
+        private readonly SurveyJsApi $api,
         private readonly SurveyResponseService $responseService,
         private readonly SurveyResponseDraftService $draftService,
         private readonly SurveyFileStorage $fileStorage,
@@ -79,11 +81,11 @@ final class SurveysPublicController
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $version = $survey->getCurrentVersion();
         if ($version === null) {
-            return new JsonResponse(['error' => 'No published version.'], 404);
+            return $this->api->failure('No published version.', 404);
         }
 
         $settings = $this->gate($request, $survey);
@@ -138,7 +140,7 @@ final class SurveysPublicController
         if ($settings->savePdf && is_string($this->licenseKey) && $this->licenseKey !== '') {
             $response->headers->set('X-SurveyJs-License-Key', $this->licenseKey);
         }
-        $response->setData($payload);
+        $this->api->success($payload['data'], 200, $response);
         $response->setPrivate();
         $response->headers->addCacheControlDirective('no-store');
         return $response;
@@ -148,16 +150,20 @@ final class SurveysPublicController
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
             return $settings;
         }
+        $invalid = $this->api->invalid($request, 'requests/public_submit');
+        if ($invalid !== null) {
+            return $invalid;
+        }
         $body = $this->decode($request);
         $answers = is_array($body['answers'] ?? null) ? $body['answers'] : null;
         if (!is_array($answers)) {
-            return new JsonResponse(['error' => 'answers required.'], 422);
+            return $this->api->failure('answers required.', 422);
         }
         // From the client only which response this is and where the
         // participant stands; every limit comes from the section.
@@ -165,10 +171,7 @@ final class SurveysPublicController
         $editMode = (bool) ($client['editMode'] ?? false);
         $progress = is_array($client['progress'] ?? null) ? $client['progress'] : [];
         if (!$editMode && $settings->isOutsideWindow()) {
-            return new JsonResponse([
-                'error' => 'The survey is not open now.',
-                'reason' => SurveySubmissionRejectedException::REASON_NOT_ACTIVE,
-            ], 409);
+            return $this->api->failure('The survey is not open now.', 409, SurveySubmissionRejectedException::REASON_NOT_ACTIVE);
         }
         $window = $settings->oncePerSchedule ? $settings->window() : null;
         $enforce = [
@@ -194,28 +197,21 @@ final class SurveysPublicController
                 SurveySubmissionRejectedException::REASON_EDIT_NOT_FOUND => 404,
                 default => 409,
             };
-            $response->setData([
-                'error' => $e->getMessage(),
-                'reason' => $e->reason,
-            ]);
-            $response->setStatusCode($status);
-            return $response;
+            return $this->api->failure($e->getMessage(), $status, $e->reason, $response);
         }
 
-        $response->setData(['data' => [
+        return $this->api->success([
             'recordId' => $record->recordId,
             'responseId' => $record->responseId,
             'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
-        ]]);
-        $response->setStatusCode(201);
-        return $response;
+        ], 201, $response);
     }
 
     public function progressGet(string $key, Request $request): Response
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
@@ -231,26 +227,27 @@ final class SurveysPublicController
             $visitorId,
             is_string($responseId) ? $responseId : null,
         );
-        $response->setData([
-            'data' => $draft !== null ? $this->draftPayload($draft) : null,
-        ]);
-        return $response;
+        return $this->api->success($draft !== null ? $this->draftPayload($draft) : null, 200, $response);
     }
 
     public function progressPut(string $key, Request $request): Response
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
             return $settings;
         }
+        $invalid = $this->api->invalid($request, 'requests/public_progress');
+        if ($invalid !== null) {
+            return $invalid;
+        }
         $body = $this->decode($request);
         $payload = is_array($body['payload'] ?? null) ? $body['payload'] : null;
         if (!is_array($payload)) {
-            return new JsonResponse(['error' => 'payload required.'], 422);
+            return $this->api->failure('payload required.', 422);
         }
         $userId = $this->userId($request);
         $response = new JsonResponse();
@@ -263,26 +260,23 @@ final class SurveysPublicController
         try {
             $draft = $this->draftService->save($survey, $responseId, $userId, $visitorId, $answers, $pageNo, $language);
         } catch (\DomainException $e) {
-            $response->setData(['error' => $e->getMessage()]);
-            $response->setStatusCode(403);
-            return $response;
+            return $this->api->failure($e->getMessage(), 403, null, $response);
         }
-        $response->setData(['data' => $this->draftPayload($draft)]);
-        return $response;
+        return $this->api->success($this->draftPayload($draft), 200, $response);
     }
 
     public function progressDelete(string $key, Request $request): Response
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
             return $settings;
         }
         $userId = $this->userId($request);
-        $response = new JsonResponse(['data' => ['deleted' => true]]);
+        $response = $this->api->success(['deleted' => true]);
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
         $responseId = $request->query->get('responseId');
         $draft = $this->draftService->resume(
@@ -301,7 +295,7 @@ final class SurveysPublicController
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
@@ -312,31 +306,24 @@ final class SurveysPublicController
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
         $responseId = $request->query->get('responseId') ?? $request->query->get('record_id');
         if (!is_string($responseId) || $responseId === '') {
-            $response->setData(['error' => 'responseId required.']);
-            $response->setStatusCode(422);
-            return $response;
+            return $this->api->failure('responseId required.', 422, null, $response);
         }
         $record = $this->responseStore->findByResponseId($survey, $responseId);
         if ($record === null || !$record->isFinished() || !$record->belongsTo($userId, $visitorId)) {
-            $response->setData(['error' => 'Not found.']);
-            $response->setStatusCode(404);
-            return $response;
+            return $this->api->failure('Not found.', 404, null, $response);
         }
-        $response->setData([
-            'data' => [
+        return $this->api->success([
                 'responseId' => $record->responseId,
                 'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
                 'answers' => $record->answers,
-            ],
-        ]);
-        return $response;
+            ], 200, $response);
     }
 
     public function uploadFile(string $key, Request $request): Response
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
@@ -348,15 +335,11 @@ final class SurveysPublicController
         $responseId = (string) $request->request->get('responseId', '');
         $questionName = (string) $request->request->get('questionName', '');
         if ($responseId === '' || $questionName === '') {
-            $response->setData(['error' => 'responseId + questionName required.']);
-            $response->setStatusCode(422);
-            return $response;
+            return $this->api->failure('responseId + questionName required.', 422, null, $response);
         }
         $uploaded = $request->files->get('file');
         if ($uploaded === null) {
-            $response->setData(['error' => 'file required.']);
-            $response->setStatusCode(422);
-            return $response;
+            return $this->api->failure('file required.', 422, null, $response);
         }
 
         // The caller must own a response of this survey with that id (saved as
@@ -365,17 +348,10 @@ final class SurveysPublicController
         if (!$this->access->canOnResponses($survey, SurveyAccessService::UPDATE)) {
             $record = $this->responseStore->findByResponseId($survey, $responseId);
             if ($record === null) {
-                $response->setData([
-                    'error' => 'Cannot upload before starting the survey. Save the first page before uploading files.',
-                    'reason' => SurveyFileException::REASON_FORBIDDEN,
-                ]);
-                $response->setStatusCode(403);
-                return $response;
+                return $this->api->failure('Cannot upload before starting the survey. Save the first page before uploading files.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
             }
             if (!$record->belongsTo($userId, $visitorId)) {
-                $response->setData(['error' => 'You do not own this response.', 'reason' => SurveyFileException::REASON_FORBIDDEN]);
-                $response->setStatusCode(403);
-                return $response;
+                return $this->api->failure('You do not own this response.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
             }
         }
 
@@ -394,21 +370,17 @@ final class SurveysPublicController
                 SurveyFileException::REASON_MIME_NOT_ALLOWED => 415,
                 default => 422,
             };
-            $response->setData(['error' => $e->getMessage(), 'reason' => $e->reason]);
-            $response->setStatusCode($status);
-            return $response;
+            return $this->api->failure($e->getMessage(), $status, $e->reason, $response);
         }
 
-        $response->setData(['data' => $this->filePayload($stored, $userId, $visitorId)]);
-        $response->setStatusCode(201);
-        return $response;
+        return $this->api->success($this->filePayload($stored, $userId, $visitorId), 201, $response);
     }
 
     public function deleteFile(string $key, int $fileId, Request $request): Response
     {
         $survey = $this->resolveSurvey($key);
         if (!$survey instanceof Survey || $survey->isArchived()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $settings = $this->gate($request, $survey);
         if ($settings instanceof JsonResponse) {
@@ -416,16 +388,14 @@ final class SurveysPublicController
         }
         $file = $this->files->find($fileId);
         if (!$file instanceof SurveyFile || $file->getSurvey()->getId() !== $survey->getId()) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $userId = $this->userId($request);
-        $response = new JsonResponse(['data' => ['deleted' => true]]);
+        $response = $this->api->success(['deleted' => true]);
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
         $isAdmin = $this->access->canOnResponses($survey, SurveyAccessService::DELETE);
         if (!$file->isOwnedBy($userId, $visitorId) && !$isAdmin) {
-            $response->setData(['error' => 'Forbidden.']);
-            $response->setStatusCode(403);
-            return $response;
+            return $this->api->failure('Forbidden.', 403, null, $response);
         }
         $this->fileStorage->delete($file);
         return $response;
@@ -435,7 +405,7 @@ final class SurveysPublicController
     {
         $file = $this->files->find($fileId);
         if (!$file instanceof SurveyFile) {
-            return new JsonResponse(['error' => 'Not found.'], 404);
+            return $this->api->failure('Not found.', 404);
         }
         $userId = $this->userId($request);
         $response = new JsonResponse();
@@ -449,27 +419,19 @@ final class SurveysPublicController
             try {
                 $this->signedUrls->verify($file, $identity, $expires, $signature);
             } catch (SurveyFileException $e) {
-                $response->setData(['error' => $e->getMessage(), 'reason' => $e->reason]);
-                $response->setStatusCode(403);
-                return $response;
+                return $this->api->failure($e->getMessage(), 403, $e->reason, $response);
             }
             $decoded = $this->signedUrls->decodeIdentity($identity);
             if (!$isAdmin && !$file->isOwnedBy($decoded['userId'], $decoded['visitorId'])) {
-                $response->setData(['error' => 'Forbidden.']);
-                $response->setStatusCode(403);
-                return $response;
+                return $this->api->failure('Forbidden.', 403, null, $response);
             }
         } elseif (!$isAdmin && !$file->isOwnedBy($userId, $visitorId)) {
-            $response->setData(['error' => 'Forbidden.']);
-            $response->setStatusCode(403);
-            return $response;
+            return $this->api->failure('Forbidden.', 403, null, $response);
         }
 
         $absolute = $this->fileStorage->resolvePath($file);
         if (!is_file($absolute)) {
-            $response->setData(['error' => 'File missing on disk.', 'reason' => SurveyFileException::REASON_NOT_FOUND]);
-            $response->setStatusCode(410);
-            return $response;
+            return $this->api->failure('File missing on disk.', 410, SurveyFileException::REASON_NOT_FOUND, $response);
         }
         $download = new BinaryFileResponse($absolute);
         $download->headers->set('Content-Type', $file->getMimeType());
@@ -542,13 +504,10 @@ final class SurveysPublicController
             $settings = $this->sections->resolve($request, $survey);
         } catch (ServiceException $e) {
             $status = $e->getCode() >= 400 && $e->getCode() < 500 ? $e->getCode() : 400;
-            return new JsonResponse(['error' => $e->getMessage()], $status);
+            return $this->api->failure($e->getMessage(), $status);
         }
         if (!$settings->allowAnonymous && $this->userId($request) === null) {
-            return new JsonResponse([
-                'error' => 'This survey needs a login.',
-                'reason' => SurveySubmissionRejectedException::REASON_AUTH_REQUIRED,
-            ], 401);
+            return $this->api->failure('This survey needs a login.', 401, SurveySubmissionRejectedException::REASON_AUTH_REQUIRED);
         }
 
         return $settings;

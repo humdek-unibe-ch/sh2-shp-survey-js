@@ -1,0 +1,11 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Rename, archive or restore a survey",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 255},
+        "themeCode": {"type": ["string", "null"], "maxLength": 64},
+        "archived": {"type": "boolean"}
+    }
+}

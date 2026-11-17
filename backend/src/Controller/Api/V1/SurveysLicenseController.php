@@ -10,6 +10,7 @@ namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\AsController;
+use Humdek\SurveyJsBundle\Service\SurveyJsApi;
 
 /**
  * Admin-only endpoint that returns the SurveyJS license key from the
@@ -25,14 +26,15 @@ final class SurveysLicenseController
 {
     public function __construct(
         private readonly ?string $licenseKey,
+        private readonly SurveyJsApi $api,
     ) {
     }
 
     public function __invoke(): JsonResponse
     {
         if ($this->licenseKey === null || $this->licenseKey === '') {
-            return new JsonResponse(['data' => ['licenseKey' => null, 'configured' => false]]);
+            return $this->api->success(['licenseKey' => null, 'configured' => false]);
         }
-        return new JsonResponse(['data' => ['licenseKey' => $this->licenseKey, 'configured' => true]]);
+        return $this->api->success(['licenseKey' => $this->licenseKey, 'configured' => true]);
     }
 }
