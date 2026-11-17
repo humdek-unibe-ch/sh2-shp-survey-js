@@ -117,6 +117,13 @@ Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
 
+### Wave 7 as built (2026-11-17)
+
+- **Manifest catalogue.** `plugin.json` declares `styleGroups`, `fieldTypes` (`select-survey-js`), `fields` and `styles[].fields`; the installer (H3) adopted the unowned style group and field type. `close_modal_on_save`, `own_entries_only` and `redirect_at_end` are core fields the style links. The install migration still seeds the old rows on a fresh install; the installer then renames and relinks them, so the end state is right. The migration was not edited: it is released and signed.
+- **Renames and published versions (critical, found while building).** A published page version stores field names and the style name, so section 4's "a rename changes metadata, not content" does not hold for published pages. Until a page is published again it names `survey-js` and `gpxMap`. The backend resolver, the H7 subscriber and the runtime read the old field name as a fallback, and the web part keeps a `gpxMap` renderer; these can go one release after everyone republished. Mobile reads `survey-js` until wave 9.
+- **Not removed by the installer:** fields that leave the manifest (`survey-js-theme`, `dynamic_replacement`, `close_modal_at_end`) stay as unlinked rows until purge; the installer deletes stale permissions but not stale fields. The field type `select-survey-js-theme` was never owned and stays.
+- **Row key.** `update_based_on` and `auto_session_key` follow SelfHelp 1 (`SURVEY_USAGE.md`): the key comes from the link (`extra_param_<name>`, `sid`), is stored as a cell, and finds the unfinished row whoever started it; knowing the key is ownership, as in SelfHelp 1. Tested live in preview with `auto_session_key`.
+
 ### Wave 6c as built (2026-11-17)
 
 - `SurveyJsApi` writes every reply as the core envelope (core `ApiResponseFormatter`) into the response the controller holds, so the guest cookie and the licence header stay; a refusal's reason is `data.reason`. Write requests are checked with `justinrainbow/json-schema` against the plugin's own schemas (`Resources/schemas/requests/`), since the core validator reads only the core's schema folder. Response schemas are not written yet.

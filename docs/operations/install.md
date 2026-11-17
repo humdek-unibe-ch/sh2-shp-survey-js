@@ -338,7 +338,7 @@ When the install completes, the host writes the following:
 - **Files**: uploads go to `var/form-files/surveyjs/` (the core form files directory, a kept volume), unless `SURVEYJS_UPLOAD_DIR` is set.
 - **Permissions**: `surveyjs.survey.{create, update, publish, delete}` (admin role by default), plus per-survey grants (resource type `surveyjs_survey`). Earlier versions' `surveyjs.surveys.{manage, view-responses, export-pdf, delete-responses, export-csv, export-xlsx, export-json, upload-files}` — all linked to the `admin` role by the plugin's migration so administrators get the full surface out of the box.
 - **Lookups**: `surveyJsTheme` (default / modern / high-contrast).
-- **Styles**: `surveyjs`, `gpxMap` (available in the page builder).
+- **Styles**: `surveyjs`, `gpx-map` (available in the page builder; declared in the manifest, written by the installer).
 - **Admin pages**: `Surveys`, `Survey Designer`, `Responses`, `Dashboard`, `Settings`.
 - **API routes**: 31 routes under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/*` and `/cms-api/v1/plugins/sh2-shp-survey-js/*`. The host's `PluginApiRouteSynchronizer` reads `plugin.json#apiRoutes` and persists each entry as a row in `api_routes` (tagged with `id_plugins`) linked to its permissions through `rel_api_routes_permissions`.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.

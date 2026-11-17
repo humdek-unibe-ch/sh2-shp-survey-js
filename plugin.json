@@ -227,18 +227,219 @@
             }
         ]
     },
+    "styleGroups": [
+        {
+            "name": "Plugin: SurveyJS",
+            "description": "Styles of the SurveyJS plugin."
+        }
+    ],
+    "fieldTypes": [
+        {
+            "name": "select-survey-js",
+            "position": 8
+        }
+    ],
+    "fields": [
+        {
+            "name": "survey_js",
+            "type": "select-survey-js",
+            "renamedFrom": [
+                "survey-js"
+            ]
+        },
+        {
+            "name": "sample_points",
+            "type": "json"
+        },
+        {
+            "name": "restart_on_refresh",
+            "type": "checkbox"
+        },
+        {
+            "name": "once_per_user",
+            "type": "checkbox"
+        },
+        {
+            "name": "once_per_schedule",
+            "type": "checkbox"
+        },
+        {
+            "name": "save_pdf",
+            "type": "checkbox"
+        },
+        {
+            "name": "url_params",
+            "type": "checkbox"
+        },
+        {
+            "name": "start_time",
+            "type": "time"
+        },
+        {
+            "name": "end_time",
+            "type": "time"
+        },
+        {
+            "name": "auto_save_interval",
+            "type": "number"
+        },
+        {
+            "name": "label_survey_done",
+            "type": "markdown-inline",
+            "translatable": true
+        },
+        {
+            "name": "label_survey_not_active",
+            "type": "markdown-inline",
+            "translatable": true
+        },
+        {
+            "name": "timeout",
+            "type": "number"
+        },
+        {
+            "name": "allow_anonymous",
+            "type": "checkbox"
+        },
+        {
+            "name": "update_based_on",
+            "type": "text"
+        },
+        {
+            "name": "auto_session_key",
+            "type": "checkbox"
+        }
+    ],
     "styles": [
         {
             "name": "surveyjs",
             "description": "Embeds a published SurveyJS survey at runtime. Grouped under the 'Plugin: SurveyJS' style_groups row created by the plugin's migration.",
             "canHaveChildren": false,
-            "capability": "frontendStyles"
+            "capability": "frontendStyles",
+            "group": "Plugin: SurveyJS",
+            "fields": [
+                {
+                    "name": "survey_js",
+                    "title": "Survey",
+                    "help": "Select the SurveyJS survey to render on this section. The section stores the survey id and the runtime resolves the published survey key automatically.",
+                    "default": ""
+                },
+                {
+                    "name": "own_entries_only",
+                    "title": "Own Entries Only",
+                    "help": "When enabled, only the participant who originally submitted a response can resume / edit it.",
+                    "default": "0"
+                },
+                {
+                    "name": "redirect_at_end",
+                    "title": "Redirect At End",
+                    "help": "Redirect to this URL once the survey is submitted."
+                },
+                {
+                    "name": "close_modal_on_save",
+                    "title": "Close Popup On Save",
+                    "default": "0",
+                    "help": "If the page is shown in a popup, close it after the survey is submitted, like a form does."
+                },
+                {
+                    "name": "restart_on_refresh",
+                    "title": "Restart on Refresh",
+                    "help": "If checked the survey is restarted on every page refresh.",
+                    "default": "0"
+                },
+                {
+                    "name": "once_per_user",
+                    "title": "Once Per User",
+                    "help": "If checked the survey can be done only once per user. Overrides `once_per_schedule`.",
+                    "default": "0"
+                },
+                {
+                    "name": "once_per_schedule",
+                    "title": "Once Per Schedule",
+                    "help": "If checked the survey can be done at most once per active schedule window. Ignored when `once_per_user` is checked.",
+                    "default": "0"
+                },
+                {
+                    "name": "save_pdf",
+                    "title": "Save as PDF",
+                    "help": "If checked, the user can download the completed survey as a PDF.",
+                    "default": "0"
+                },
+                {
+                    "name": "url_params",
+                    "title": "URL Parameters",
+                    "help": "If enabled, query-string parameters are passed into the survey (e.g. `?par1=2&par2=3`).",
+                    "default": "0"
+                },
+                {
+                    "name": "start_time",
+                    "title": "Start Time",
+                    "help": "Start time when the survey becomes available.",
+                    "default": "00:00"
+                },
+                {
+                    "name": "end_time",
+                    "title": "End Time",
+                    "help": "End time when the survey is no longer available.",
+                    "default": "00:00"
+                },
+                {
+                    "name": "auto_save_interval",
+                    "title": "Auto-Save Interval (s)",
+                    "help": "If higher than 0, the runtime auto-saves the survey every N seconds.",
+                    "default": "0"
+                },
+                {
+                    "name": "label_survey_done",
+                    "title": "Label - Survey Done",
+                    "help": "Markdown shown when the survey is already completed and `once_per_*` blocks a re-run."
+                },
+                {
+                    "name": "label_survey_not_active",
+                    "title": "Label - Survey Not Active",
+                    "help": "Markdown shown when the survey is outside its `start_time` / `end_time` window."
+                },
+                {
+                    "name": "timeout",
+                    "title": "Timeout (minutes)",
+                    "help": "Survey expires after N minutes from when the participant started it. Set to 0 to disable.",
+                    "default": "0"
+                },
+                {
+                    "name": "allow_anonymous",
+                    "title": "Allow Anonymous",
+                    "help": "When enabled, the survey may be submitted by unauthenticated visitors. Once-per-user is then enforced by the signed visitor cookie.",
+                    "default": "1"
+                },
+                {
+                    "name": "update_based_on",
+                    "title": "Update Based On",
+                    "help": "Name of a column that identifies the response row; its value comes from the URL parameter of the same name. A participant who opens the link again continues or edits that row instead of starting a new one."
+                },
+                {
+                    "name": "auto_session_key",
+                    "title": "Auto Session Key",
+                    "default": "0",
+                    "help": "Give each guest a private key in the link, so guests who share one invite link do not see each other's answers and can continue on another device. The link works as a password."
+                }
+            ]
         },
         {
-            "name": "gpxMap",
-            "description": "Standalone Leaflet-based map renderer for a GPX answer field. Grouped under the 'Plugin: SurveyJS' style_groups row created by the plugin's migration.",
+            "name": "gpx-map",
+            "description": "Draws a route on a map from sample points: a list of points, a whole GPX answer, or a variable resolving to either.",
             "canHaveChildren": false,
-            "capability": "frontendStyles"
+            "capability": "frontendStyles",
+            "renamedFrom": [
+                "gpxMap"
+            ],
+            "group": "Plugin: SurveyJS",
+            "fields": [
+                {
+                    "name": "sample_points",
+                    "title": "Sample Points",
+                    "help": "Inline GPX sample points or a reference to a GPX answer field (`{{question_name}}`). Renders the polyline on the Leaflet map."
+                }
+            ]
         }
     ],
     "adminPages": [

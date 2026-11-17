@@ -58,7 +58,6 @@ import {
     captureSurveyMeta,
     type ISurveyMeta,
 } from './surveyMeta';
-import { extractUrlParams } from './urlParams';
 import { LocalDraftStore } from './localDraftStore';
 import { CountdownTimer, type ITimerHandle } from './countdownTimer';
 import { renderMarkdown } from './markdown';
@@ -90,6 +89,8 @@ export interface ISurveyJsStyleProps {
     styleProps?: Record<string, string>;
     cssClass?: string;
     page?: ISurveyHostPage;
+    /** The popup the page is shown in (`IPluginStyleProps.pageModal`). */
+    pageModal?: { inModal: boolean; closeModal: () => void };
 }
 
 interface ISurveyRuntimeBridge {
@@ -133,9 +134,14 @@ export function SurveyRuntime({
     styleProps,
     cssClass,
     page,
+    pageModal,
 }: ISurveyJsStyleProps): React.ReactElement | null {
     const runtimeSection = section ?? style;
-    const surveyIdentifier = useMemo(() => extractFieldString(runtimeSection, 'survey-js'), [runtimeSection]);
+    // `survey-js` is the field's name before the upgrade, still in pages published before it.
+    const surveyIdentifier = useMemo(
+        () => extractFieldString(runtimeSection, 'survey_js') ?? extractFieldString(runtimeSection, 'survey-js'),
+        [runtimeSection],
+    );
     const sectionId = runtimeSection?.id;
     const pageId = page?.id ?? null;
     const languageId = page?.languageId ?? null;
@@ -159,6 +165,9 @@ export function SurveyRuntime({
     const timerRef = useRef<ITimerHandle | null>(null);
     const submittingRef = useRef(false);
     const editModeResponseIdRef = useRef<string | null>(null);
+    // Read at submit time, so a new popup object does not rebuild the survey.
+    const pageModalRef = useRef(pageModal);
+    pageModalRef.current = pageModal;
 
     // Step 1: load the SurveyJS runtime bundle (lazy) and register
     // the plugin's custom question types in the same module.
@@ -204,10 +213,12 @@ export function SurveyRuntime({
     useEffect(() => {
         if (!surveyIdentifier || !sectionRef) return;
         let cancelled = false;
-        // Sent always; the server keeps them only when the section passes URL parameters.
-        fetchPublishedSurvey(surveyIdentifier, sectionRef, extractUrlParams())
+        fetchPublishedSurvey(surveyIdentifier, sectionRef)
             .then((data) => {
                 if (cancelled) return;
+                if (data.runtimeConfig.autoSessionKey) {
+                    ensureSessionKeyInUrl();
+                }
                 setPublished(data);
                 draftStoreRef.current = new LocalDraftStore(`sh2-shp-survey-js:${data.surveyId}`);
 
@@ -372,7 +383,10 @@ export function SurveyRuntime({
                             submittedAt: result.submittedAt,
                         });
                     }
-                    if (config.redirectAtEnd && typeof window !== 'undefined') {
+                    const popup = pageModalRef.current;
+                    if (config.closeModalOnSave && popup?.inModal) {
+                        popup.closeModal();
+                    } else if (config.redirectAtEnd && typeof window !== 'undefined') {
                         window.location.assign(config.redirectAtEnd);
                     }
                 })
@@ -652,7 +666,9 @@ async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHy
         // ignore — we still attempt the local cache below.
     }
 
-    if (!restored && !published.state.completedResponseId && draftStore !== null) {
+    // With keyed rows the response is the one the link names, never this
+    // browser's latest: on a shared device that could be someone else's.
+    if (!restored && !published.state.completedResponseId && !published.runtimeConfig.keyedRows && draftStore !== null) {
         const local = draftStore.loadLatest();
         if (local) {
             restored = { responseId: local.responseId, pageNo: local.pageNo, data: local.data };
@@ -681,6 +697,20 @@ function extractDraftData(payload: Record<string, unknown>): Record<string, unkn
 function readRuntimeLicenseKey(): string {
     if (typeof window === 'undefined') return '';
     return (window as Window & { __SURVEYJS_LICENSE_KEY?: string }).__SURVEYJS_LICENSE_KEY ?? '';
+}
+
+/**
+ * `auto_session_key`: a guest on a shared invite link gets a private `sid` in
+ * the link on first open, so guests on the same link never resume each other
+ * and the link continues the response on another device (it works as a
+ * password). A link that already has one keeps it.
+ */
+function ensureSessionKeyInUrl(): void {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('sid')) return;
+    url.searchParams.set('sid', cryptoRandomHex(16));
+    window.history.replaceState(window.history.state, '', url.toString());
 }
 
 function readQueryParam(name: string): string | null {

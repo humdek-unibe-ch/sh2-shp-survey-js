@@ -12,7 +12,7 @@ use App\Plugin\Event\StyleRegistryEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Registers the `surveyjs` runtime style + the `gpxMap` standalone
+ * Registers the `surveyjs` runtime style + the `gpx-map` standalone
  * style with the host's StyleRegistryEvent so the admin section
  * builder shows them in the catalog alongside core styles.
  */
@@ -38,7 +38,7 @@ final class SurveyJsStyleRegistrySubscriber implements EventSubscriberInterface
         );
         $event->addStyle(
             pluginId: self::PLUGIN_ID,
-            name: 'gpxMap',
+            name: 'gpx-map',
             description: 'Standalone Leaflet-based map renderer for a GPX answer field.',
             category: 'media',
             canHaveChildren: false,

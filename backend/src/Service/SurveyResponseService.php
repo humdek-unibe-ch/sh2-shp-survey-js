@@ -38,6 +38,7 @@ final class SurveyResponseService
      *     editMode?: bool,
      *     progress?: array<string, mixed>,
      * } $enforce
+     * @param array{0: string, 1: string}|null $rowKey column and value that name the row (`update_based_on`, `auto_session_key`)
      *
      * @throws SurveySubmissionRejectedException
      */
@@ -48,6 +49,7 @@ final class SurveyResponseService
         ?string $guestKey,
         array $enforce = [],
         ?string $language = null,
+        ?array $rowKey = null,
     ): SurveyResponseRecord {
         $version = $survey->getCurrentVersion();
         if ($version === null) {
@@ -79,8 +81,11 @@ final class SurveyResponseService
         } else {
             $this->guardAgainstReSubmission($survey, $userId, $guestKey, $enforce);
             // Only the caller's own unfinished response is completed; any other
-            // known id (finished, or someone else's) gets a fresh response.
-            $existing = $known !== null && !$known->isFinished() && $known->belongsTo($userId, $guestKey) ? $known : null;
+            // known id (finished, or someone else's) gets a fresh response. With
+            // a row key it is the unfinished row holding that key.
+            $existing = $rowKey !== null
+                ? $this->responses->findUnfinishedByCell($survey, $rowKey[0], $rowKey[1])
+                : ($known !== null && !$known->isFinished() && $known->belongsTo($userId, $guestKey) ? $known : null);
             $responseId = $existing->responseId ?? ($known === null && $candidate !== null ? $candidate : $this->generateResponseId($survey));
         }
 
@@ -95,6 +100,7 @@ final class SurveyResponseService
             true,
             $existing,
             $userId,
+            $rowKey,
         );
         $this->realtime->surveyResponseSubmitted($survey, $record, $userId);
 

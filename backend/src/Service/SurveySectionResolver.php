@@ -27,7 +27,9 @@ use Symfony\Component\HttpFoundation\Response;
 class SurveySectionResolver
 {
     public const STYLE_NAME = 'surveyjs';
-    public const FIELD_SURVEY = 'survey-js';
+    public const FIELD_SURVEY = 'survey_js';
+    /** The field's name before the upgrade, still in pages published before it. */
+    public const FIELD_SURVEY_OLD = 'survey-js';
 
     public function __construct(
         private readonly PublicSectionAccessService $access,
@@ -52,7 +54,11 @@ class SurveySectionResolver
         $preview = in_array($params['preview'] ?? null, [true, 1, '1', 'true'], true);
         $scope = $this->access->forSection($pageId, $sectionId, self::STYLE_NAME, $preview);
 
-        if (trim($scope->field(self::FIELD_SURVEY)) !== $survey->getSurveyId()) {
+        $surveyKey = trim($scope->field(self::FIELD_SURVEY));
+        if ($surveyKey === '') {
+            $surveyKey = trim($scope->field(self::FIELD_SURVEY_OLD));
+        }
+        if ($surveyKey !== $survey->getSurveyId()) {
             throw new ServiceException('The section shows another survey.', Response::HTTP_BAD_REQUEST);
         }
 
@@ -81,11 +87,13 @@ class SurveySectionResolver
             restartOnRefresh: $flag('restart_on_refresh'),
             autoSaveIntervalSeconds: $number('auto_save_interval'),
             savePdf: $flag('save_pdf'),
-            closeModalAtEnd: $flag('close_modal_at_end'),
+            closeModalOnSave: $flag('close_modal_on_save'),
             redirectAtEnd: $text('redirect_at_end'),
             urlParams: $flag('url_params'),
             labelSurveyDone: $label('label_survey_done'),
             labelSurveyNotActive: $label('label_survey_not_active'),
+            updateBasedOn: self::column($text('update_based_on')),
+            autoSessionKey: $flag('auto_session_key'),
         );
     }
 
@@ -146,6 +154,20 @@ class SurveySectionResolver
         }
 
         return $params;
+    }
+
+    /**
+     * A usable `update_based_on` column name: a data column key, not one the
+     * plugin or the core writes itself; anything else is ignored.
+     */
+    private static function column(?string $name): ?string
+    {
+        if ($name === null || preg_match('/^[a-z][a-z0-9_]{0,99}$/', $name) !== 1
+            || in_array($name, [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS], true)) {
+            return null;
+        }
+
+        return $name;
     }
 
     private static function positiveInt(mixed $value): ?int

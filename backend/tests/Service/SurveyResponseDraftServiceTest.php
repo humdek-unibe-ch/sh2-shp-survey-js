@@ -28,7 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[AllowMockObjectsWithoutExpectations]
 final class SurveyResponseDraftServiceTest extends TestCase
 {
-    /** @var list<array{responseId: string, pageNo: int, finished: bool, existing: ?SurveyResponseRecord, language: ?string}> */
+    /** @var list<array{responseId: string, pageNo: int, finished: bool, existing: ?SurveyResponseRecord, language: ?string, rowKey: array{0: string, 1: string}|null}> */
     private array $saves = [];
 
     /** @var array<string, SurveyResponseRecord> */
@@ -36,6 +36,9 @@ final class SurveyResponseDraftServiceTest extends TestCase
 
     /** @var array<string, SurveyResponseRecord> unfinished rows keyed "user:<id>" or "guest:<key>" */
     private array $unfinished = [];
+
+    /** @var array<string, SurveyResponseRecord> unfinished rows keyed "<column>=<value>" */
+    private array $keyed = [];
 
     public function testFirstSaveStartsAnUnfinishedResponseWithPageAndLanguage(): void
     {
@@ -105,6 +108,26 @@ final class SurveyResponseDraftServiceTest extends TestCase
         self::assertSame('R_USER', $this->service()->resume($this->survey(), 7, 'guest-1', null)?->responseId);
     }
 
+    public function testAKeyedLinkContinuesTheRowHoldingTheKeyWhoeverStartedIt(): void
+    {
+        $this->keyed['extra_param_code=P-17'] = $this->record('R_KEYED', 'updated', null, 'guest-other', 2);
+
+        $this->service()->save($this->survey(), null, null, 'guest-1', ['q1' => 'a'], 3, null, ['extra_param_code', 'P-17']);
+
+        self::assertSame('R_KEYED', $this->saves[0]['responseId']);
+        self::assertSame(['extra_param_code', 'P-17'], $this->saves[0]['rowKey'], 'the key is stored in the row');
+        self::assertSame('R_KEYED', $this->service()->resume($this->survey(), null, 'guest-1', null, ['extra_param_code', 'P-17'])?->responseId);
+    }
+
+    public function testAKeyWithNoRowYetStartsANewRowHoldingIt(): void
+    {
+        $this->service()->save($this->survey(), 'R_NEW', null, 'guest-1', ['q1' => 'a'], 0, null, ['extra_param_sid', 'abc']);
+
+        self::assertNull($this->saves[0]['existing']);
+        self::assertSame('R_NEW', $this->saves[0]['responseId']);
+        self::assertNull($this->service()->resume($this->survey(), null, 'guest-1', null, ['extra_param_sid', 'other']), 'another key finds nothing');
+    }
+
     public function testDiscardDeletesTheRow(): void
     {
         $open = $this->record('R_OPEN', 'updated', null, 'guest-1');
@@ -135,9 +158,12 @@ final class SurveyResponseDraftServiceTest extends TestCase
                 ? ($this->unfinished['user:' . $userId] ?? null)
                 : ($this->unfinished['guest:' . $guestKey] ?? null),
         );
+        $store->method('findUnfinishedByCell')->willReturnCallback(
+            fn (Survey $s, string $column, string $value): ?SurveyResponseRecord => $this->keyed[$column . '=' . $value] ?? null,
+        );
         $store->method('save')->willReturnCallback(
-            function (Survey $s, SurveyVersion $v, array $cells, string $responseId, ?string $guestKey, ?string $language, int $pageNo, bool $finished, ?SurveyResponseRecord $existing = null): SurveyResponseRecord {
-                $this->saves[] = compact('responseId', 'pageNo', 'finished', 'existing', 'language');
+            function (Survey $s, SurveyVersion $v, array $cells, string $responseId, ?string $guestKey, ?string $language, int $pageNo, bool $finished, ?SurveyResponseRecord $existing = null, ?int $userId = null, ?array $rowKey = null): SurveyResponseRecord {
+                $this->saves[] = compact('responseId', 'pageNo', 'finished', 'existing', 'language', 'rowKey');
                 return $this->record($responseId, $finished ? 'finished' : 'updated', null, $guestKey, $pageNo);
             },
         );

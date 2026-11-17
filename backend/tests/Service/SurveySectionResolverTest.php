@@ -49,7 +49,7 @@ final class SurveySectionResolverTest extends TestCase
     public function testTheSettingsComeFromTheSectionNotFromTheRequest(): void
     {
         $this->fields = [
-            'survey-js' => [1 => 'SV_TEST'],
+            'survey_js' => [1 => 'SV_TEST'],
             'once_per_user' => [1 => '1'],
             'start_time' => [1 => '08:00'],
             'end_time' => [1 => '12:00'],
@@ -82,7 +82,7 @@ final class SurveySectionResolverTest extends TestCase
 
     public function testASignedInParticipantsOwnTimezoneWins(): void
     {
-        $this->fields = ['survey-js' => [1 => 'SV_TEST']];
+        $this->fields = ['survey_js' => [1 => 'SV_TEST']];
         $this->user = new User();
         $this->user->setTimezone((new Lookup())->setLookupCode('America/New_York'));
 
@@ -93,7 +93,7 @@ final class SurveySectionResolverTest extends TestCase
 
     public function testACallWithoutPageOrSectionIsRefused(): void
     {
-        $this->fields = ['survey-js' => [1 => 'SV_TEST']];
+        $this->fields = ['survey_js' => [1 => 'SV_TEST']];
 
         foreach ([[], ['page_id' => '7'], ['page_id' => '0', 'section_id' => '5'], ['page_id' => 'x', 'section_id' => '5']] as $query) {
             try {
@@ -105,9 +105,18 @@ final class SurveySectionResolverTest extends TestCase
         }
     }
 
+    public function testAPagePublishedBeforeTheRenameStillShowsItsSurvey(): void
+    {
+        $this->fields = ['survey-js' => [1 => 'SV_TEST']];
+
+        $settings = $this->resolver()->resolve(Request::create('/x', 'GET', ['page_id' => '7', 'section_id' => '5']), new Survey('Test', 'SV_TEST'));
+
+        self::assertTrue($settings->allowAnonymous, 'the section resolves through the old field name');
+    }
+
     public function testASectionShowingAnotherSurveyIsRefused(): void
     {
-        $this->fields = ['survey-js' => [1 => 'SV_OTHER']];
+        $this->fields = ['survey_js' => [1 => 'SV_OTHER']];
 
         $this->expectException(ServiceException::class);
         $this->expectExceptionMessage('another survey');
@@ -116,7 +125,7 @@ final class SurveySectionResolverTest extends TestCase
 
     public function testThePageSectionAndPreviewGoToTheCoreAccessCheck(): void
     {
-        $this->fields = ['survey-js' => [1 => 'SV_TEST']];
+        $this->fields = ['survey_js' => [1 => 'SV_TEST']];
         $access = $this->createMock(PublicSectionAccessService::class);
         $access->expects(self::once())->method('forSection')->with(7, 5, 'surveyjs', true)->willReturn($this->scope());
 

@@ -36,6 +36,9 @@ final class SurveyResponseServiceTest extends TestCase
 
     private ?SurveyResponseRecord $latestFinished = null;
 
+    /** @var array<string, SurveyResponseRecord> unfinished rows keyed "<column>=<value>" */
+    private array $keyed = [];
+
     public function testSubmitWithoutAPublishedVersionIsRefused(): void
     {
         $this->expectException(\DomainException::class);
@@ -87,6 +90,29 @@ final class SurveyResponseServiceTest extends TestCase
         self::assertNull($this->saves[0]['existing']);
         self::assertNotSame('R_OTHER', $this->saves[0]['responseId']);
         self::assertStringStartsWith('R_', $this->saves[0]['responseId']);
+    }
+
+    public function testAKeyedSubmitFinishesTheRowHoldingTheKey(): void
+    {
+        $open = $this->record('R_KEYED', 'updated', null, 'guest-other');
+        $this->keyed['extra_param_code=P-17'] = $open;
+
+        $this->service()->submit($this->survey(), ['q1' => 'yes'], null, 'guest-1', ['responseId' => 'R_MINE'], null, ['extra_param_code', 'P-17']);
+
+        self::assertSame($open, $this->saves[0]['existing']);
+        self::assertSame('R_KEYED', $this->saves[0]['responseId']);
+    }
+
+    public function testAFinishedRowIsNeverJoinedByItsKey(): void
+    {
+        // findUnfinishedByCell returns only unfinished rows: none here, the
+        // submitted one stays as it is and a new response starts.
+        $this->byResponseId['R_DONE'] = $this->record('R_DONE', 'finished', null, 'guest-1');
+
+        $this->service()->submit($this->survey(), ['q1' => 'again'], null, 'guest-1', ['responseId' => 'R_DONE'], null, ['extra_param_code', 'P-17']);
+
+        self::assertNull($this->saves[0]['existing']);
+        self::assertNotSame('R_DONE', $this->saves[0]['responseId']);
     }
 
     public function testOncePerUserRefusesASecondSubmit(): void
@@ -152,6 +178,9 @@ final class SurveyResponseServiceTest extends TestCase
         $store = $this->createMock(SurveyResponseStore::class);
         $store->method('findByResponseId')->willReturnCallback(fn (Survey $s, string $id): ?SurveyResponseRecord => $this->byResponseId[$id] ?? null);
         $store->method('findLatestFinished')->willReturnCallback(fn (): ?SurveyResponseRecord => $this->latestFinished);
+        $store->method('findUnfinishedByCell')->willReturnCallback(
+            fn (Survey $s, string $column, string $value): ?SurveyResponseRecord => $this->keyed[$column . '=' . $value] ?? null,
+        );
         $store->method('save')->willReturnCallback(
             function (Survey $s, SurveyVersion $v, array $cells, string $responseId, ?string $guestKey, ?string $language, int $pageNo, bool $finished, ?SurveyResponseRecord $existing = null, ?int $userId = null): SurveyResponseRecord {
                 $this->saves[] = compact('responseId', 'guestKey', 'finished', 'existing', 'userId', 'cells');

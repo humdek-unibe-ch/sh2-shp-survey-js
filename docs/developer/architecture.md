@@ -50,7 +50,7 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `EventSubscriber\SurveyJsUserDataCleanupSubscriber` | Deletes a removed user's uploaded files (core `UserDataCleanupEvent`). |
 | `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
 | `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
-| `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpxMap` styles to the admin catalog.       |
+| `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog.       |
 | `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
 | `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
 
@@ -67,7 +67,7 @@ The bundle depends on host contracts, not concrete host services:
 
 The npm package's entry point (`src/index.ts`) returns an `IPluginRegistration` from `definePlugin()`:
 
-- **Styles**: `surveyjs` (runtime), `gpxMap` (standalone Leaflet map).
+- **Styles**: `surveyjs` (runtime), `gpx-map` (route map from `sample_points`).
 - **Admin pages**: list, designer, responses, dashboard, settings — all under `/admin/plugins-host/sh2-shp-survey-js/*`.
 - **Menu items**: one entry under the host's `admin` section.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.

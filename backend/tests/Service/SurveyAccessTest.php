@@ -103,11 +103,11 @@ final class SurveyAccessTest extends TestCase
         });
         $subscriber = new SurveyJsSectionBindingSubscriber($surveys, $this->access());
 
-        $hidden = new SectionFieldBindingEvent('survey-js', 'select-survey-js', 'SV_HIDDEN', 7);
+        $hidden = new SectionFieldBindingEvent('survey_js', 'select-survey-js', 'SV_HIDDEN', 7);
         $subscriber->onBinding($hidden);
         self::assertNotNull($hidden->getDenial());
 
-        foreach ([['survey-js', 'SV_SEEN'], ['survey-js', 'SV_UNKNOWN'], ['title', 'SV_HIDDEN']] as [$field, $value]) {
+        foreach ([['survey_js', 'SV_SEEN'], ['survey_js', 'SV_UNKNOWN'], ['title', 'SV_HIDDEN']] as [$field, $value]) {
             $event = new SectionFieldBindingEvent($field, null, $value, 7);
             $subscriber->onBinding($event);
             self::assertNull($event->getDenial(), "$field=$value");

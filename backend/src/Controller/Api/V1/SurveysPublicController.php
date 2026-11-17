@@ -98,7 +98,8 @@ final class SurveysPublicController
         $visitorId = $this->visitor->ensureVisitorId($request, $response);
 
         $alreadyLocked = $this->checkLockoutStatus($survey, $userId, $visitorId, $settings);
-        $existingDraft = $this->draftService->resume($survey, $userId, $visitorId, null);
+        $rowKey = $settings->rowKey($this->readUrlParams($request));
+        $existingDraft = $this->draftService->resume($survey, $userId, $visitorId, null, $rowKey);
         $completed = $this->responseStore->findLatestFinished($survey, $userId, $visitorId);
 
         $payload = [
@@ -114,11 +115,13 @@ final class SurveysPublicController
                     'autoSaveIntervalSeconds' => $settings->autoSaveIntervalSeconds,
                     'timeoutMinutes' => $settings->timeoutMinutes,
                     'savePdf' => $settings->savePdf,
-                    'closeModalAtEnd' => $settings->closeModalAtEnd,
+                    'closeModalOnSave' => $settings->closeModalOnSave,
                     'redirectAtEnd' => $settings->redirectAtEnd,
                     'urlParams' => $settings->urlParams,
                     'oncePerUser' => $settings->oncePerUser,
                     'oncePerSchedule' => $settings->oncePerSchedule,
+                    'autoSessionKey' => $settings->autoSessionKey,
+                    'keyedRows' => $settings->autoSessionKey || $settings->updateBasedOn !== null,
                     'labelSurveyDone' => $settings->labelSurveyDone,
                     'labelSurveyNotActive' => $settings->labelSurveyNotActive,
                 ],
@@ -189,7 +192,7 @@ final class SurveysPublicController
         $language = is_string($progress['locale'] ?? null) && $progress['locale'] !== '' ? $progress['locale'] : null;
 
         try {
-            $record = $this->responseService->submit($survey, $answers, $userId, $visitorId, $enforce, $language);
+            $record = $this->responseService->submit($survey, $answers, $userId, $visitorId, $enforce, $language, $settings->rowKey($this->readUrlParams($request)));
         } catch (SurveySubmissionRejectedException $e) {
             $status = match ($e->reason) {
                 SurveySubmissionRejectedException::REASON_AUTH_REQUIRED => 401,
@@ -226,6 +229,7 @@ final class SurveysPublicController
             $userId,
             $visitorId,
             is_string($responseId) ? $responseId : null,
+            $settings->rowKey($this->readUrlParams($request)),
         );
         return $this->api->success($draft !== null ? $this->draftPayload($draft) : null, 200, $response);
     }
@@ -258,7 +262,7 @@ final class SurveysPublicController
         $language = is_string($payload['locale'] ?? null) && $payload['locale'] !== '' ? $payload['locale'] : null;
 
         try {
-            $draft = $this->draftService->save($survey, $responseId, $userId, $visitorId, $answers, $pageNo, $language);
+            $draft = $this->draftService->save($survey, $responseId, $userId, $visitorId, $answers, $pageNo, $language, $settings->rowKey($this->readUrlParams($request)));
         } catch (\DomainException $e) {
             return $this->api->failure($e->getMessage(), 403, null, $response);
         }
@@ -284,6 +288,7 @@ final class SurveysPublicController
             $userId,
             $visitorId,
             is_string($responseId) ? $responseId : null,
+            $settings->rowKey($this->readUrlParams($request)),
         );
         if ($draft !== null) {
             $this->draftService->discard($survey, $draft);

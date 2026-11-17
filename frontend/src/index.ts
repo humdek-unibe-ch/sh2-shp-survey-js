@@ -83,8 +83,18 @@ export const register = (api: IPluginApi): IPluginRegistration => {
                 component: SurveyJsStyle as never,
             },
             {
+                name: 'gpx-map',
+                description: 'Draws a route on a map from sample points.',
+                category: 'media',
+                canHaveChildren: false,
+                component: GpxMapStyle as never,
+            },
+            // The style's name before the upgrade: a page published before it
+            // still names the style `gpxMap` until it is published again. Only
+            // draws such pages; the style catalogue comes from the manifest.
+            {
                 name: 'gpxMap',
-                description: 'Standalone Leaflet-based map renderer for a GPX answer field.',
+                description: 'Old name of gpx-map, kept for pages published before the rename.',
                 category: 'media',
                 canHaveChildren: false,
                 component: GpxMapStyle as never,

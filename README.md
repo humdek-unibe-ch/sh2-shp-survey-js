@@ -5,7 +5,7 @@ SurveyJS v3 plugin for the SelfHelp CMS. Provides:
 - A Mantine-themed Survey Creator for admins (`survey-creator-react`).
 - A runtime SurveyJS style for the frontend (`survey-react-ui`).
 - Optional custom question types: GPX (Leaflet map preview), Video, and Tiptap rich-text.
-- A standalone `gpxMap` style for rendering a GPX answer field on its own page.
+- A standalone `gpx-map` style that draws a route from `sample_points` (a list of points or a GPX answer).
 - A readonly mobile renderer with an "Open on web" fallback for unsupported question types.
 - A response dashboard, response list, PDF export, and collaborative-edit notifications via Mercure.
 
@@ -72,7 +72,7 @@ sh2-shp-survey-js/
 ├── frontend/                        npm package (@humdek/sh2-shp-survey-js)
 │   ├── package.json
 │   ├── src/index.ts                 Exports `register` for the host PluginRuntime
-│   ├── src/styles/                  surveyjs runtime style + gpxMap standalone style
+│   ├── src/styles/                  surveyjs runtime style + gpx-map standalone style
 │   ├── src/admin/                   Creator, Responses, Dashboard, Settings pages
 │   ├── src/custom-questions/        rich-text / gpx / video custom question types
 │   └── src/theme/                   Mantine -> SurveyJS theme bridge

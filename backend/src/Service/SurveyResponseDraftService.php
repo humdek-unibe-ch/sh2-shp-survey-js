@@ -31,7 +31,11 @@ final class SurveyResponseDraftService
      * Saves the answers so far. A submitted response is never turned back to
      * unfinished: progress sent for it (an edit in progress) is ignored.
      *
+     * With a row key (`update_based_on`, `auto_session_key`) the response is
+     * the unfinished row holding that key, whoever started it.
+     *
      * @param array<string, mixed> $answers
+     * @param array{0: string, 1: string}|null $rowKey
      *
      * @throws \DomainException when the response id belongs to someone else
      */
@@ -43,10 +47,15 @@ final class SurveyResponseDraftService
         array $answers,
         int $pageNo,
         ?string $language,
+        ?array $rowKey = null,
     ): SurveyResponseRecord {
         $version = $survey->getCurrentVersion();
         if ($version === null) {
             throw new \DomainException(sprintf('Survey "%s" has no published version.', $survey->getSurveyId()));
+        }
+
+        if ($rowKey !== null) {
+            return $this->saveKeyed($survey, $version, $rowKey, $responseId, $userId, $guestKey, $answers, $pageNo, $language);
         }
 
         $existing = $responseId !== null && $responseId !== ''
@@ -79,10 +88,16 @@ final class SurveyResponseDraftService
     /**
      * The participant's unfinished response: the named one if it is theirs,
      * else their latest. A signed-in participant also gets back what they
-     * started as a guest on this browser.
+     * started as a guest on this browser. With a row key it is the unfinished
+     * row holding that key, and only that one.
+     *
+     * @param array{0: string, 1: string}|null $rowKey
      */
-    public function resume(Survey $survey, ?int $userId, ?string $guestKey, ?string $responseId): ?SurveyResponseRecord
+    public function resume(Survey $survey, ?int $userId, ?string $guestKey, ?string $responseId, ?array $rowKey = null): ?SurveyResponseRecord
     {
+        if ($rowKey !== null) {
+            return $this->responses->findUnfinishedByCell($survey, $rowKey[0], $rowKey[1]);
+        }
         if ($responseId !== null && $responseId !== '') {
             $record = $this->responses->findByResponseId($survey, $responseId);
 
@@ -95,6 +110,43 @@ final class SurveyResponseDraftService
         }
 
         return $record;
+    }
+
+    /**
+     * Progress of the row holding the row key: knowing the key (it is in the
+     * link) makes the participant its owner.
+     *
+     * @param array{0: string, 1: string} $rowKey
+     * @param array<string, mixed> $answers
+     */
+    private function saveKeyed(
+        Survey $survey,
+        \Humdek\SurveyJsBundle\Entity\SurveyVersion $version,
+        array $rowKey,
+        ?string $responseId,
+        ?int $userId,
+        ?string $guestKey,
+        array $answers,
+        int $pageNo,
+        ?string $language,
+    ): SurveyResponseRecord {
+        $existing = $this->responses->findUnfinishedByCell($survey, $rowKey[0], $rowKey[1]);
+
+        return $this->responses->save(
+            $survey,
+            $version,
+            $this->normalizer->normalize($version, $answers),
+            $existing->responseId ?? ($responseId !== null && $responseId !== '' && $this->responses->findByResponseId($survey, $responseId) === null
+                ? $responseId
+                : $this->submissions->generateResponseId($survey)),
+            SurveyResponseStore::guestKeyToStore($userId, $guestKey, $existing),
+            $language ?? $existing?->language,
+            max($pageNo, $existing->pageNo ?? 0),
+            false,
+            $existing,
+            $userId,
+            $rowKey,
+        );
     }
 
     /** Throws the unfinished response away (core soft delete, trigger `deleted`). */

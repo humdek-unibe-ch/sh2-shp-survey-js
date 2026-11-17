@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5 and 6. Web only; mobile still ships SurveyJS 2.
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6 and 7. Web only; mobile still ships SurveyJS 2 and the old field names (wave 9).
 
 **Needs** a core with the section access check and section variables (H4, H1),
 plugin resource types and the section field check (H6, H7), and a frontend
@@ -17,6 +17,30 @@ that passes `page` to plugin styles (`PluginStyleHost`); set the
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **Fields and styles come from the manifest (wave 7, rule 7.8).** `plugin.json`
+  declares the style group, the `select-survey-js` field type, the plugin's
+  fields and each style's field list; the host installer writes them.
+- **Renamed in place:** field `survey-js` is now `survey_js`, style `gpxMap` is
+  now `gpx-map` (`renamedFrom`, same rows, section values kept). Pages published
+  before the update still name the old ones in their stored version until they
+  are published again, so the backend and the runtime read `survey-js` when
+  `survey_js` is empty, and `gpxMap` still draws the map. **Mobile apps built
+  with the old plugin read `survey-js`: release mobile (wave 9) with or before
+  this.**
+- **`close_modal_on_save`** (the core form's field) replaces
+  `close_modal_at_end`, which did nothing: after a submit the popup the page is
+  shown in closes.
+- **`gpx-map` draws `sample_points`:** a list of points (`{lat, lon}`,
+  `{lat, lng}` or `[lat, lon]`) or a whole GPX answer, possibly through a
+  variable. It read a `gpx_url` field that never existed.
+- **New `update_based_on` and `auto_session_key`, as in SelfHelp 1.** With
+  `update_based_on` naming a column (usually `extra_param_<name>` from the
+  link), the survey continues the unfinished row holding the link's value;
+  without the value it starts empty. `auto_session_key` gives each guest on a
+  shared invite link a private `?sid=`, so guests never resume each other and
+  the link continues the response on another device. The key is stored in the
+  row; a finished row is never reopened; the browser's local draft is not used
+  in these modes.
 - **Standard envelope and request schemas (wave 6c).** Every reply of the
   plugin's API is the SelfHelp envelope (`status`, `message`, `error`,
   `logged_in`, `meta`, `data`); a refusal's reason is `data.reason`. Every
@@ -111,6 +135,9 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   (in design mode) before it is compared with the Creator's JSON.
 
 ### Removed
+- **Fields `survey-js-theme`, `dynamic_replacement`, `close_modal_at_end`
+  (wave 7)** are no longer linked to the style. The installer leaves the field
+  rows until the plugin is purged.
 - **Old permissions (wave 6b):** `surveyjs.surveys.manage`, `view-responses`,
   `export-pdf`, `delete-responses`, `export-csv`, `export-xlsx`, `export-json`
   and `upload-files` (unused). The installer removes them on update; roles

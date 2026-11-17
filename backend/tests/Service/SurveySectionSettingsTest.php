@@ -60,6 +60,28 @@ final class SurveySectionSettingsTest extends TestCase
         }
     }
 
+    public function testUpdateBasedOnNamesTheRowByTheLinksValue(): void
+    {
+        $settings = $this->settings(null, null, 'UTC', updateBasedOn: 'extra_param_code');
+
+        self::assertSame(['extra_param_code', 'P-17'], $settings->rowKey(['extra_param_code' => 'P-17']));
+        self::assertNull($settings->rowKey([]), 'no key in the link: the survey starts empty');
+        self::assertNull($settings->rowKey(['extra_param_code' => '  ']));
+    }
+
+    public function testAColumnNamedWithoutThePrefixReadsTheUrlParameterOfThatName(): void
+    {
+        self::assertSame(['code', 'P-17'], $this->settings(null, null, 'UTC', updateBasedOn: 'code')->rowKey(['extra_param_code' => 'P-17']));
+    }
+
+    public function testTheSessionKeyOfASharedLinkNamesTheRow(): void
+    {
+        $settings = $this->settings(null, null, 'UTC', updateBasedOn: 'extra_param_code', autoSessionKey: true);
+
+        self::assertSame(['extra_param_sid', 'abc'], $settings->rowKey(['extra_param_sid' => 'abc', 'extra_param_code' => 'P-17']), 'the session key wins');
+        self::assertNull($this->settings(null, null, 'UTC')->rowKey(['extra_param_sid' => 'abc']), 'off by default');
+    }
+
     /**
      * @param array{0: \DateTimeImmutable, 1: \DateTimeImmutable}|null $window
      * @return list<string>
@@ -70,7 +92,7 @@ final class SurveySectionSettingsTest extends TestCase
         return [$window[0]->format(DATE_ATOM), $window[1]->format(DATE_ATOM)];
     }
 
-    private function settings(?string $start, ?string $end, string $timezone): SurveySectionSettings
+    private function settings(?string $start, ?string $end, string $timezone, ?string $updateBasedOn = null, bool $autoSessionKey = false): SurveySectionSettings
     {
         // The window needs no section content; works with the host class and its stub.
         $scope = (new \ReflectionClass(PublicSectionScope::class))->newInstanceWithoutConstructor();
@@ -89,11 +111,13 @@ final class SurveySectionSettingsTest extends TestCase
             restartOnRefresh: false,
             autoSaveIntervalSeconds: 0,
             savePdf: false,
-            closeModalAtEnd: false,
+            closeModalOnSave: false,
             redirectAtEnd: null,
             urlParams: false,
             labelSurveyDone: null,
             labelSurveyNotActive: null,
+            updateBasedOn: $updateBasedOn,
+            autoSessionKey: $autoSessionKey,
         );
     }
 }

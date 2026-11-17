@@ -3,19 +3,17 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * `gpxMap` standalone style.
+ * `gpx-map` standalone style: draws a route on a Leaflet map from the
+ * section's `sample_points` ({@link parseSamplePoints}): a list of points,
+ * a whole GPX answer, or a variable resolving to either. The tile hosts are
+ * declared in the manifest's `security.cspRules.img-src`.
  *
- * Renders a Leaflet map preview of a GPX file referenced by the
- * section field map. The map tile hosts are declared in the
- * manifest's `security.cspRules.img-src` so the host's response CSP
- * allows OpenStreetMap / Carto tiles.
- *
- * Leaflet itself ships as a peer-of-a-peer-of-a-peer of the SurveyJS
- * runtime; we resolve it via dynamic import so a page without a
- * `gpxMap` section pays nothing.
+ * Leaflet is imported on demand, so a page without a `gpx-map` section pays
+ * nothing.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { parseSamplePoints } from './samplePoints';
 
 type TPluginStyleSection = {
     id: number;
@@ -34,17 +32,18 @@ export interface IGpxMapStyleProps {
 
 export function GpxMapStyle({ style, section, styleProps, cssClass }: IGpxMapStyleProps): React.ReactElement {
     const runtimeSection = section ?? style;
-    const gpxUrl = extractGpxUrl(runtimeSection);
+    const rawPoints = fieldValue(runtimeSection, 'sample_points');
+    const points = useMemo(() => parseSamplePoints(rawPoints), [rawPoints]);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        if (!gpxUrl) return undefined;
+        if (points.length === 0) return undefined;
         let activeMap: { remove: () => void; fitBounds: (bounds: unknown) => unknown } | null = null;
         let cancelled = false;
 
         const init = async (): Promise<void> => {
             const L = await import('leaflet').catch((err: Error) => {
-                console.warn('[gpxMap] leaflet not available', err);
+                console.warn('[gpx-map] leaflet not available', err);
                 return null;
             });
             if (!L || cancelled || !containerRef.current) return;
@@ -60,18 +59,8 @@ export function GpxMapStyle({ style, section, styleProps, cssClass }: IGpxMapSty
                     attribution: '© OpenStreetMap contributors',
                 })
                 .addTo(map as never);
-            try {
-                const gpxText = await fetch(gpxUrl).then((r) => r.text());
-                const points = parseGpx(gpxText);
-                if (points.length > 0) {
-                    const polyline = leaflet
-                        .polyline(points, { color: '#228be6' })
-                        .addTo(map as never);
-                    map.fitBounds(polyline.getBounds());
-                }
-            } catch (err) {
-                console.warn('[gpxMap] failed to load GPX', err);
-            }
+            const polyline = leaflet.polyline(points, { color: '#228be6' }).addTo(map as never);
+            map.fitBounds(polyline.getBounds());
         };
         void init();
 
@@ -79,12 +68,12 @@ export function GpxMapStyle({ style, section, styleProps, cssClass }: IGpxMapSty
             cancelled = true;
             if (activeMap) activeMap.remove();
         };
-    }, [gpxUrl]);
+    }, [points]);
 
-    if (!gpxUrl) {
+    if (points.length === 0) {
         return (
             <div role="alert" style={{ padding: 12, border: '1px solid #fab005', borderRadius: 4 }}>
-                No GPX URL configured on this section.
+                No route to show: the section's sample points are empty or not readable.
             </div>
         );
     }
@@ -99,34 +88,11 @@ export function GpxMapStyle({ style, section, styleProps, cssClass }: IGpxMapSty
     );
 }
 
-function extractGpxUrl(section?: TPluginStyleSection): string | null {
-    const fields = { ...(section ?? {}), ...(section?.fields ?? {}) };
-    for (const key of ['gpx_url', 'gpxUrl']) {
-        const value = fields[key];
-        if (typeof value === 'string' && value.trim() !== '') return value.trim();
-        if (
-            value &&
-            typeof value === 'object' &&
-            'content' in (value as Record<string, unknown>) &&
-            typeof (value as { content?: unknown }).content === 'string'
-        ) {
-            return ((value as { content: string }).content ?? '').trim() || null;
-        }
+/** A section field's stored value (`{content}` or plain), or null. */
+function fieldValue(section: TPluginStyleSection | undefined, key: string): unknown {
+    const value = section?.fields?.[key] ?? section?.[key];
+    if (value && typeof value === 'object' && 'content' in (value as Record<string, unknown>)) {
+        return (value as { content?: unknown }).content ?? null;
     }
-    return null;
-}
-
-function parseGpx(xml: string): Array<[number, number]> {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, 'application/xml');
-    const points: Array<[number, number]> = [];
-    const nodes = doc.getElementsByTagName('trkpt');
-    for (let i = 0; i < nodes.length; i++) {
-        const lat = Number(nodes[i]?.getAttribute('lat'));
-        const lon = Number(nodes[i]?.getAttribute('lon'));
-        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-            points.push([lat, lon]);
-        }
-    }
-    return points;
+    return value ?? null;
 }

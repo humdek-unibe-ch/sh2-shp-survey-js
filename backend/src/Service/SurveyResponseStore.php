@@ -91,6 +91,7 @@ class SurveyResponseStore
      * always ends as `finished`. Updating names the row by its record id.
      *
      * @param list<array{name: string, type: string, value: mixed, title?: string|null}> $cells normalized answers
+     * @param array{0: string, 1: string}|null $rowKey column and value that name the row (stored as a cell)
      */
     public function save(
         Survey $survey,
@@ -103,6 +104,7 @@ class SurveyResponseStore
         bool $finished,
         ?SurveyResponseRecord $existing = null,
         ?int $userId = null,
+        ?array $rowKey = null,
     ): SurveyResponseRecord {
         $tableName = self::tableNameFor($survey);
         $this->ensureDataTable($tableName, $survey);
@@ -122,6 +124,11 @@ class SurveyResponseStore
             if (is_string($title) && $title !== '') {
                 $labels[$cell['name']] = $title;
             }
+        }
+        // The row key (`update_based_on`, `auto_session_key`) is a cell of the
+        // row, so the next visit with the same link finds it.
+        if ($rowKey !== null && !in_array($rowKey[0], [...self::RESERVED_COLUMNS, ...self::SYSTEM_COLUMNS], true)) {
+            $data[$rowKey[0]] = $rowKey[1];
         }
         $data += [
             self::COL_RESPONSE_ID => $responseId,
@@ -183,6 +190,24 @@ class SurveyResponseStore
             $owner,
             new DataFilter('triggerType', DataFilter::OP_IN, self::UNFINISHED_TRIGGERS),
         ]);
+    }
+
+    /**
+     * The unfinished response whose cell `$column` holds `$value` (the row key
+     * of `update_based_on` / `auto_session_key`), whoever owns it: knowing the
+     * key is what makes the participant its owner. A finished row is never
+     * returned, so a completed response is never reopened.
+     */
+    public function findUnfinishedByCell(Survey $survey, string $column, string $value): ?SurveyResponseRecord
+    {
+        return $this->first(
+            $survey,
+            [
+                new DataFilter($column, DataFilter::OP_EQ, $value),
+                new DataFilter('triggerType', DataFilter::OP_IN, self::UNFINISHED_TRIGGERS),
+            ],
+            [$column => 'text'],
+        );
     }
 
     /**
@@ -271,7 +296,10 @@ class SurveyResponseStore
     /**
      * @param list<DataFilter> $filters
      */
-    private function first(Survey $survey, array $filters): ?SurveyResponseRecord
+    /**
+     * @param array<string, string> $extraColumns columns that may not exist yet, read as empty
+     */
+    private function first(Survey $survey, array $filters, array $extraColumns = []): ?SurveyResponseRecord
     {
         $table = $this->table($survey);
         if ($table === null) {
@@ -282,7 +310,7 @@ class SurveyResponseStore
             filter: new DataFilterGroup(DataFilterGroup::MODE_AND, $filters),
             sorts: [new DataSort('record_id', DataSort::DESC)],
             limit: 1,
-            optionalColumns: $this->optionalColumns(),
+            optionalColumns: [...$this->optionalColumns(), ...$extraColumns],
         ));
         $row = $result->rows[0] ?? null;
 

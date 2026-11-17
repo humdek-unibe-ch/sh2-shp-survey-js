@@ -22,6 +22,7 @@ SPDX-License-Identifier: MPL-2.0
 
 import { csrfHeaders } from './csrf';
 import { guestKeyHeaders } from './guestKey';
+import { extractUrlParams } from '../runtime/urlParams';
 
 /** The section a call is made for, as the host tells the plugin style. */
 export interface ISurveySectionRef {
@@ -38,11 +39,15 @@ export interface IRuntimeConfig {
     autoSaveIntervalSeconds: number;
     timeoutMinutes: number;
     savePdf: boolean;
-    closeModalAtEnd: boolean;
+    closeModalOnSave: boolean;
     redirectAtEnd: string | null;
     urlParams: boolean;
     oncePerUser: boolean;
     oncePerSchedule: boolean;
+    /** Each guest gets a private `sid` in the link (`auto_session_key`). */
+    autoSessionKey: boolean;
+    /** The response row is named by a key in the link (`update_based_on` or `auto_session_key`). */
+    keyedRows: boolean;
     labelSurveyDone: string | null;
     labelSurveyNotActive: string | null;
 }
@@ -131,6 +136,11 @@ function sectionUrl(path: string, ref: ISurveySectionRef, extra: Record<string, 
     for (const [name, value] of Object.entries(ref.routeParams)) {
         url.searchParams.set(`route[${name}]`, value);
     }
+    // The page's URL parameters, for `url_params` and the row key of
+    // `update_based_on` / `auto_session_key`; the server decides what it uses.
+    for (const [name, value] of Object.entries(extractUrlParams())) {
+        url.searchParams.set(`extraParams[${name}]`, value);
+    }
     for (const [name, value] of Object.entries(extra)) {
         url.searchParams.set(name, value);
     }
@@ -161,16 +171,8 @@ async function ensureOk<T>(res: Response): Promise<T> {
     return (await res.json()) as T;
 }
 
-export async function fetchPublishedSurvey(
-    key: string,
-    ref: ISurveySectionRef,
-    urlParams?: Record<string, string | number | boolean>,
-): Promise<IPublishedSurvey> {
-    const extra: Record<string, string> = {};
-    for (const [k, v] of Object.entries(urlParams ?? {})) {
-        extra[`extraParams[${k}]`] = String(v);
-    }
-    const res = await fetch(sectionUrl(surveyPath(key), ref, extra), {
+export async function fetchPublishedSurvey(key: string, ref: ISurveySectionRef): Promise<IPublishedSurvey> {
+    const res = await fetch(sectionUrl(surveyPath(key), ref), {
         credentials: 'include',
         headers: { Accept: 'application/json', ...guestKeyHeaders() },
     });

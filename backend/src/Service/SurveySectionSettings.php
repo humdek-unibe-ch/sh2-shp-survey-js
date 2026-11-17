@@ -34,12 +34,42 @@ final class SurveySectionSettings
         public readonly bool $restartOnRefresh,
         public readonly int $autoSaveIntervalSeconds,
         public readonly bool $savePdf,
-        public readonly bool $closeModalAtEnd,
+        public readonly bool $closeModalOnSave,
         public readonly ?string $redirectAtEnd,
         public readonly bool $urlParams,
         public readonly ?string $labelSurveyDone,
         public readonly ?string $labelSurveyNotActive,
+        public readonly ?string $updateBasedOn = null,
+        public readonly bool $autoSessionKey = false,
     ) {
+    }
+
+    /** The URL parameter `auto_session_key` puts in the link. */
+    public const SESSION_KEY_COLUMN = 'extra_param_sid';
+
+    /**
+     * The column and value that name this participant's response row, or
+     * null: with `auto_session_key` the `sid` of the link, else the URL value
+     * of the `update_based_on` column (`extra_param_<name>`, or `<name>`).
+     * Without the value in the URL there is no key: the survey starts empty,
+     * so nobody is handed another participant's row (SelfHelp 1 rule).
+     *
+     * @param array<string, scalar> $urlParams URL parameters as `extra_param_<name>`
+     * @return array{0: string, 1: string}|null
+     */
+    public function rowKey(array $urlParams): ?array
+    {
+        if ($this->autoSessionKey) {
+            $column = self::SESSION_KEY_COLUMN;
+        } elseif ($this->updateBasedOn !== null) {
+            $column = $this->updateBasedOn;
+        } else {
+            return null;
+        }
+        $value = $urlParams[$column] ?? $urlParams['extra_param_' . $column] ?? null;
+        $value = is_scalar($value) ? trim((string) $value) : '';
+
+        return $value === '' ? null : [$column, $value];
     }
 
     /**

@@ -94,7 +94,7 @@ Entry `surveyjs_survey` in the core lookup `resourceTypes` (data access, H6).
 
 ## Styles and admin pages
 
-- Styles: `surveyjs` (embeds a published survey) and `gpxMap` (standalone GPX map renderer). Both are `frontendStyles` and cannot have children; grouped under the plugin's `Plugin: SurveyJS` style group.
+- Styles: `surveyjs` (embeds a published survey) and `gpx-map` (draws a route from `sample_points`); declared in the manifest with their fields (`styleGroups`, `fieldTypes`, `fields`, `styles[].fields`), which the host installer writes (rule 7.8). Both are `frontendStyles` and cannot have children; grouped under the plugin's `Plugin: SurveyJS` style group.
 - Admin page: slug `surveys`, label `SurveyJS`, permission `surveyjs.survey.update`, icon `tabler-clipboard-list`.
 
 ## API routes

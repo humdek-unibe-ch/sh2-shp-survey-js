@@ -35,7 +35,7 @@ final class SurveyJsSectionBindingSubscriber implements EventSubscriberInterface
 
     public function onBinding(SectionFieldBindingEvent $event): void
     {
-        if ($event->fieldName !== SurveySectionResolver::FIELD_SURVEY) {
+        if (!in_array($event->fieldName, [SurveySectionResolver::FIELD_SURVEY, SurveySectionResolver::FIELD_SURVEY_OLD], true)) {
             return;
         }
         $survey = $this->surveys->findOneBySurveyId($event->value);
