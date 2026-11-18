@@ -39,7 +39,7 @@ final class SurveyJsRealtimeTopicSubscriber implements EventSubscriberInterface
             pluginId: self::PLUGIN_ID,
             key: 'surveys/{surveyId}/responses',
             description: 'Realtime stream of new survey responses. New entries arrive without polling.',
-            requiredPermission: 'surveyjs.survey.update',
+            requiredPermission: 'surveyjs.survey.read',
         );
     }
 }

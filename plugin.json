@@ -91,6 +91,13 @@
     },
     "permissions": [
         {
+            "key": "surveyjs.survey.read",
+            "description": "Open the SurveyJS admin screens and see the surveys the role has the view grant on. Their answers also need the grant on the survey's data table.",
+            "defaultRoles": [
+                "admin"
+            ]
+        },
+        {
             "key": "surveyjs.survey.create",
             "description": "Create surveys. The creator's roles that hold this permission get all four rights on the new survey.",
             "defaultRoles": [
@@ -148,7 +155,7 @@
         {
             "key": "surveys/{surveyId}/responses",
             "description": "Realtime stream of new survey responses. New entries arrive without polling.",
-            "requiredPermission": "surveyjs.survey.update"
+            "requiredPermission": "surveyjs.survey.read"
         },
         {
             "key": "surveys/{surveyId}/editing",
@@ -446,7 +453,7 @@
         {
             "slug": "surveys",
             "label": "SurveyJS",
-            "permission": "surveyjs.survey.update",
+            "permission": "surveyjs.survey.read",
             "icon": "tabler-clipboard-list"
         }
     ],
@@ -459,6 +466,7 @@
                 "GET"
             ],
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -485,6 +493,7 @@
                 "id": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -550,6 +559,7 @@
                 "id": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -581,6 +591,7 @@
                 "versionId": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -615,6 +626,7 @@
                 "id": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -632,6 +644,7 @@
                 "id": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -649,6 +662,7 @@
                 "id": "\\d+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -667,6 +681,7 @@
                 "rid": "[A-Za-z0-9_-]+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -685,6 +700,7 @@
                 "rid": "[A-Za-z0-9_-]+"
             },
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -717,6 +733,7 @@
                 "GET"
             ],
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",
@@ -731,6 +748,7 @@
                 "GET"
             ],
             "permissions": [
+                "surveyjs.survey.read",
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",

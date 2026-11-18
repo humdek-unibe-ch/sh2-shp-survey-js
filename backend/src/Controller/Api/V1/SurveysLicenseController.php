@@ -16,8 +16,8 @@ use Humdek\SurveyJsBundle\Service\SurveyJsApi;
  * Admin-only endpoint that returns the SurveyJS license key from the
  * configured environment so the admin Survey Designer can apply it.
  *
- * The host's `ApiSecurityListener` ensures only callers with
- * `surveyjs.survey.update` reach this controller; we additionally
+ * The host's `ApiSecurityListener` ensures only callers with a
+ * `surveyjs.survey.*` permission reach this controller; we additionally
  * scrub the response when the key is empty to avoid handing out an
  * empty token that would mislead admins.
  */

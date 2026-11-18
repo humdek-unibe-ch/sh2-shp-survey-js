@@ -834,12 +834,12 @@ function ContextMenuPortal({ position, onClose, children }: IContextMenuPortalPr
 }
 
 function PluginOperationsPanel(): React.ReactElement {
-    const [license, setLicense] = useState<{ configured: boolean } | null>(null);
+    const [license, setLicense] = useState<{ configured: boolean } | 'unavailable' | null>(null);
 
     useEffect(() => {
         fetchLicenseKey()
             .then((data) => setLicense({ configured: data.configured }))
-            .catch(() => setLicense({ configured: false }));
+            .catch(() => setLicense('unavailable'));
     }, []);
 
     return (
@@ -852,7 +852,7 @@ function PluginOperationsPanel(): React.ReactElement {
                             These settings affect the SurveyJS plugin as a whole, not one survey.
                         </Text>
                     </Stack>
-                    {license === null ? (
+                    {license === 'unavailable' ? null : license === null ? (
                         <Loader size="xs" />
                     ) : license.configured ? (
                         <Badge color="green" variant="light">License configured</Badge>
@@ -861,7 +861,7 @@ function PluginOperationsPanel(): React.ReactElement {
                     )}
                 </Group>
 
-                {license !== null && !license.configured && (
+                {license !== null && license !== 'unavailable' && !license.configured && (
                     <Alert color="yellow" title="SurveyJS license">
                         Set <Code>SURVEYJS_LICENSE_KEY</Code> in the backend environment to remove the
                         SurveyJS watermark from the Designer and runtime forms.

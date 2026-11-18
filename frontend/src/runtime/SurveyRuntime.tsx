@@ -60,7 +60,7 @@ import {
 } from './surveyMeta';
 import { LocalDraftStore } from './localDraftStore';
 import { CountdownTimer, type ITimerHandle } from './countdownTimer';
-import { renderMarkdown } from './markdown';
+import { stateMessageHtml } from './stateMessage';
 import { registerCustomQuestionRuntime } from '../custom-questions/runtimeBridge';
 import { registerCustomQuestions } from '../custom-questions/register';
 import { getPluginApi } from './pluginApi';
@@ -491,10 +491,7 @@ export function SurveyRuntime({
     // These lifecycle states intentionally render before the generic
     // loading guard because they do not build a SurveyJS model at all.
     if (lifecycle.kind === 'not-active') {
-        return renderInfoBlock(
-            lifecycle.label,
-            'gray',
-        );
+        return renderInfoBlock(lifecycle.label, 'gray', 'This survey is not open right now.');
     }
 
     if (lifecycle.kind === 'login-required') {
@@ -506,17 +503,11 @@ export function SurveyRuntime({
     }
 
     if (lifecycle.kind === 'locked') {
-        return renderInfoBlock(
-            lifecycle.label,
-            'blue',
-        );
+        return renderInfoBlock(lifecycle.label, 'blue', 'You have already completed this survey.');
     }
 
     if (lifecycle.kind === 'timed-out') {
-        return renderInfoBlock(
-            lifecycle.label,
-            'orange',
-        );
+        return renderInfoBlock(lifecycle.label, 'orange', 'The time for this survey is over.');
     }
 
     if (lifecycle.kind === 'loading' || !bridge || !published || !model) {
@@ -577,47 +568,16 @@ function StateFrame({ children }: { children: React.ReactNode }): React.ReactEle
     return <Box py="md">{children}</Box>;
 }
 
-function renderInfoBlock(label: string | null, color: string): React.ReactElement | null {
-    const html = renderStatusLabel(label);
-    if (html === null) {
-        return null;
-    }
+function renderInfoBlock(label: string | null, color: string, fallback: string): React.ReactElement {
     return (
         <StateFrame>
             <Alert color={color}>
-                <Box dangerouslySetInnerHTML={{ __html: html }} />
+                <Box dangerouslySetInnerHTML={{ __html: stateMessageHtml(label, fallback) }} />
             </Alert>
         </StateFrame>
     );
 }
 
-function renderStatusLabel(label: string | null): string | null {
-    const value = label?.trim() ?? '';
-    if (value === '') {
-        return null;
-    }
-
-    // CMS translation fields often arrive as already-rendered HTML
-    // (`<p>...</p>` from the editor). Preserve that as-is instead of
-    // escaping it through the markdown fallback path. Empty editor
-    // output like `<p></p>` or `<p>&nbsp;</p>` counts as "not set".
-    if (value.startsWith('<') && value.endsWith('>')) {
-        return hasMeaningfulHtmlContent(value) ? value : null;
-    }
-
-    const rendered = renderMarkdown(value);
-    return hasMeaningfulHtmlContent(rendered) ? rendered : null;
-}
-
-function hasMeaningfulHtmlContent(value: string): boolean {
-    const text = value
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .replace(/<br\s*\/?>/gi, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/gi, ' ')
-        .trim();
-    return text !== '';
-}
 
 interface IHydrateArgs {
     published: IPublishedSurvey;

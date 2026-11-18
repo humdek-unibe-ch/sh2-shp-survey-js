@@ -40,6 +40,7 @@ All default to the `admin` role:
 
 | Key | Allows |
 | --- | --- |
+| `surveyjs.survey.read` | Open the SurveyJS admin screens (page and menu entry), like `admin.page.read` for pages. |
 | `surveyjs.survey.create` | Create surveys. The creator's roles that hold it get all four rights on the new survey. |
 | `surveyjs.survey.update` | Edit the surveys the role has the update grant on. |
 | `surveyjs.survey.publish` | Publish or restore a version of a survey the role may update. |
@@ -72,7 +73,7 @@ Submissions land in the host `data_tables` / `data_rows` / `data_cols` / `data_c
 
 | Topic | Required permission |
 | --- | --- |
-| `surveys/{surveyId}/responses` | `surveyjs.survey.update` |
+| `surveys/{surveyId}/responses` | `surveyjs.survey.read` |
 | `surveys/{surveyId}/editing` | `surveyjs.survey.update` |
 
 ## Feature flags
@@ -95,7 +96,7 @@ Entry `surveyjs_survey` in the core lookup `resourceTypes` (data access, H6).
 ## Styles and admin pages
 
 - Styles: `surveyjs` (embeds a published survey) and `gpx-map` (draws a route from `sample_points`); declared in the manifest with their fields (`styleGroups`, `fieldTypes`, `fields`, `styles[].fields`), which the host installer writes (rule 7.8). Both are `frontendStyles` and cannot have children; grouped under the plugin's `Plugin: SurveyJS` style group.
-- Admin page: slug `surveys`, label `SurveyJS`, permission `surveyjs.survey.update`, icon `tabler-clipboard-list`.
+- Admin page: slug `surveys`, label `SurveyJS`, permission `surveyjs.survey.read`, icon `tabler-clipboard-list`. The host opens the page only for users holding it.
 
 ## API routes
 
@@ -103,7 +104,8 @@ Admin routes are mounted under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/...`
 
 | Group | Base path | Permission |
 | --- | --- | --- |
-| List, read, versions, presence | `/admin/.../surveys[/{id}]`, `/versions` (GET) | any `surveyjs.survey.*` + read grant |
+| List, read, versions | `/admin/.../surveys[/{id}]`, `/versions` (GET) | any `surveyjs.survey.*` + read grant |
+| Presence | `/admin/.../surveys/{id}/presence` (POST) | `create`, `update`, `publish` or `delete` |
 | Create | `/admin/.../surveys` (POST) | `surveyjs.survey.create` |
 | Edit, draft | `/admin/.../surveys/{id}` (PUT), `/draft` | `surveyjs.survey.update` + update grant |
 | Publish, restore | `/admin/.../surveys/{id}/versions` (POST), `/restore` | `surveyjs.survey.publish` + update grant |

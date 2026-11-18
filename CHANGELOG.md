@@ -17,6 +17,11 @@ that passes `page` to plugin styles (`PluginStyleHost`); set the
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **New permission `surveyjs.survey.read`** opens the SurveyJS admin screens,
+  like `admin.page.read` for pages. The admin page, its menu entry, the
+  read-only routes and the response stream use it; changing a survey still
+  needs `create`, `update`, `publish` or `delete`. Existing survey roles need
+  `read` added, or they no longer open the screens.
 - **Fields and styles come from the manifest (wave 7, rule 7.8).** `plugin.json`
   declares the style group, the `select-survey-js` field type, the plugin's
   fields and each style's field list; the host installer writes them.
@@ -118,6 +123,11 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   not produce duplicate HTML ids.
 
 ### Fixed
+- **Empty state labels.** When a section leaves `label_survey_not_active`,
+  `label_survey_done` or the timeout label empty, the participant now sees a
+  short default text instead of an empty spot.
+- **Licence badge.** The admin page no longer says "License not configured"
+  when the licence could not be read (for example without permission).
 - The browser could switch off a survey's limits: the backend believed the
   limits the client sent and checked no page or section (problem 1, F109).
 - The plugin's backend tests failed when run without the host (the plugin CI):

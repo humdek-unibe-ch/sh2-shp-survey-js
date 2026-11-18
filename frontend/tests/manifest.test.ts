@@ -34,6 +34,9 @@ const manifest = JSON.parse(
     mobile: { version: string };
     security: { trustLevel: string; signing: { required: boolean } };
     dataAccess: { ownedTables: string[]; ownedDataTablePrefix: string };
+    permissions: Array<{ key: string }>;
+    adminPages: Array<{ slug: string; permission: string }>;
+    apiRoutes: Array<{ name: string; methods: string[]; permission?: string; permissions?: string[] }>;
 };
 
 /** The core version the current SelfHelp pre-release ships (CRITICAL 5). */
@@ -117,5 +120,19 @@ describe('SurveyJS plugin.json release contract', () => {
     it('declares owned tables under its reserved data-table prefix', () => {
         expect(manifest.dataAccess.ownedTables.length).toBeGreaterThan(0);
         expect(manifest.dataAccess.ownedDataTablePrefix).toMatch(/^sh2_surveyjs_/);
+    });
+
+    it('opens the admin screens with surveyjs.survey.read and keeps changes behind the other permissions', () => {
+        const read = 'surveyjs.survey.read';
+        expect(manifest.permissions.map((p) => p.key)).toContain(read);
+        expect(manifest.adminPages.every((p) => p.permission === read)).toBe(true);
+        for (const route of manifest.apiRoutes.filter((r) => r.name.startsWith('surveyjs_admin_'))) {
+            const allowed = route.permissions ?? (route.permission ? [route.permission] : []);
+            if (route.methods.includes('GET')) {
+                expect(allowed, route.name).toContain(read);
+            } else {
+                expect(allowed, route.name).not.toContain(read);
+            }
+        }
     });
 });
