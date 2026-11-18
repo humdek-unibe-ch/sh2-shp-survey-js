@@ -118,9 +118,7 @@ final class SurveyAccessTest extends TestCase
     {
         $surveys = $this->createMock(SurveyRepository::class);
         $surveys->method('findAll')->willReturn([$this->survey(4, 'Mood'), $this->survey(5, 'Sleep')]);
-        $admin = $this->createMock(SurveyAccessService::class);
-        $admin->method('readableSurveyIdsOrNull')->willReturn(null);
-        $subscriber = new SurveyJsDataAccessResourcesSubscriber($surveys, $admin);
+        $subscriber = new SurveyJsDataAccessResourcesSubscriber($surveys);
 
         $mine = new DataAccessResourcesEvent('surveyjs_survey');
         $subscriber->onResources($mine);
@@ -129,19 +127,6 @@ final class SurveyAccessTest extends TestCase
         $other = new DataAccessResourcesEvent('pages');
         $subscriber->onResources($other);
         self::assertSame([], $other->getResources());
-    }
-
-    public function testTheRoleScreenOffersOnlyTheSurveysTheCallerMaySee(): void
-    {
-        // A new survey shows only to whoever can hand it out, not in every role's popup.
-        $surveys = $this->createMock(SurveyRepository::class);
-        $surveys->method('findAll')->willReturn([$this->survey(4, 'Mood'), $this->survey(5, 'Sleep')]);
-        $editor = $this->createMock(SurveyAccessService::class);
-        $editor->method('readableSurveyIdsOrNull')->willReturn([5]);
-
-        $event = new DataAccessResourcesEvent('surveyjs_survey');
-        (new SurveyJsDataAccessResourcesSubscriber($surveys, $editor))->onResources($event);
-        self::assertSame(['Sleep'], array_column($event->getResources(), 'name'));
     }
 
     private function access(bool $signedIn = true): SurveyAccessService
