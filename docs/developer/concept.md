@@ -90,10 +90,10 @@ Style `gpx-map` draws a route on a map from `sample_points`: a list of points, a
 The server decides, the client draws.
 
 - Every public call names the page and the section. The backend checks that the caller may see the page and that the section is a `surveyjs` section on it, and reads every setting from the published section. Nothing that limits a participant comes from the request.
-- The participant is the logged-in user. A guest is recognised by the plugin's signed visitor cookie, or by the key in the link when `auto_session_key` is on. That link works as a password.
+- The participant is the logged-in user. A guest is recognised by a random guest key the browser keeps and sends with each call, or by the key in the link when `auto_session_key` is on. That link works as a password.
 - The daily window is meant in the participant's timezone, then the CMS default.
 - The call that shows a survey is never cached: its answer depends on the clock and the participant.
-- A survey is a resource in core data access, like a page or an asset. Every admin action needs a permission (`surveyjs.survey.create`, `.update`, `.publish`, `.delete`) and the grant on that survey. Publishing needs the publish permission and the update grant.
+- A survey is a resource in core data access, like a page or an asset. `surveyjs.survey.read` opens the SurveyJS admin screens, like `admin.page.read` for pages. Every admin action needs a permission (`.read`, `.create`, `.update`, `.publish`, `.delete`) and the grant on that survey. Publishing needs the publish permission and the update grant.
 - The creator's roles that hold `surveyjs.survey.create` get all four rights on a new survey. A non-admin cannot leave a survey with no role that manages it. Sharing a survey means granting it to another role.
 - Who may see, export or delete a survey's answers is the grant on its data table, through the core data screens. When the survey creates its table, the roles that can edit the survey get the grant on the table. After that the two grants are independent.
 - Placing a survey on a page needs the update right on the page and a view grant on the survey, checked on save and on import.

@@ -117,7 +117,7 @@ The work ships in waves, not as one large change. Each wave:
 | 8 | Admin screens: Creator on SurveyJS 3, dashboard on Chart.js, response list and exports removed; older developer documents rewritten | plugin (web) | 1, 4, 5 |
 | 9 | Mobile | plugin (mobile), mobile app | 7 |
 
-Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 2026-11-17), not yet reviewed or released.
+Waves 1 to 7 are built on the branch `feature/surveyjs-3-mantine` (the core parts on `feature/surveyjs-3-upgrade` in backend, frontend and shared), not yet reviewed or released. Wave 9 is built on its own branch, `feature/surveyjs-3-upgrade-mobile`, to be reviewed. Wave 8 is open.
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
 
@@ -126,6 +126,7 @@ Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Drop
 - **Checked live** (Chrome, impersonating a role): survey permissions and grants (delete, publish, restore, creator gets the grant), answers behind the data table grant, placing a survey, once per user, once per window, not active, one row per response, upload folder, edit mode, `update_based_on`, redirect at end, `close_modal_on_save` in a page popup, Save PDF, an action on `finished` (job queued, then removed), deleting a user removes answers and files, `gpx-map`, a page published before the rename, and the same page published again.
 - **Fixed:** a plugin admin page opened by link without its permission (core); `surveyjs.survey.read`; default texts for empty state labels; a false "License not configured"; the role screen ticks view with other rights (core); `update_based_on` naming a column the core reserves (`record`, `user`, …) failed silently and is now ignored; Leaflet's stylesheet was never loaded, so every `gpx-map` broke the page layout (also on `main`).
 - **Open:** no separate timeout label (the timeout reuses "label survey not active"); deleting a user leaves empty response folders; read-only users still see the "New Survey" button (wave 8).
+- **Core role problems found while testing** are in `sh2-concepts/findings.md` (F196 to F206). The SurveyJS roles popup that lists only the caller's surveys (F203) is reverted until F198 is fixed.
 
 ### Wave 7 as built (2026-11-17)
 
@@ -143,7 +144,7 @@ Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Drop
 - **Permissions and grants.** `SurveyAccessService` checks the grant on a survey (resource type `surveyjs_survey`, declared in the manifest's `lookups`, H6) after the route permission; the list is filtered by read grants; creating grants the creator's roles that hold `create` (admin excluded); deleting revokes the survey's grants. `SurveyJsDataAccessResourcesSubscriber` lists the surveys on the role screen.
 - **Answers.** Dashboard, responses, PDF, response delete and staff file access check the grant on the survey's data table. When `SurveyResponseStore` creates the table, the roles with the update grant on the survey get full rights on it (F15).
 - **Placing.** Needed a core hook: H7, `SectionFieldBindingEvent`, dispatched by `SectionTableBindingGuard` on section save and import. `SurveyJsSectionBindingSubscriber` refuses a survey the editor may not see. H7 is not in section 5 above; added during the build.
-- **Known limits.** A plugin route may only use the plugin's own permissions, so a role that may read a survey's data table but holds none of the four survey permissions uses the core data screens, not the plugin dashboard. The creator grant and the data-table grant were not run live with a non-admin account; unit tests cover the checks, the core tests cover H7.
+- **Known limits.** A plugin route may only use the plugin's own permissions, so a role that may read a survey's data table but holds no survey permission uses the core data screens, not the plugin dashboard. The grants were run live with a non-admin account on 2026-11-18 (see "Live checks and fixes").
 
 ### Wave 6a as built (2026-11-17)
 
