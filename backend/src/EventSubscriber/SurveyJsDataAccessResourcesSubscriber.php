@@ -15,13 +15,16 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
  * Lists the surveys on the core "Permissions for role" screen, under the
- * resource type `surveyjs_survey` the manifest declares (H6), so an admin can
- * grant a role rights on single surveys.
+ * resource type `surveyjs_survey` the manifest declares (H6). Only the surveys
+ * the caller may see are offered, as the pages popup does: handing out access
+ * is limited by what the caller holds (rules 4.6d). The admin role sees all.
  */
 final class SurveyJsDataAccessResourcesSubscriber implements EventSubscriberInterface
 {
-    public function __construct(private readonly SurveyRepository $surveys)
-    {
+    public function __construct(
+        private readonly SurveyRepository $surveys,
+        private readonly SurveyAccessService $access,
+    ) {
     }
 
     public static function getSubscribedEvents(): array
@@ -34,8 +37,9 @@ final class SurveyJsDataAccessResourcesSubscriber implements EventSubscriberInte
         if ($event->resourceTypeCode !== SurveyAccessService::RESOURCE_TYPE) {
             return;
         }
+        $visible = $this->access->readableSurveyIdsOrNull();
         foreach ($this->surveys->findAll() as $survey) {
-            if ($survey->getId() !== null) {
+            if ($survey->getId() !== null && ($visible === null || in_array((int) $survey->getId(), $visible, true))) {
                 $event->addResource((int) $survey->getId(), $survey->getName(), $survey->getSurveyId());
             }
         }

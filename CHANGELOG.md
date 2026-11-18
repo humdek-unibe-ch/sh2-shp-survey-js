@@ -123,6 +123,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   not produce duplicate HTML ids.
 
 ### Fixed
+- **The roles screen offered every survey to everyone.** The Surveys
+  permissions popup now lists only the surveys the person opening it may see
+  (the admin role sees all), like the pages popup (rules 4.6d). Saving it keeps
+  a role's grants on surveys that person is not offered.
 - **`update_based_on` with a reserved column name.** A name the core keeps
   for itself (`record`, `user`, `scope`, …) was dropped on save, so every
   visit made a new row. Such a name is now ignored.
