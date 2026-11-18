@@ -123,6 +123,12 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   not produce duplicate HTML ids.
 
 ### Fixed
+- **`update_based_on` with a reserved column name.** A name the core keeps
+  for itself (`record`, `user`, `scope`, …) was dropped on save, so every
+  visit made a new row. Such a name is now ignored.
+- **`gpx-map` broke the page layout.** Leaflet's stylesheet was never loaded,
+  so the map tiles spilled out of the section; it is now part of the plugin
+  stylesheet.
 - **Empty state labels.** When a section leaves `label_survey_not_active`,
   `label_survey_done` or the timeout label empty, the participant now sees a
   short default text instead of an empty spot.

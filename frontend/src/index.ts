@@ -36,6 +36,7 @@ import 'survey-creator-core/survey-creator-core.css';
 import 'survey-analytics/survey.analytics.min.css';
 import 'survey-analytics/survey.analytics.tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_site_dark.min.css';
+import 'leaflet/dist/leaflet.css';
 import './theme/mantine-adapter.css';
 import './custom-questions/custom-questions.css';
 

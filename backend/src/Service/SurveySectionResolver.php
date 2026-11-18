@@ -10,6 +10,7 @@ namespace Humdek\SurveyJsBundle\Service;
 
 use App\Exception\ServiceException;
 use App\Service\CMS\CmsPreferenceService;
+use App\Service\CMS\DataColumnService;
 use App\Service\CMS\Effective\PublicSectionAccessService;
 use App\Service\Core\InterpolationService;
 use App\Service\Core\UserContextAwareService;
@@ -163,7 +164,9 @@ class SurveySectionResolver
     private static function column(?string $name): ?string
     {
         if ($name === null || preg_match('/^[a-z][a-z0-9_]{0,99}$/', $name) !== 1
-            || in_array($name, [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS], true)) {
+            || in_array($name, [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS], true)
+            // The core drops these keys on save, so the row could never be found again.
+            || in_array($name, DataColumnService::RESERVED_KEYS, true)) {
             return null;
         }
 

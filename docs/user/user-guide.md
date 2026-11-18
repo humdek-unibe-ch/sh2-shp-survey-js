@@ -299,9 +299,9 @@ Five permissions say what a role may do with surveys at all:
 
 Which surveys a role may use is set separately: open **Admin → Roles**,
 choose **Surveys permissions** in the role's menu and tick the rights
-per survey, like pages and data tables. Always tick **View** together
-with Update or Delete: without View the survey is not listed and cannot
-be opened. When you create a survey, your
+per survey, like pages and data tables. Ticking Update or Delete also
+ticks **View**, because a survey you cannot see cannot be changed. When
+you create a survey, your
 roles that may create surveys get every right on it.
 
 Who may see a survey's answers is set on its data table in the same

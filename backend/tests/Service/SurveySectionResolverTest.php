@@ -80,6 +80,17 @@ final class SurveySectionResolverTest extends TestCase
         self::assertSame('Europe/Zurich', $settings->timezone->getName(), 'a guest gets the CMS default timezone');
     }
 
+    public function testAnUpdateBasedOnColumnTheCoreReservesIsIgnored(): void
+    {
+        // The core drops `record` on save; keying rows by it would never find a row again.
+        $this->fields = ['survey_js' => [1 => 'SV_TEST'], 'update_based_on' => [1 => 'record']];
+        $request = Request::create('/x', 'GET', ['page_id' => '7', 'section_id' => '5']);
+        self::assertNull($this->resolver()->resolve($request, new Survey('Test', 'SV_TEST'))->updateBasedOn);
+
+        $this->fields['update_based_on'] = [1 => 'visit'];
+        self::assertSame('visit', $this->resolver()->resolve($request, new Survey('Test', 'SV_TEST'))->updateBasedOn);
+    }
+
     public function testASignedInParticipantsOwnTimezoneWins(): void
     {
         $this->fields = ['survey_js' => [1 => 'SV_TEST']];

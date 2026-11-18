@@ -14,7 +14,7 @@
 
 Web first, mobile after. Point 3 is the largest part.
 
-## 2. Decisions (2026-11-16, survey access 2026-11-17)
+## 2. Decisions (2026-11-16, survey access 2026-11-17 and 2026-11-18)
 
 | Topic | Decision |
 | --- | --- |
@@ -28,14 +28,17 @@ Web first, mobile after. Point 3 is the largest part.
 | Answers | One home: the data store. `survey_answer_links` dropped |
 | Unfinished surveys | A data row marked `started`, then `updated`, as in SelfHelp 1. `survey_response_drafts` dropped |
 | `survey_runs` | Dropped. Version, guest key and language are reserved columns in the response row; start, changes and finish come from core data history and the row's trigger |
-| Survey access | Surveys get their own resource type `survey` in core data access (H6). Permissions `surveyjs.survey.create`, `.update`, `.publish`, `.delete`; every admin endpoint checks the permission and the grant on that survey |
+| Survey access | Surveys get their own resource type `survey` in core data access (H6). Permissions `surveyjs.survey.read`, `.create`, `.update`, `.publish`, `.delete`; every admin endpoint checks the permission and the grant on that survey |
+| Opening the screens | `surveyjs.survey.read` opens the SurveyJS admin page and menu entry, like `admin.page.read` for pages; the host opens a plugin page only for users holding the permission it declares (decided 2026-11-18, to be added to `rules.md`) |
+| Role permissions win | Creating a survey gives the creator's roles the grant, not the permissions: editing or deleting even one's own survey needs `update` / `delete` (decided 2026-11-18) |
+| View with other rights | On the role screen, ticking create, update or delete on an item also ticks view, and unticking view clears the rest; for every resource type, not only surveys (decided 2026-11-18) |
 | New survey | The creator's roles that hold `surveyjs.survey.create` get all four rights on it, the same rule as pages (F14) and assets (6e). A non-admin cannot leave a survey with no managing role. Sharing a survey means granting it to another role |
 | Publishing | The publish permission plus the update grant on the survey |
 | Answers' access | When the survey's data table is created, the roles that can edit the survey also get a grant on the table (F15). After that the two grants are independent: a role can see the answers without editing the survey, or the other way round |
-| Placing a survey | Needs the update right on the page plus a view grant on the survey, checked on save and on import |
+| Placing a survey | Needs the update right on the page plus a view grant on the survey, checked on save and on import. Editors may only choose surveys they have access to (confirmed 2026-11-18) |
 | Response screens and exports | The plugin keeps the charts dashboard, one response drawn as the survey, and the PDF. It drops its response list and its CSV, Excel and JSON exports; the core data screens do this. Excel export is added to the core, for every data table (H5). Viewing, exporting and deleting answers use core data access, so the permissions `surveyjs.surveys.view-responses`, `export-*` and `delete-responses` are dropped |
 | Core catalogue rows | Follow rule 7.8: the host installer writes the plugin's styles, fields and permissions from the manifest (H3), built first as its own task |
-| Core additions | H1 to H6 (section 5) |
+| Core additions | H1 to H7 (section 5) |
 | Licence | The SurveyJS licence covers the developers, not the instances or their users. No question to SurveyJS needed |
 | Rules | The upgrade and all new SH2 work follow `concepts.md`, `rules.md`, `plugins.md` |
 
@@ -86,6 +89,7 @@ Sections point at their style and field values by id, not by name, so a rename c
 | H4 | A service a plugin calls to check "may this caller see page P, and is section S on it", returning the published section's fields. First check whether something like it exists | Problem 1 | Small to medium | approved |
 | H5 | Excel export in the core data screens, next to CSV and JSON, for every data table | Problem 12 | Small to medium | approved |
 | H6 | Plugins register their own data-access resource types. The `resourceTypes` lookup is closed to plugins today (`LookupPolicyRegistry`: `CLOSED`); it opens for types declared in `plugin.json`, written by the host installer and tagged with the plugin id, never by a plugin migration. `DataAccessSecurityService` and `role_data_access` accept them, the "Permissions for role" screen shows them next to pages, data tables, assets and groups, and purging the plugin removes their grants | Survey access | Small to medium | approved 2026-11-17 |
+| H7 | `SectionFieldBindingEvent`: when a section field is saved, a plugin may refuse the value (dispatched by `SectionTableBindingGuard`) | Placing a survey | Small | built; the rule it serves is decided, the hook itself is a new extension point (plugins.md, rule 7.1) |
 
 ## 6. Why these decisions
 
@@ -116,6 +120,12 @@ The work ships in waves, not as one large change. Each wave:
 Waves 1 and 5 are built on the branch `feature/surveyjs-3-mantine` (2026-11-16, 2026-11-17), not yet reviewed or released.
 
 Waves 1, 2, 4 and 5 do not depend on each other; H6 in wave 3 needs wave 2. Dropping `survey_response_drafts` in wave 5 discards surveys that are half filled at that moment; deploy it when no study is running, or tell participants.
+
+### Live checks and fixes (2026-11-18)
+
+- **Checked live** (Chrome, impersonating a role): survey permissions and grants (delete, publish, restore, creator gets the grant), answers behind the data table grant, placing a survey, once per user, once per window, not active, one row per response, upload folder, edit mode, `update_based_on`, redirect at end, `close_modal_on_save` in a page popup, Save PDF, an action on `finished` (job queued, then removed), deleting a user removes answers and files, `gpx-map`, a page published before the rename, and the same page published again.
+- **Fixed:** a plugin admin page opened by link without its permission (core); `surveyjs.survey.read`; default texts for empty state labels; a false "License not configured"; the role screen ticks view with other rights (core); `update_based_on` naming a column the core reserves (`record`, `user`, …) failed silently and is now ignored; Leaflet's stylesheet was never loaded, so every `gpx-map` broke the page layout (also on `main`).
+- **Open:** no separate timeout label (the timeout reuses "label survey not active"); deleting a user leaves empty response folders; read-only users still see the "New Survey" button (wave 8).
 
 ### Wave 7 as built (2026-11-17)
 

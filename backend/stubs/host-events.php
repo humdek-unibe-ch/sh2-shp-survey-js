@@ -304,6 +304,14 @@ namespace App\Service\CMS\DataQuery {
 }
 
 namespace App\Service\CMS {
+    if (!\class_exists(DataColumnService::class, false)) {
+        /** Mirrors the host's reserved data column keys. */
+        class DataColumnService
+        {
+            public const RESERVED_KEYS = ['id', 'id_users', 'record_id', 'entry_date', 'user_name', 'user_code', 'triggerType', 'trigger_type', 'language_id', 'deleted', 'record', 'scope', 'user', 'metadata'];
+        }
+    }
+
     if (!\class_exists(DataService::class, false)) {
         /**
          * Mirrors the host `App\Service\CMS\DataService` surface the SurveyJS
