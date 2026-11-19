@@ -295,7 +295,7 @@ Five permissions say what a role may do with surveys at all:
 | `surveyjs.survey.create`  | create surveys                                   |
 | `surveyjs.survey.update`  | edit surveys                                     |
 | `surveyjs.survey.publish` | publish a new version or restore an old one      |
-| `surveyjs.survey.delete`  | delete surveys                                   |
+| `surveyjs.survey.delete`  | delete surveys, with all their answers and files (once a survey has answers, the role also needs Delete on its data table) |
 
 Which surveys a role may use is set separately: open **Admin → Roles**,
 choose **Surveys permissions** in the role's menu and tick the rights

@@ -8,6 +8,8 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
+use App\Service\CMS\FormFileUploadService;
+
 use App\Service\Core\LookupService;
 
 /**
@@ -35,6 +37,8 @@ final class SurveyResponseRecord
         public readonly ?string $language,
         public readonly int $pageNo,
         public readonly array $answers,
+        /** @var list<string> files uploaded to the response, see {@see SurveyResponseStore::COL_UPLOADS} */
+        public readonly array $uploadedFiles = [],
     ) {
     }
 
@@ -68,6 +72,7 @@ final class SurveyResponseRecord
             language: $text(SurveyResponseStore::COL_LANGUAGE) !== '' ? $text(SurveyResponseStore::COL_LANGUAGE) : null,
             pageNo: (int) $text(SurveyResponseStore::COL_PAGE),
             answers: $answers,
+            uploadedFiles: FormFileUploadService::keysIn(is_string($row[SurveyResponseStore::COL_UPLOADS] ?? null) ? $row[SurveyResponseStore::COL_UPLOADS] : null),
         );
     }
 

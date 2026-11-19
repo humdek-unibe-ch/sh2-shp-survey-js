@@ -62,7 +62,7 @@ on the survey, checked on section save and import (core H7).
 
 ## Data access
 
-- Owned tables: `surveys`, `survey_versions`, `survey_files` (Doctrine entities `Survey`, `SurveyVersion`, `SurveyFile`). Responses are rows of the core data tables `sh2_surveyjs_<survey id>`.
+- Owned tables: `surveys`, `survey_versions` (Doctrine entities `Survey`, `SurveyVersion`); older names stay listed so the purger drops them on hosts that still have them. Uploads are core form files. Responses are rows of the core data tables `sh2_surveyjs_<survey id>`.
 - Owned data-table prefix: `sh2_surveyjs_`.
 - Reads host tables: `data_tables`, `data_rows`, `data_cols`, `data_cells`, `lookups`, `languages`.
 - Writes host tables: `data_tables`, `data_rows`, `data_cols`, `data_cells`.

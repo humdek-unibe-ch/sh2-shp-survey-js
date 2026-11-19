@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Tests\Service;
 
+use App\Service\CMS\DataTableService;
 use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
@@ -199,6 +200,7 @@ final class SurveyServicePublishGuardTest extends TestCase
             $versions,
             $this->createMock(SurveyJsRealtimePublisher::class),
             $responses,
+            $this->createMock(DataTableService::class),
         );
     }
 

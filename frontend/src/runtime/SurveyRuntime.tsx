@@ -46,7 +46,6 @@ import {
     type ISurveySectionRef,
     RUNTIME_LICENSE_HEADER,
     deleteDraft,
-    deleteSurveyFile,
     fetchDraft,
     fetchEditableResponse,
     fetchPublishedSurvey,
@@ -282,9 +281,6 @@ export function SurveyRuntime({
                     questionName,
                     file,
                 });
-            },
-            deleteFile: async (fileId) => {
-                await deleteSurveyFile(published.surveyId, sectionRef, fileId);
             },
         });
 

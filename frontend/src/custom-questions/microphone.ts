@@ -57,7 +57,7 @@ export async function mountMicrophoneQuestion(
         getPropertyValue: (name: string) => unknown;
     },
     args: {
-        uploadFile: (questionName: string, file: File) => Promise<{ id: number; downloadUrl: string; filename: string }>;
+        uploadFile: (questionName: string, file: File) => Promise<{ key: string; downloadUrl: string; filename: string }>;
         setAnswer: (value: unknown) => void;
     },
 ): Promise<void> {
@@ -113,13 +113,15 @@ export async function mountMicrophoneQuestion(
             stream?.getTracks().forEach((track) => track.stop());
             stream = null;
             recorder = null;
-            const fileName = `recording-${Date.now()}.webm`;
+            // The server checks the content against the extension: Safari records mp4, others webm or ogg.
+            const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+            const fileName = `recording-${Date.now()}.${extension}`;
             const file = new File([blob], fileName, { type: blob.type });
             try {
                 const uploaded = await args.uploadFile(question.name, file);
                 args.setAnswer({
                     url: uploaded.downloadUrl,
-                    fileId: uploaded.id,
+                    key: uploaded.key,
                     filename: uploaded.filename,
                     durationMs,
                     mimeType: blob.type,

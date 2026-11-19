@@ -305,10 +305,15 @@ namespace App\Service\CMS\DataQuery {
 
 namespace App\Service\CMS {
     if (!\class_exists(DataColumnService::class, false)) {
-        /** Mirrors the host's reserved data column keys. */
+        /** Mirrors the host's reserved data column keys and the call that marks upload columns. */
         class DataColumnService
         {
             public const RESERVED_KEYS = ['id', 'id_users', 'record_id', 'entry_date', 'user_name', 'user_code', 'triggerType', 'trigger_type', 'language_id', 'deleted', 'record', 'scope', 'user', 'metadata'];
+
+            /** @param list<string> $fieldKeys */
+            public function markFileColumns(\App\Entity\DataTable $dataTable, array $fieldKeys): void
+            {
+            }
         }
     }
 
@@ -344,6 +349,64 @@ namespace App\Service\CMS {
             public function getDataTableByName(string $tableName): ?\App\Entity\DataTable
             {
                 return null;
+            }
+        }
+    }
+
+    if (!\class_exists(FormFileUploadService::class, false)) {
+        /** Mirrors the host `App\Service\CMS\FormFileUploadService` surface survey uploads use. */
+        class FormFileUploadService
+        {
+            public const UPLOAD_DIR = 'uploads/form-files/';
+
+            public function storeRecordFile(\Symfony\Component\HttpFoundation\File\UploadedFile $file, int $dataTableId, int $recordId, string $fieldKey, ?int $userId): string
+            {
+                return '';
+            }
+
+            public function isRecordFileKey(string $key, int $dataTableId, int $recordId): bool
+            {
+                return false;
+            }
+
+            public function resolveKey(string $key): ?string
+            {
+                return null;
+            }
+
+            public static function nameOfKey(string $key): string
+            {
+                return preg_replace('/^\d+_[0-9a-f]{8}_/', '', basename($key)) ?? basename($key);
+            }
+
+            /** @return list<string> */
+            public static function keysIn(?string $value): array
+            {
+                $decoded = $value !== null && $value !== '' ? json_decode($value, true) : null;
+                $leaves = [];
+                if (is_array($decoded)) {
+                    array_walk_recursive($decoded, static function (mixed $leaf) use (&$leaves): void {
+                        $leaves[] = $leaf;
+                    });
+                } elseif ($value !== null) {
+                    $leaves[] = $value;
+                }
+
+                return array_values(array_unique(array_filter(
+                    $leaves,
+                    static fn (mixed $leaf): bool => is_string($leaf) && str_starts_with($leaf, self::UPLOAD_DIR) && !str_contains($leaf, '..'),
+                )));
+            }
+        }
+    }
+
+    if (!\class_exists(DataTableService::class, false)) {
+        /** Mirrors the host `App\Service\CMS\DataTableService` call the survey delete uses. */
+        class DataTableService
+        {
+            public function deleteDataTable(string $tableName): bool
+            {
+                return false;
             }
         }
     }

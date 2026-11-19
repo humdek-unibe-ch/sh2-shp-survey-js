@@ -15,29 +15,24 @@ use Doctrine\Migrations\AbstractMigration;
  * Answers in one home (SurveyJS 3 upgrade, wave 5): a response is now only a
  * row of the core data table `sh2_surveyjs_<survey id>`, unfinished or
  * finished. The plugin's copies go: `survey_runs`, `survey_answer_links` and
- * `survey_response_drafts`, and the links of `survey_files` to the first and
- * last of them (a file belongs to its response by `response_id`).
+ * `survey_response_drafts`. Uploads are core form files named in the answer,
+ * so `survey_files` goes too.
  *
  * Answers already submitted stay in the data tables. Lost on purpose: the
- * plugin's metadata about them (revision, visitor id) and unfinished drafts.
- * `down()` restores the empty tables and columns, not their rows.
+ * plugin's metadata about them (revision, visitor id), unfinished drafts, and
+ * files uploaded before (their rows; the files stay in the old folder).
+ * `down()` restores the empty tables, not their rows.
  */
 final class Version20261117132938 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'sh2-shp-survey-js: drop survey_runs, survey_answer_links, survey_response_drafts and their survey_files links; responses live in the core data store.';
+        return 'sh2-shp-survey-js: drop survey_runs, survey_answer_links, survey_response_drafts and survey_files; responses and their uploads live in the core data store.';
     }
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE survey_files DROP FOREIGN KEY fk_survey_files_survey_runs');
-        $this->addSql('ALTER TABLE survey_files DROP FOREIGN KEY fk_survey_files_survey_response_drafts');
-        $this->addSql('DROP INDEX idx_survey_files_survey_runs ON survey_files');
-        $this->addSql('DROP INDEX idx_survey_files_survey_drafts ON survey_files');
-        $this->addSql('ALTER TABLE survey_files DROP COLUMN id_survey_runs, DROP COLUMN id_survey_response_drafts');
-        $this->addSql('CREATE INDEX idx_survey_files_uploaded_by_user ON survey_files (uploaded_by_user_id)');
-
+        $this->addSql('DROP TABLE survey_files');
         $this->addSql('DROP TABLE survey_answer_links');
         $this->addSql('DROP TABLE survey_runs');
         $this->addSql('DROP TABLE survey_response_drafts');
@@ -115,11 +110,34 @@ final class Version20261117132938 extends AbstractMigration
             ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
         SQL);
 
-        $this->addSql('DROP INDEX idx_survey_files_uploaded_by_user ON survey_files');
-        $this->addSql('ALTER TABLE survey_files ADD id_survey_runs INT DEFAULT NULL AFTER id_surveys, ADD id_survey_response_drafts INT DEFAULT NULL AFTER id_survey_runs');
-        $this->addSql('CREATE INDEX idx_survey_files_survey_runs ON survey_files (id_survey_runs)');
-        $this->addSql('CREATE INDEX idx_survey_files_survey_drafts ON survey_files (id_survey_response_drafts)');
-        $this->addSql('ALTER TABLE survey_files ADD CONSTRAINT fk_survey_files_survey_runs FOREIGN KEY (id_survey_runs) REFERENCES survey_runs (id) ON DELETE SET NULL');
-        $this->addSql('ALTER TABLE survey_files ADD CONSTRAINT fk_survey_files_survey_response_drafts FOREIGN KEY (id_survey_response_drafts) REFERENCES survey_response_drafts (id) ON DELETE SET NULL');
+        $this->addSql(<<<'SQL'
+            CREATE TABLE survey_files (
+                id INT AUTO_INCREMENT NOT NULL,
+                id_surveys INT NOT NULL,
+                id_survey_runs INT DEFAULT NULL,
+                id_survey_response_drafts INT DEFAULT NULL,
+                response_id VARCHAR(100) NOT NULL,
+                question_name VARCHAR(191) NOT NULL,
+                original_filename VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(128) NOT NULL,
+                size_bytes INT NOT NULL,
+                storage_path VARCHAR(512) NOT NULL,
+                sha256 VARCHAR(64) NOT NULL,
+                uploaded_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                uploaded_by_user_id INT DEFAULT NULL,
+                uploaded_by_visitor_id VARCHAR(64) DEFAULT NULL,
+                INDEX idx_survey_files_response_id (response_id),
+                INDEX idx_survey_files_survey_runs (id_survey_runs),
+                INDEX idx_survey_files_survey_drafts (id_survey_response_drafts),
+                INDEX idx_survey_files_sha256 (sha256),
+                CONSTRAINT pk_survey_files PRIMARY KEY (id),
+                CONSTRAINT fk_survey_files_surveys
+                    FOREIGN KEY (id_surveys) REFERENCES surveys (id) ON DELETE CASCADE,
+                CONSTRAINT fk_survey_files_survey_runs
+                    FOREIGN KEY (id_survey_runs) REFERENCES survey_runs (id) ON DELETE SET NULL,
+                CONSTRAINT fk_survey_files_survey_response_drafts
+                    FOREIGN KEY (id_survey_response_drafts) REFERENCES survey_response_drafts (id) ON DELETE SET NULL
+            ) DEFAULT CHARACTER SET utf8mb4 ENGINE = InnoDB
+        SQL);
     }
 }

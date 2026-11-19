@@ -18,7 +18,7 @@ SurveyJS v3 plugin for the SelfHelp CMS. Provides:
 > - [Manifest reference](./docs/reference/manifest.md) — the exact `plugin.json` contract.
 > - [Docs index](./docs/README.md) — the full audience-based documentation map.
 
-Each response is one row of the core data table `sh2_surveyjs_<survey id>`, unfinished or submitted, normalized by `SurveyAnswerNormalizer` (one cell per question). HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns three tables — `surveys`, `survey_versions`, `survey_files` — for surveys, version snapshots and uploaded files. Surveys and responses get generated stable keys (`survey_id` / `response_id`) for external references.
+Each response is one row of the core data table `sh2_surveyjs_<survey id>`, unfinished or submitted, normalized by `SurveyAnswerNormalizer` (one cell per question). HTML answers go through `SurveyJsHtmlSanitizer` before storage. The plugin owns two tables — `surveys`, `survey_versions` — for surveys and version snapshots; uploads are core form files of the response. Surveys and responses get generated stable keys (`survey_id` / `response_id`) for external references.
 
 ## Develop locally in 60 seconds
 

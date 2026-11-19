@@ -117,7 +117,7 @@ export async function mountGpxQuestion(
         getPropertyValue: (name: string) => unknown;
     },
     args: {
-        uploadFile: (questionName: string, file: File) => Promise<{ id: number; downloadUrl: string; filename: string }>;
+        uploadFile: (questionName: string, file: File) => Promise<{ key: string; downloadUrl: string; filename: string }>;
         setAnswer: (value: unknown) => void;
     },
 ): Promise<void> {
@@ -148,7 +148,7 @@ export async function mountGpxQuestion(
                 const uploaded = await args.uploadFile(question.name, file);
                 args.setAnswer({
                     url: uploaded.downloadUrl,
-                    fileId: uploaded.id,
+                    key: uploaded.key,
                     filename: uploaded.filename,
                     sampledPoints: track.sampledPoints,
                     distanceMeters: track.distanceMeters,

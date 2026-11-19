@@ -87,15 +87,11 @@ export interface IDraftPayload {
     lastSavedAt: string | null;
 }
 
+/** An upload, stored by the core as a form file of the response; `key` names it in the answer. */
 export interface IUploadedFile {
-    id: number;
-    responseId: string;
-    questionName: string;
+    key: string;
     filename: string;
     mimeType: string;
-    sizeBytes: number;
-    sha256: string;
-    uploadedAt: string;
     downloadUrl: string;
 }
 
@@ -297,13 +293,3 @@ export async function uploadSurveyFile(
     return body.data;
 }
 
-export async function deleteSurveyFile(key: string, ref: ISurveySectionRef, fileId: number): Promise<void> {
-    const res = await fetch(sectionUrl(surveyPath(key, `/files/${fileId}`), ref), {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { Accept: 'application/json', ...guestKeyHeaders(), ...csrfHeaders() },
-    });
-    if (!res.ok && res.status !== 404) {
-        throw new Error(`HTTP ${res.status}`);
-    }
-}

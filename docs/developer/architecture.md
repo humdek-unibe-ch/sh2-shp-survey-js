@@ -47,14 +47,14 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `Service\SurveyResponseService`          | Submit: limits, then the response saved as `finished`.               |
 | `Service\SurveyResponseDraftService`     | Progress: the same row saved as `started` / `updated`, resume, discard. |
 | `Service\SurveyDashboardService`         | Totals and chart rows for the dashboard, read from the store.        |
-| `EventSubscriber\SurveyJsUserDataCleanupSubscriber` | Deletes a removed user's uploaded files (core `UserDataCleanupEvent`). |
+| `Service\SurveyFileAnswers`               | File answers: keys stored without links, links added on load, keys of other responses dropped. |
 | `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
 | `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
 | `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog.       |
 | `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
 | `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
 
-The plugin owns three tables: `surveys`, `survey_versions` and `survey_files`. The install migration `Version20260522063620.php` creates them (and three older ones that `Version20261117132938.php` drops again: responses now live only in the core data store). `surveys.survey_id` and the `response_id` cell of each response are generated stable external keys; shared CMS rows and generated core `data_tables` are tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
+The plugin owns two tables: `surveys` and `survey_versions`. The install migration `Version20260522063620.php` creates them (and four older ones that `Version20261117132938.php` drops again: responses and their uploads now live only in the core data store). `surveys.survey_id` and the `response_id` cell of each response are generated stable external keys; shared CMS rows and generated core `data_tables` are tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
 
 ### Decoupling from the host
 
@@ -193,7 +193,7 @@ Besides the answers each row carries reserved columns: `response_id`, `survey_re
 
 A signed-in participant owns their row (`id_users`). A guest's row has no owner; it carries the **guest key**, a random 128-bit id the browser keeps and sends as the `X-SurveyJs-Guest-Key` header (the host BFF drops cookies the backend sets, so the older `_sh_sjs_vid` cookie only works for clients that call the backend directly). A row keeps the guest key only when a guest wrote it, so the next person on a shared browser cannot match a signed-in participant's response. A guest who signs in keeps their unfinished response, and it becomes theirs when they save it.
 
-Uploaded files are stored under `<form files dir>/surveyjs/` (`selfhelp.form_file_storage_dir`, a kept volume), unless `SURVEYJS_UPLOAD_DIR` says otherwise.
+Uploaded files are core form files of the response's row: `FormFileUploadService::storeRecordFile` stores them under `user_<id>/` or `guest/` in the form files directory (a kept volume) with the core's type, content and size checks. The answer names each file by its key, the reserved column `uploaded_files` names every upload, and the plugin declares these columns with the value type `file`, so the core delivers, zips and erases them. An answer may only name keys of its own response (`isRecordFileKey`). Participants open a file through a signed link (`SignedFileUrlService`, one hour), handed out only with an answer they may read.
 
 ## Replies and requests
 
@@ -245,13 +245,13 @@ sh2-shp-survey-js/
 │   ├── composer.json
 │   ├── src/HumdekSurveyJsBundle.php
 │   ├── src/Entity/{Survey, SurveyVersion, SurveyFile}.php
-│   ├── src/Repository/{Survey…, SurveyVersion…, SurveyFile…}Repository.php
+│   ├── src/Repository/{Survey…, SurveyVersion…}Repository.php
 │   ├── src/Service/{SurveyService, SurveyResponseStore, SurveyResponseRecord,
 │   │                SurveyResponseService, SurveyResponseDraftService, SurveyDashboardService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
-│   │                SurveyJsHealthCheck, SurveyFileStorage, SurveyPdfService, …}.php
+│   │                SurveyJsHealthCheck, SurveyFileAnswers, SurveyPdfService, …}.php
 │   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
-│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic, SurveyJsUserDataCleanup}Subscriber.php
+│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic, …}Subscriber.php
 │   ├── src/Resources/config/services.php
 │   └── src/Migrations/Version20260522063620.php
 ├── frontend/

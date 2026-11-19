@@ -14,6 +14,7 @@ use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\SurveyAccessService;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
+use Humdek\SurveyJsBundle\Service\SurveyFileAnswers;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
@@ -47,6 +48,7 @@ final class SurveysAdminController
         private readonly SurveyPdfService $pdfService,
         private readonly SurveyAccessService $access,
         private readonly SurveyJsRealtimePublisher $realtime,
+        private readonly SurveyFileAnswers $fileAnswers,
     ) {
     }
 
@@ -126,6 +128,9 @@ final class SurveysAdminController
         }
         if (!$this->access->can($survey, SurveyAccessService::DELETE)) {
             return $this->forbidden();
+        }
+        if ($this->responseStore->hasDataTable($survey) && !$this->access->canOnResponses($survey, SurveyAccessService::DELETE)) {
+            return $this->api->failure('Deleting the survey deletes its answers, which needs the delete grant on its data table.', 403);
         }
         $this->access->revokeAll($survey);
         $this->surveyService->delete($survey);
@@ -418,7 +423,7 @@ final class SurveysAdminController
 
         return $this->api->success([
             ...$this->responseSummary($survey, $record),
-            'answers' => $record->answers,
+            'answers' => $this->fileAnswers->answersToClient($record->answers),
         ]);
     }
 

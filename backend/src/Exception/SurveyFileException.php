@@ -16,14 +16,11 @@ namespace Humdek\SurveyJsBundle\Exception;
  */
 final class SurveyFileException extends \RuntimeException
 {
-    public const REASON_TOO_LARGE = 'file_too_large';
-    public const REASON_MIME_NOT_ALLOWED = 'file_mime_not_allowed';
     public const REASON_INVALID = 'file_invalid';
     public const REASON_NOT_FOUND = 'file_not_found';
     public const REASON_FORBIDDEN = 'file_forbidden';
     public const REASON_SIGNATURE_INVALID = 'file_signature_invalid';
     public const REASON_SIGNATURE_EXPIRED = 'file_signature_expired';
-    public const REASON_STORAGE = 'file_storage_error';
 
     public function __construct(
         public readonly string $reason,

@@ -4,14 +4,14 @@ SPDX-License-Identifier: MPL-2.0
 */
 /**
  * Wires the plugin's file pipeline into a SurveyJS runtime model so
- * the four custom question types (`gpx`, `video`, `microphone`,
- * `rich-text`) and the built-in `file` type all upload through the
- * plugin's secure `/files` endpoint instead of base64-embedding the
- * payload into `data_cells`.
+ * the custom question types (`gpx`, `video`, `microphone`) and the
+ * built-in `file` type upload through the plugin's `/files` endpoint,
+ * which stores each file as a core form file of the response, instead
+ * of base64-embedding the payload into `data_cells`.
  *
- * The SurveyJS `onUploadFiles` / `onDownloadFile` / `onClearFiles`
- * events are the only hooks we need: SurveyJS itself stays in charge
- * of question rendering, validation, and answer materialization.
+ * The answer names each file by its key; the server drops the links on
+ * save and adds fresh ones on load. Clearing a file only changes the
+ * answer: the file stays in the response's history, like a core form edit.
  */
 
 import type { ISurveyModel } from 'survey-core';
@@ -22,13 +22,22 @@ export interface IRuntimeFileBridge {
     surveyKey: string;
     responseIdProvider: () => string;
     uploadFile: (questionName: string, file: File) => Promise<IUploadedFile>;
-    deleteFile: (fileId: number) => Promise<void>;
+}
+
+/** The server's reason for a refused upload (wrong type, too large, not your response), shown to the participant. */
+export function uploadErrorMessage(error: unknown): string {
+    const body = (error as { body?: { error?: unknown } } | null)?.body;
+    return typeof body?.error === 'string' && body.error !== '' ? body.error : 'The file could not be uploaded.';
 }
 
 export function registerCustomQuestionRuntime(
     model: ISurveyModel,
     bridge: IRuntimeFileBridge,
 ): void {
+    const upload = (questionName: string, file: File): Promise<IUploadedFile> =>
+        bridge.uploadFile(questionName, file).catch((error: unknown) => {
+            throw new Error(uploadErrorMessage(error));
+        });
     // Per-question host element mount for the renderers that need a
     // dedicated UI (video player, GPX map, microphone recorder).
     model.onAfterRenderQuestion.add((sender, options) => {
@@ -57,21 +66,13 @@ export function registerCustomQuestionRuntime(
             case 'gpx':
                 void mountGpxQuestion(options.htmlElement, q, {
                     setAnswer,
-                    uploadFile: (name, file) => bridge.uploadFile(name, file).then((u) => ({
-                        id: u.id,
-                        downloadUrl: u.downloadUrl,
-                        filename: u.filename,
-                    })),
+                    uploadFile: upload,
                 });
                 break;
             case 'microphone':
                 void mountMicrophoneQuestion(options.htmlElement, q, {
                     setAnswer,
-                    uploadFile: (name, file) => bridge.uploadFile(name, file).then((u) => ({
-                        id: u.id,
-                        downloadUrl: u.downloadUrl,
-                        filename: u.filename,
-                    })),
+                    uploadFile: upload,
                 });
                 break;
             default:
@@ -85,36 +86,40 @@ export function registerCustomQuestionRuntime(
             options.callback('error');
             return;
         }
-        const responseId = bridge.responseIdProvider();
         const question = options.question as { name?: string } | undefined;
         const questionName = options.name ?? question?.name ?? 'file';
 
-        Promise.all(files.map((file) => bridge.uploadFile(questionName, file).then((entry) => ({ file, entry }))))
+        Promise.all(files.map((file) => upload(questionName, file).then((entry) => ({ file, entry }))))
             .then((uploaded) => {
                 options.callback(
                     'success',
                     uploaded.map(({ file, entry }) => ({
                         file,
                         content: JSON.stringify({
-                            id: entry.id,
+                            key: entry.key,
                             url: entry.downloadUrl,
                             filename: entry.filename,
                             mimeType: entry.mimeType,
-                            sizeBytes: entry.sizeBytes,
-                            sha256: entry.sha256,
-                            responseId,
                         }),
                     })),
                 );
             })
-            .catch(() => {
-                options.callback('error');
+            .catch((error: unknown) => {
+                options.callback('error', error instanceof Error ? error.message : uploadErrorMessage(error));
             });
     });
 
     model.onDownloadFile.add((_sender, options) => {
+        // `content` is the pointer `{key, url, ...}` as JSON (or, from older answers, a URL).
         const value = options.content as string | { url?: string; content?: string } | undefined;
-        const url = typeof value === 'string' ? value : value?.url ?? value?.content;
+        let url = typeof value === 'string' ? value : value?.url ?? value?.content;
+        if (typeof url === 'string' && url.startsWith('{')) {
+            try {
+                url = (JSON.parse(url) as { url?: string }).url;
+            } catch {
+                url = undefined;
+            }
+        }
         if (typeof url === 'string' && url !== '') {
             options.callback('success', url);
             return;
@@ -122,38 +127,8 @@ export function registerCustomQuestionRuntime(
         options.callback('error');
     });
 
+    // The file stays in the response's history; clearing only changes the answer.
     model.onClearFiles.add((_sender, options) => {
-        const value = options.value as
-            | { id?: number }
-            | Array<{ id?: number }>
-            | string
-            | undefined;
-        const ids: number[] = [];
-        const collect = (entry: unknown): void => {
-            if (entry && typeof entry === 'object' && 'id' in entry) {
-                const candidate = (entry as { id?: unknown }).id;
-                if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-                    ids.push(candidate);
-                }
-            } else if (typeof entry === 'string') {
-                try {
-                    collect(JSON.parse(entry));
-                } catch {
-                    // ignore — not a pointer payload.
-                }
-            }
-        };
-        if (Array.isArray(value)) {
-            value.forEach((entry) => collect(entry));
-        } else {
-            collect(value);
-        }
-        if (ids.length === 0) {
-            options.callback('success');
-            return;
-        }
-        Promise.all(ids.map((id) => bridge.deleteFile(id).catch(() => undefined)))
-            .then(() => options.callback('success'))
-            .catch(() => options.callback('error'));
+        options.callback('success');
     });
 }

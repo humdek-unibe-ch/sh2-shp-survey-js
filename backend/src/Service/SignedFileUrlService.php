@@ -8,31 +8,23 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
-use Humdek\SurveyJsBundle\Entity\SurveyFile;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
 
 /**
- * HMAC-signed short-lived URLs for survey file downloads.
- *
- * The signature binds:
- *   - the SurveyFile id,
- *   - the caller identity (visitor id OR user id; both for hybrid
- *     scenarios where an authenticated admin downloads a participant
- *     file),
- *   - the expiry timestamp.
- *
- * Default TTL is 5 minutes. The signature is included as the `s` /
- * `e` / `u` query parameters; this lets the file download endpoint
- * remain stateless and survives reverse-proxy caching layers that
- * key by query string.
+ * Short-lived signed links to a survey upload (a core form file key), so an
+ * image, audio or GPX answer can be shown with a plain URL (no header for the
+ * guest key). A link is only handed to whoever was allowed to read the answer
+ * that names the file; the signature binds the key and the expiry.
  */
 final class SignedFileUrlService
 {
+    public const QUERY_KEY = 'k';
     public const QUERY_SIGNATURE = 's';
     public const QUERY_EXPIRES = 'e';
-    public const QUERY_IDENTITY = 'u';
 
-    private const DEFAULT_TTL_SECONDS = 300;
+    /** Browser path through the host BFF, which forwards to `/cms-api/v1/...`. */
+    private const DOWNLOAD_PATH = '/api/plugins/sh2-shp-survey-js/files';
+    private const DEFAULT_TTL_SECONDS = 3600;
 
     public function __construct(
         private readonly string $secret,
@@ -40,57 +32,29 @@ final class SignedFileUrlService
     ) {
     }
 
-    /**
-     * @return array{e:int, u:string, s:string}
-     */
-    public function sign(SurveyFile $file, ?int $userId, ?string $visitorId, ?int $ttlSeconds = null): array
+    public function url(string $key, ?int $ttlSeconds = null): string
     {
-        $identity = $this->encodeIdentity($userId, $visitorId);
         $expires = time() + ($ttlSeconds ?? $this->defaultTtlSeconds);
-        $signature = $this->compute($file->getId() ?? 0, $identity, $expires);
-        return [
+
+        return self::DOWNLOAD_PATH . '?' . http_build_query([
+            self::QUERY_KEY => $key,
             self::QUERY_EXPIRES => $expires,
-            self::QUERY_IDENTITY => $identity,
-            self::QUERY_SIGNATURE => $signature,
-        ];
+            self::QUERY_SIGNATURE => $this->compute($key, $expires),
+        ]);
     }
 
-    public function verify(SurveyFile $file, string $identity, int $expires, string $signature): void
+    public function verify(string $key, int $expires, string $signature): void
     {
         if ($expires < time()) {
             throw new SurveyFileException(SurveyFileException::REASON_SIGNATURE_EXPIRED, 'Signed URL has expired.');
         }
-        $expected = $this->compute($file->getId() ?? 0, $identity, $expires);
-        if (!hash_equals($expected, $signature)) {
+        if (!hash_equals($this->compute($key, $expires), $signature)) {
             throw new SurveyFileException(SurveyFileException::REASON_SIGNATURE_INVALID, 'Signed URL signature mismatch.');
         }
     }
 
-    /**
-     * @return array{userId: int|null, visitorId: string|null}
-     */
-    public function decodeIdentity(string $identity): array
+    private function compute(string $key, int $expires): string
     {
-        $parts = explode(':', $identity, 2);
-        $userId = is_numeric($parts[0] ?? '') ? (int) $parts[0] : null;
-        $visitorId = $parts[1] ?? '';
-        return [
-            'userId' => $userId === 0 ? null : $userId,
-            'visitorId' => $visitorId === '' ? null : $visitorId,
-        ];
-    }
-
-    private function encodeIdentity(?int $userId, ?string $visitorId): string
-    {
-        return ($userId ?? 0) . ':' . ($visitorId ?? '');
-    }
-
-    private function compute(int $fileId, string $identity, int $expires): string
-    {
-        return substr(
-            hash_hmac('sha256', $fileId . '|' . $identity . '|' . $expires, $this->secret),
-            0,
-            32,
-        );
+        return rtrim(strtr(base64_encode(hash_hmac('sha256', $key . '|' . $expires, $this->secret, true)), '+/', '-_'), '=');
     }
 }

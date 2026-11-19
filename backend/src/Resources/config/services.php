@@ -15,15 +15,12 @@ use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsLookupRegistrySubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsRealtimeTopicSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsSectionBindingSubscriber;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsStyleRegistrySubscriber;
-use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsUserDataCleanupSubscriber;
-use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
 use Humdek\SurveyJsBundle\Service\SurveyAnswerNormalizer;
 use Humdek\SurveyJsBundle\Service\SurveyDashboardService;
 use Humdek\SurveyJsBundle\Service\SurveyDataInterpolator;
-use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
 use Humdek\SurveyJsBundle\Service\SurveyJsHealthCheck;
 use Humdek\SurveyJsBundle\Service\SurveyJsHtmlSanitizer;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
@@ -50,7 +47,6 @@ return static function (ContainerConfigurator $configurator): void {
 
     $services->set(SurveyRepository::class)->autowire();
     $services->set(SurveyVersionRepository::class)->autowire();
-    $services->set(SurveyFileRepository::class)->autowire();
 
     $services->set(SurveyJsHtmlSanitizer::class)->autowire();
     $services->set(SurveyAnswerNormalizer::class)->autowire();
@@ -68,22 +64,11 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(VisitorIdResolver::class)
         ->arg('$secret', '%env(default:kernel.secret:SURVEYJS_VISITOR_SECRET)%');
 
-    // Defaults for the env-driven knobs below. Symfony's `default:`
-    // env processor requires the fallback to be a **parameter name**,
-    // not a literal — so we materialise the literals here. Operators
-    // still override via env (`SURVEYJS_UPLOAD_MAX_BYTES`, etc.).
-    // Uploads default to the core form files directory, a kept volume
-    // (backed up, survives updates), like core form uploads.
+    // Symfony's `default:` env processor needs the fallback as a parameter
+    // name, so the literal lives here. Uploads are core form files (the core
+    // stores, delivers and erases them); the plugin only signs short links.
     $configurator->parameters()
-        ->set('surveyjs_default_upload_dir', '%selfhelp.form_file_storage_dir%/surveyjs')
-        ->set('surveyjs_default_upload_max_bytes', 25000000)
-        ->set('surveyjs_default_file_url_ttl_seconds', 300);
-
-    // Private file storage (outside web root). Defaults resolve to
-    // `<form files dir>/surveyjs` when the env override is missing.
-    $services->set(SurveyFileStorage::class)
-        ->arg('$uploadDir', '%env(default:surveyjs_default_upload_dir:SURVEYJS_UPLOAD_DIR)%')
-        ->arg('$maxBytes', '%env(int:default:surveyjs_default_upload_max_bytes:SURVEYJS_UPLOAD_MAX_BYTES)%');
+        ->set('surveyjs_default_file_url_ttl_seconds', 3600);
 
     $services->set(SignedFileUrlService::class)
         ->arg('$secret', '%env(default:kernel.secret:SURVEYJS_FILE_URL_SECRET)%')
@@ -112,7 +97,6 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveyJsStyleRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsLookupRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsRealtimeTopicSubscriber::class)->tag('kernel.event_subscriber');
-    $services->set(SurveyJsUserDataCleanupSubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsDataAccessResourcesSubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsSectionBindingSubscriber::class)->tag('kernel.event_subscriber');
 };

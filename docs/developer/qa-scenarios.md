@@ -113,21 +113,21 @@ Automated coverage:
 
 1. Add a `file` question to a survey.
 2. Upload a small PNG.
-3. The answer cell contains `{ id, url, filename, mimeType,
-   sizeBytes, sha256 }` (no base64).
-4. The file lives under `var/form-files/surveyjs/` (unless `SURVEYJS_UPLOAD_DIR` is set).
+3. The answer cell contains `[{ name, type, content: "uploads/form-files/…" }]`
+   (the core file key, no base64, no link); `uploaded_files` lists the key.
+4. The file lives under `var/form-files/user_<id>/table_<id>/record_<id>/` (`guest/…` for a guest).
+5. In the Data screen the question's column shows the file with view and download.
 
 ### 3.2 Signed download
 
-1. Right-click the file link in the response, copy the URL.
-2. Paste it in an incognito window.
-3. Expect `403` because the signature identity does not match.
-4. Sign in as the original uploader / admin: the file streams.
+1. Reload the survey: the file shows again (a fresh signed link).
+2. Change one character of the link's `s` parameter: `403`.
+3. After an hour the link expires: `403`; reloading the survey gives a new one.
 
 ### 3.3 Delete
 
-1. As the original uploader (or admin), delete the response.
-2. The file is removed from disk and `survey_files` row is GONE.
+1. Delete the survey (or its data table in the Data screen).
+2. The response's files are removed from disk.
 
 ### 3.4 GPX question
 

@@ -69,7 +69,7 @@ declare module 'survey-core' {
         onCurrentPageChanged: IEvent<{ oldCurrentPage: { name: string }; newCurrentPage: { name: string }; isNextPage: boolean }>;
         onValueChanged: IEvent<{ name: string; value: unknown }>;
         onAfterRenderQuestion: IEvent<{ question: unknown; htmlElement: HTMLElement }>;
-        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }>) => void; question: unknown }>;
+        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }> | string) => void; question: unknown }>;
         onDownloadFile: IEvent<{ content: unknown; callback: (status: string, value?: string) => void }>;
         onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
     }
@@ -99,7 +99,7 @@ declare module 'survey-core' {
         onCurrentPageChanged: IEvent<{ oldCurrentPage: { name: string }; newCurrentPage: { name: string }; isNextPage: boolean }>;
         onValueChanged: IEvent<{ name: string; value: unknown }>;
         onAfterRenderQuestion: IEvent<{ question: unknown; htmlElement: HTMLElement }>;
-        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }>) => void; question: unknown }>;
+        onUploadFiles: IEvent<{ name: string; files: File[]; callback: (status: string, value?: Array<{ file: File; content: string }> | string) => void; question: unknown }>;
         onDownloadFile: IEvent<{ content: unknown; callback: (status: string, value?: string) => void }>;
         onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
     }

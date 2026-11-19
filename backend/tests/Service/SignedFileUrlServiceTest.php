@@ -8,75 +8,56 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Tests\Service;
 
-use Humdek\SurveyJsBundle\Entity\SurveyFile;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
 /**
- * Round-trip tests for the signed file URL service: a freshly signed
- * URL must verify cleanly, a tampered signature must throw, and an
- * expired timestamp must throw with the dedicated reason code so the
- * controller can map it to a clear 410-style response.
+ * A survey upload is shown through a short-lived signed link, handed out only
+ * with an answer the caller may read: the link is valid for its key until it
+ * expires, and for nothing else.
  */
 final class SignedFileUrlServiceTest extends TestCase
 {
-    public function testSignAndVerifyRoundTrip(): void
+    private const KEY = 'uploads/form-files/guest/table_3/record_7/field_photo/1_abcdef01_a.png';
+
+    public function testALinkOpensItsFileUntilItExpires(): void
     {
         $service = new SignedFileUrlService('test-secret');
-        $file = $this->makeFile(42);
+        $query = $this->query($service->url(self::KEY));
 
-        $signed = $service->sign($file, 7, 'visitor-abc', 60);
-        $service->verify($file, $signed['u'], $signed['e'], $signed['s']);
-
-        $decoded = $service->decodeIdentity($signed['u']);
-        self::assertSame(7, $decoded['userId']);
-        self::assertSame('visitor-abc', $decoded['visitorId']);
+        self::assertSame(self::KEY, $query['k']);
+        $service->verify($query['k'], (int) $query['e'], $query['s']);
+        $this->addToAssertionCount(1);
     }
 
-    public function testVerifyRejectsTamperedSignature(): void
+    public function testALinkDoesNotOpenAnotherFile(): void
     {
         $service = new SignedFileUrlService('test-secret');
-        $file = $this->makeFile(1);
-        $signed = $service->sign($file, null, 'visitor-abc', 60);
+        $query = $this->query($service->url(self::KEY));
 
         $this->expectException(SurveyFileException::class);
-        $this->expectExceptionMessage('signature');
-        $service->verify($file, $signed['u'], $signed['e'], 'bogus-signature');
+        $service->verify(str_replace('record_7', 'record_8', self::KEY), (int) $query['e'], $query['s']);
     }
 
-    public function testVerifyRejectsExpiredSignature(): void
+    public function testAnExpiredLinkIsRefused(): void
     {
         $service = new SignedFileUrlService('test-secret');
-        $file = $this->makeFile(2);
-        // Use a TTL of -10 seconds so the signature lands in the past.
-        $signed = $service->sign($file, 1, null, -10);
+        $query = $this->query($service->url(self::KEY, -10));
 
         $this->expectException(SurveyFileException::class);
-        $service->verify($file, $signed['u'], $signed['e'], $signed['s']);
+        $service->verify(self::KEY, (int) $query['e'], $query['s']);
     }
 
-    public function testDecodeIdentityHandlesAnonymous(): void
+    /**
+     * @return array<string, string>
+     */
+    private function query(string $url): array
     {
-        $service = new SignedFileUrlService('test-secret');
-        $decoded = $service->decodeIdentity('0:visitor-abc');
-        self::assertNull($decoded['userId']);
-        self::assertSame('visitor-abc', $decoded['visitorId']);
-    }
+        self::assertStringStartsWith('/api/plugins/sh2-shp-survey-js/files?', $url);
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
-    private function makeFile(int $id): SurveyFile
-    {
-        // Bypass the constructor — Survey requires Doctrine entities
-        // that aren't bootstrapped in the unit-test context. The
-        // SignedFileUrlService only cares about getId(); the other
-        // fields are irrelevant.
-        $fileRef = new ReflectionClass(SurveyFile::class);
-        /** @var SurveyFile $file */
-        $file = $fileRef->newInstanceWithoutConstructor();
-        $prop = $fileRef->getProperty('id');
-        $prop->setAccessible(true);
-        $prop->setValue($file, $id);
-        return $file;
+        /** @var array<string, string> $query */
+        return $query;
     }
 }

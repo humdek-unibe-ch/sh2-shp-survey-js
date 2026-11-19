@@ -61,6 +61,7 @@
             "readDataTables",
             "writeDataTables",
             "lookupOwnGroup",
+            "lookupExtend",
             "frontendStyles",
             "mobileStyles",
             "adminPages",
@@ -833,27 +834,12 @@
             }
         },
         {
-            "name": "surveyjs_public_file_delete",
-            "path": "/plugins/sh2-shp-survey-js/published/{key}/files/{fileId}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::deleteFile",
-            "methods": [
-                "DELETE"
-            ],
-            "requirements": {
-                "key": "[a-zA-Z0-9_-]+",
-                "fileId": "\\d+"
-            }
-        },
-        {
             "name": "surveyjs_public_file_download",
-            "path": "/plugins/sh2-shp-survey-js/files/{fileId}",
+            "path": "/plugins/sh2-shp-survey-js/files",
             "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::downloadFile",
             "methods": [
                 "GET"
-            ],
-            "requirements": {
-                "fileId": "\\d+"
-            }
+            ]
         }
     ],
     "scheduledJobs": [],

@@ -48,13 +48,14 @@ Publishing refuses to rename or remove a question that already has answers, so a
 | Answers, finished or not | Data store, table `sh2_surveyjs_<survey id>`, one row per response | What a user enters never gets its own SQL table. Export, data access, actions and user cleanup then need no plugin code |
 | Which version a response used, the guest key, the language | Reserved columns in the response row | To redraw old answers with the right version. No plugin table holds user data |
 | When a response started, changed and finished | Core data history and the row's trigger (`started`, `updated`, `finished`) | The core keeps the history of every data row |
-| Uploaded files | The instance's form-upload folder (`var/form-files`) | The folder that is kept on update and backed up |
+| Uploaded files | Core form files of the response's row (`var/form-files`), named by key in the answer | The core keeps, delivers, exports and erases them like a form's files; the folder is kept on update and backed up |
 | Licence key | Environment variable `SURVEYJS_LICENSE_KEY` | Never in the package. Sent only to the screens that need it: the Creator, the dashboard and the PDF export |
 
 - A question's `name` is the column key and never changes. Its `title` is the column label and may change.
 - A complex answer (matrix, dynamic panel) is JSON text in its cell.
 - A guest's row has no owner.
 - The plugin's own tables hold no user data, so removing a user needs no plugin code.
+- A file answer names core form file keys (`[{name, type, content: <key>}]`, or `{key, …}` for GPX and recordings). Its column is declared with the value type `file`; the reserved column `uploaded_files` names every upload. An answer may only name files of its own response.
 
 ## 5. The section fields
 
@@ -95,7 +96,7 @@ The server decides, the client draws.
 - The call that shows a survey is never cached: its answer depends on the clock and the participant.
 - A survey is a resource in core data access, like a page or an asset. `surveyjs.survey.read` opens the SurveyJS admin screens, like `admin.page.read` for pages. Every admin action needs a permission (`.read`, `.create`, `.update`, `.publish`, `.delete`) and the grant on that survey. Publishing needs the publish permission and the update grant.
 - The creator's roles that hold `surveyjs.survey.create` get all four rights on a new survey. A non-admin cannot leave a survey with no role that manages it. Sharing a survey means granting it to another role.
-- Who may see, export or delete a survey's answers is the grant on its data table, through the core data screens. When the survey creates its table, the roles that can edit the survey get the grant on the table. After that the two grants are independent.
+- Who may see, export or delete a survey's answers is the grant on its data table, through the core data screens. When the survey creates its table, the roles that can edit the survey get the grant on the table. After that the two grants are independent. Deleting a survey deletes its answers too (its data table through the core, and its uploaded files), so once the table exists it also needs the delete grant on the table. Deleting one response is the core soft delete: the row, its history and its files stay until explicit erasure (rule 2.5).
 - Placing a survey on a page needs the update right on the page and a view grant on the survey, checked on save and on import.
 - Every request is checked against a JSON Schema, and every reply uses the standard SelfHelp envelope.
 

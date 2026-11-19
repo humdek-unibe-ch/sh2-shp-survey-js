@@ -334,8 +334,8 @@ It checks: lock-file parity, Composer/npm package presence, Mercure reachability
 
 When the install completes, the host writes the following:
 
-- **Database**: 3 plugin-owned tables (`surveys`, `survey_versions`, `survey_files`). Responses, unfinished or submitted, are rows of plugin-owned host `data_tables` created on demand with the `sh2_surveyjs_` prefix. `surveys.survey_id` and each response's `response_id` cell are generated stable keys.
-- **Files**: uploads go to `var/form-files/surveyjs/` (the core form files directory, a kept volume), unless `SURVEYJS_UPLOAD_DIR` is set.
+- **Database**: 2 plugin-owned tables (`surveys`, `survey_versions`). Responses, unfinished or submitted, are rows of plugin-owned host `data_tables` created on demand with the `sh2_surveyjs_` prefix. `surveys.survey_id` and each response's `response_id` cell are generated stable keys.
+- **Files**: uploads are core form files in `var/form-files/` (a kept volume), named in the response's row.
 - **Permissions**: `surveyjs.survey.{create, update, publish, delete}` (admin role by default), plus per-survey grants (resource type `surveyjs_survey`). Earlier versions' `surveyjs.surveys.{manage, view-responses, export-pdf, delete-responses, export-csv, export-xlsx, export-json, upload-files}` — all linked to the `admin` role by the plugin's migration so administrators get the full surface out of the box.
 - **Lookups**: `surveyJsTheme` (default / modern / high-contrast).
 - **Styles**: `surveyjs`, `gpx-map` (available in the page builder; declared in the manifest, written by the installer).

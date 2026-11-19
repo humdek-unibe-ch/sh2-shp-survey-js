@@ -10,8 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6 and 7. Web only; mobile still ships SurveyJS 2 and the old field names (wave 9).
 
 **Needs** a core with the section access check and section variables (H4, H1),
-plugin resource types and the section field check (H6, H7), and a frontend
-that passes `page` to plugin styles (`PluginStyleHost`); set the
+plugin resource types and the section field check (H6, H7), core form files
+for a record without a form (`FormFileUploadService::storeRecordFile`, value
+type `file` for data columns), and a frontend that passes `page` to plugin
+styles (`PluginStyleHost`) and reads file keys inside answers; set the
 `supports.core` / `compatibility.selfhelp` floors at release.
 
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
@@ -98,11 +100,16 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   cookies the backend sets, so the `_sh_sjs_vid` cookie never reached a browser
   and guest resume and guest limits did not work on web. A row keeps the guest
   key only when a guest wrote it.
-- **Uploads move to the core form files folder.** The default upload directory
-  is now `var/form-files/surveyjs` (a kept volume: backed up, survives
-  updates) instead of `var/plugin-data/sh2-shp-survey-js/uploads` (lost on
-  update). **Upgrade step:** move existing uploads from the old folder to the
-  new one, or set `SURVEYJS_UPLOAD_DIR` to the old folder.
+- **Uploads are core form files.** An upload is stored by the core as a form
+  file of the response's row (`var/form-files/user_<id>/…` or `guest/…`, a kept
+  volume) and the answer names it by its key. The column is a file column, so
+  the Data screen shows, downloads and zips the files, and deleting the table,
+  a column or the user erases them, with no plugin code. The reserved column
+  `uploaded_files` names every upload as soon as it is made. An answer may only
+  name files of its own response. The core accepts audio, video and GPX up to
+  25 MB, with the content checked against the extension. Participants open
+  their files through short signed links (one hour). **Upgrade step:** files
+  uploaded before are not carried over (their rows are dropped).
 - The admin Responses list and detail read the data table and show unfinished
   responses; deleting a response is the core soft delete (history kept).
 - Publishing refuses a question named like a column the system writes
@@ -123,6 +130,16 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   not produce duplicate HTML ids.
 
 ### Fixed
+- **Deleting a survey deletes its answers.** The dialog said so, but the
+  survey's data table stayed, and the uploaded files stayed on disk without
+  their rows. The core now deletes the table, with its history and files. Once
+  the survey has answers, deleting it also needs the delete grant on its data
+  table.
+- **A refused upload says why** (wrong type, too large, too many files)
+  under the question, instead of nothing.
+- **The manifest declares `lookupExtend`.** It adds the resource type
+  `surveyjs_survey` to a core lookup group; without the capability the
+  installer refused the plugin.
 - **`update_based_on` with a reserved column name.** A name the core keeps
   for itself (`record`, `user`, `scope`, …) was dropped on save, so every
   visit made a new row. Such a name is now ignored.
@@ -143,14 +160,20 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
 - The PDF of a response printed answers that look like HTML unsanitized; on
   the HTML fallback (no dompdf) a guest could place markup an admin's browser
   ran. Such answers now go through the HTML sanitizer.
-- Deleting a user now deletes the files they uploaded to surveys (listener on
-  the core `UserDataCleanupEvent`); their answers go with the core data.
+- Deleting a user now deletes the files they uploaded to surveys; as core form
+  files they go with the user's data.
 - The Designer no longer shows "N unpublished changes" on a survey nobody
   edited. SurveyJS 3 renames some properties and drops default values when it
   loads a definition, so the published version is now normalized the same way
   (in design mode) before it is compared with the Creator's JSON.
 
 ### Removed
+- **The plugin's own file storage:** the table `survey_files` (dropped by
+  migration `Version20261117132938`), `SurveyFileStorage`, the user-cleanup
+  listener, the file delete route (clearing a file only changes the answer;
+  the file stays in the response's history) and the settings
+  `SURVEYJS_UPLOAD_DIR` and `SURVEYJS_UPLOAD_MAX_BYTES`. The download route is
+  now `GET /plugins/sh2-shp-survey-js/files?k=…&e=…&s=…`.
 - **Fields `survey-js-theme`, `dynamic_replacement`, `close_modal_at_end`
   (wave 7)** are no longer linked to the style. The installer leaves the field
   rows until the plugin is purged.

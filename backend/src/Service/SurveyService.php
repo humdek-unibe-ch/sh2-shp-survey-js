@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
+use App\Service\CMS\DataTableService;
 use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
@@ -35,6 +36,7 @@ final class SurveyService
         private readonly SurveyVersionRepository $versions,
         private readonly SurveyJsRealtimePublisher $realtime,
         private readonly SurveyResponseStore $responses,
+        private readonly DataTableService $dataTables,
     ) {
     }
 
@@ -124,9 +126,15 @@ final class SurveyService
         return $survey;
     }
 
+    /**
+     * Deletes the survey with all its answers, as the delete dialog says: the
+     * core deletes its data table, an explicit erasure that also removes the
+     * history and the uploaded files.
+     */
     public function delete(Survey $survey): void
     {
         $this->em->wrapInTransaction(function () use ($survey): void {
+            $this->dataTables->deleteDataTable(SurveyResponseStore::tableNameFor($survey));
             $this->em->remove($survey);
             $this->em->flush();
         });

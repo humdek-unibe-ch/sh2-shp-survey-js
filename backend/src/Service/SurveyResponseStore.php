@@ -15,10 +15,14 @@ use App\Service\CMS\DataQuery\DataFilterGroup;
 use App\Service\CMS\DataQuery\DataQuery;
 use App\Service\CMS\DataQuery\DataQueryEngine;
 use App\Service\CMS\DataQuery\DataSort;
+use App\Exception\ServiceException;
+use App\Service\CMS\DataColumnService;
 use App\Service\CMS\DataService;
+use App\Service\CMS\FormFileUploadService;
 use App\Service\CMS\DataRevision\RecordWriteContext;
 use App\Service\Core\LookupService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 
@@ -41,6 +45,10 @@ class SurveyResponseStore
     public const COL_GUEST_KEY = 'guest_key';
     public const COL_LANGUAGE = 'language';
     public const COL_PAGE = 'page_no';
+    /** Every file uploaded to the response (core form file keys), written on upload so no file is left unnamed. */
+    public const COL_UPLOADS = 'uploaded_files';
+    /** Uploads one response may hold, so nobody can fill the disk through one survey. */
+    public const MAX_UPLOADS = 50;
 
     /** Columns the plugin writes on every response; a question may not use these names. */
     public const RESERVED_COLUMNS = [
@@ -49,6 +57,7 @@ class SurveyResponseStore
         self::COL_GUEST_KEY,
         self::COL_LANGUAGE,
         self::COL_PAGE,
+        self::COL_UPLOADS,
     ];
 
     /** Keys the core data store reads as row values, not cells. */
@@ -66,6 +75,8 @@ class SurveyResponseStore
         private readonly DataService $dataService,
         private readonly DataQueryEngine $queries,
         private readonly SurveyAccessService $access,
+        private readonly FormFileUploadService $files,
+        private readonly DataColumnService $columns,
     ) {
     }
 
@@ -108,6 +119,11 @@ class SurveyResponseStore
     ): SurveyResponseRecord {
         $tableName = self::tableNameFor($survey);
         $this->ensureDataTable($tableName, $survey);
+        $table = $this->table($survey);
+        // A file answer may only name files uploaded to this response.
+        $owns = fn (string $key): bool => $existing !== null && $table !== null
+            && $this->files->isRecordFileKey($key, (int) $table->getId(), $existing->recordId);
+        $fileColumns = [];
 
         // The storage key is the immutable question name; the title travels as
         // the column's display label (core keeps an admin-curated label). A
@@ -119,7 +135,10 @@ class SurveyResponseStore
             if (in_array($cell['name'], self::RESERVED_COLUMNS, true) || in_array($cell['name'], self::SYSTEM_COLUMNS, true)) {
                 continue;
             }
-            $data[$cell['name']] = self::stringify($cell['value']);
+            $data[$cell['name']] = self::stringify(SurveyFileAnswers::toStored($cell['value'], $owns));
+            if (FormFileUploadService::keysIn($data[$cell['name']]) !== []) {
+                $fileColumns[] = $cell['name'];
+            }
             $title = $cell['title'] ?? null;
             if (is_string($title) && $title !== '') {
                 $labels[$cell['name']] = $title;
@@ -160,9 +179,49 @@ class SurveyResponseStore
         if ($recordId === false) {
             throw new \RuntimeException(sprintf('Failed to save the response to survey "%s".', $survey->getSurveyId()));
         }
+        if ($fileColumns !== [] && $table !== null) {
+            $this->columns->markFileColumns($table, $fileColumns);
+        }
 
         return $this->findByRecordId($survey, $recordId)
             ?? throw new \RuntimeException('The saved response could not be read back.');
+    }
+
+    /**
+     * Stores an upload as a core form file of the response's row and names it
+     * in the row right away ({@see self::COL_UPLOADS}), so even a file the
+     * participant never saves in an answer is erased with the response's data.
+     * A submitted response is not touched: saving would make it unfinished;
+     * its edit names the file when it is submitted again.
+     *
+     * @return string the file's key
+     */
+    public function storeUpload(Survey $survey, SurveyResponseRecord $record, UploadedFile $file, string $questionName, ?int $userId): string
+    {
+        $table = $this->table($survey) ?? throw new \RuntimeException('The survey has no data table yet.');
+        if (count($record->uploadedFiles) >= self::MAX_UPLOADS) {
+            throw new ServiceException(sprintf('A response may hold at most %d uploaded files.', self::MAX_UPLOADS), 400);
+        }
+        $key = $this->files->storeRecordFile($file, (int) $table->getId(), $record->recordId, $questionName, $userId);
+        $this->columns->markFileColumns($table, [self::COL_UPLOADS]);
+        if ($record->isFinished()) {
+            return $key;
+        }
+
+        $saved = $this->dataService->saveData(
+            self::tableNameFor($survey),
+            [self::COL_UPLOADS => json_encode([...$record->uploadedFiles, $key], JSON_UNESCAPED_SLASHES) ?: '[]'],
+            LookupService::TRANSACTION_BY_BY_USER,
+            ['record_id' => $record->recordId],
+            false,
+            null,
+            new RecordWriteContext(LookupService::DATA_REVISION_SOURCES_FORM),
+        );
+        if ($saved === false) {
+            throw new \RuntimeException('The upload could not be named in the response.');
+        }
+
+        return $key;
     }
 
     public function findByResponseId(Survey $survey, string $responseId): ?SurveyResponseRecord
@@ -338,6 +397,11 @@ class SurveyResponseStore
     private function optionalColumns(): array
     {
         return array_fill_keys(self::RESERVED_COLUMNS, 'text');
+    }
+
+    public function hasDataTable(Survey $survey): bool
+    {
+        return $this->table($survey) !== null;
     }
 
     private function table(Survey $survey): ?DataTable

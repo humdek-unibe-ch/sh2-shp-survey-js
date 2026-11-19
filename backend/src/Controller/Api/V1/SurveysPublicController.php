@@ -9,15 +9,14 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
 use App\Exception\ServiceException;
+use App\Service\CMS\FormFileUploadService;
 use Humdek\SurveyJsBundle\Entity\Survey;
-use Humdek\SurveyJsBundle\Entity\SurveyFile;
 use Humdek\SurveyJsBundle\Exception\SurveyFileException;
 use Humdek\SurveyJsBundle\Exception\SurveySubmissionRejectedException;
-use Humdek\SurveyJsBundle\Repository\SurveyFileRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Service\SignedFileUrlService;
 use Humdek\SurveyJsBundle\Service\SurveyAccessService;
-use Humdek\SurveyJsBundle\Service\SurveyFileStorage;
+use Humdek\SurveyJsBundle\Service\SurveyFileAnswers;
 use Humdek\SurveyJsBundle\Service\SurveyResponseDraftService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
 use Humdek\SurveyJsBundle\Service\SurveyResponseService;
@@ -61,18 +60,21 @@ use Humdek\SurveyJsBundle\Service\SurveyJsApi;
 #[AsController]
 final class SurveysPublicController
 {
+    /** Files that could run as a page are never shown in the browser, only downloaded. */
+    private const DOWNLOAD_ONLY_MIME_TYPES = ['text/html', 'application/xhtml+xml', 'text/xml', 'application/xml', 'application/gpx+xml'];
+
     public function __construct(
         private readonly ?string $licenseKey,
         private readonly SurveyRepository $surveys,
         private readonly SurveyJsApi $api,
         private readonly SurveyResponseService $responseService,
         private readonly SurveyResponseDraftService $draftService,
-        private readonly SurveyFileStorage $fileStorage,
         private readonly SignedFileUrlService $signedUrls,
+        private readonly SurveyFileAnswers $fileAnswers,
+        private readonly FormFileUploadService $formFiles,
         private readonly SurveySectionResolver $sections,
         private readonly SurveyAccessService $access,
         private readonly VisitorIdResolver $visitor,
-        private readonly SurveyFileRepository $files,
         private readonly SurveyResponseStore $responseStore,
     ) {
     }
@@ -320,7 +322,7 @@ final class SurveysPublicController
         return $this->api->success([
                 'responseId' => $record->responseId,
                 'submittedAt' => $record->lastChangedAt?->format(DATE_ATOM),
-                'answers' => $record->answers,
+                'answers' => $this->fileAnswers->answersToClient($record->answers),
             ], 200, $response);
     }
 
@@ -347,103 +349,68 @@ final class SurveysPublicController
             return $this->api->failure('file required.', 422, null, $response);
         }
 
-        // The caller must own a response of this survey with that id (saved as
-        // progress at least once), so nobody can add files to another
-        // participant's response.
-        if (!$this->access->canOnResponses($survey, SurveyAccessService::UPDATE)) {
-            $record = $this->responseStore->findByResponseId($survey, $responseId);
-            if ($record === null) {
-                return $this->api->failure('Cannot upload before starting the survey. Save the first page before uploading files.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
-            }
-            if (!$record->belongsTo($userId, $visitorId)) {
-                return $this->api->failure('You do not own this response.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
-            }
+        // Files belong to a response saved at least once, of the caller (or
+        // of anyone, for a role that may edit the survey's answers), so nobody
+        // can add files to another participant's response.
+        $record = $this->responseStore->findByResponseId($survey, $responseId);
+        if ($record === null) {
+            return $this->api->failure('Cannot upload before starting the survey. Save the first page before uploading files.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
+        }
+        if (!$record->belongsTo($userId, $visitorId) && !$this->access->canOnResponses($survey, SurveyAccessService::UPDATE)) {
+            return $this->api->failure('You do not own this response.', 403, SurveyFileException::REASON_FORBIDDEN, $response);
         }
 
         try {
-            $stored = $this->fileStorage->upload(
-                $survey,
-                $responseId,
-                $questionName,
-                $uploaded,
-                $userId,
-                $visitorId,
-            );
-        } catch (SurveyFileException $e) {
-            $status = match ($e->reason) {
-                SurveyFileException::REASON_TOO_LARGE => 413,
-                SurveyFileException::REASON_MIME_NOT_ALLOWED => 415,
-                default => 422,
-            };
-            return $this->api->failure($e->getMessage(), $status, $e->reason, $response);
+            $key = $this->responseStore->storeUpload($survey, $record, $uploaded, $questionName, $userId);
+        } catch (ServiceException $e) {
+            $status = $e->getCode() >= 400 && $e->getCode() < 500 ? 422 : 500;
+            return $this->api->failure($e->getMessage(), $status, SurveyFileException::REASON_INVALID, $response);
         }
 
-        return $this->api->success($this->filePayload($stored, $userId, $visitorId), 201, $response);
+        return $this->api->success([
+            'key' => $key,
+            'filename' => (string) ($uploaded->getClientOriginalName() ?: FormFileUploadService::nameOfKey($key)),
+            'mimeType' => (string) ($uploaded->getClientMimeType() ?: 'application/octet-stream'),
+            'downloadUrl' => $this->signedUrls->url($key),
+        ], 201, $response);
     }
 
-    public function deleteFile(string $key, int $fileId, Request $request): Response
+    /**
+     * A survey upload behind a signed link (handed out only with an answer the
+     * caller may read). The file is the core's; it is served sandboxed, like
+     * the core's own form file delivery.
+     */
+    public function downloadFile(Request $request): Response
     {
-        $survey = $this->resolveSurvey($key);
-        if (!$survey instanceof Survey || $survey->isArchived()) {
-            return $this->api->failure('Not found.', 404);
-        }
-        $settings = $this->gate($request, $survey);
-        if ($settings instanceof JsonResponse) {
-            return $settings;
-        }
-        $file = $this->files->find($fileId);
-        if (!$file instanceof SurveyFile || $file->getSurvey()->getId() !== $survey->getId()) {
-            return $this->api->failure('Not found.', 404);
-        }
-        $userId = $this->userId($request);
-        $response = $this->api->success(['deleted' => true]);
-        $visitorId = $this->visitor->ensureVisitorId($request, $response);
-        $isAdmin = $this->access->canOnResponses($survey, SurveyAccessService::DELETE);
-        if (!$file->isOwnedBy($userId, $visitorId) && !$isAdmin) {
-            return $this->api->failure('Forbidden.', 403, null, $response);
-        }
-        $this->fileStorage->delete($file);
-        return $response;
-    }
-
-    public function downloadFile(int $fileId, Request $request): Response
-    {
-        $file = $this->files->find($fileId);
-        if (!$file instanceof SurveyFile) {
-            return $this->api->failure('Not found.', 404);
-        }
-        $userId = $this->userId($request);
-        $response = new JsonResponse();
-        $visitorId = $this->visitor->ensureVisitorId($request, $response);
-        $isAdmin = $this->access->canOnResponses($file->getSurvey(), SurveyAccessService::READ);
-
+        $key = $request->query->get(SignedFileUrlService::QUERY_KEY);
         $signature = $request->query->get(SignedFileUrlService::QUERY_SIGNATURE);
         $expires = (int) $request->query->get(SignedFileUrlService::QUERY_EXPIRES);
-        $identity = $request->query->get(SignedFileUrlService::QUERY_IDENTITY);
-        if (is_string($signature) && is_string($identity) && $expires > 0) {
-            try {
-                $this->signedUrls->verify($file, $identity, $expires, $signature);
-            } catch (SurveyFileException $e) {
-                return $this->api->failure($e->getMessage(), 403, $e->reason, $response);
-            }
-            $decoded = $this->signedUrls->decodeIdentity($identity);
-            if (!$isAdmin && !$file->isOwnedBy($decoded['userId'], $decoded['visitorId'])) {
-                return $this->api->failure('Forbidden.', 403, null, $response);
-            }
-        } elseif (!$isAdmin && !$file->isOwnedBy($userId, $visitorId)) {
-            return $this->api->failure('Forbidden.', 403, null, $response);
+        if (!is_string($key) || !is_string($signature) || $expires <= 0) {
+            return $this->api->failure('Not found.', 404);
+        }
+        try {
+            $this->signedUrls->verify($key, $expires, $signature);
+        } catch (SurveyFileException $e) {
+            return $this->api->failure($e->getMessage(), 403, $e->reason);
+        }
+        $path = $this->formFiles->resolveKey($key);
+        if ($path === null) {
+            return $this->api->failure('File missing on disk.', 410, SurveyFileException::REASON_NOT_FOUND);
         }
 
-        $absolute = $this->fileStorage->resolvePath($file);
-        if (!is_file($absolute)) {
-            return $this->api->failure('File missing on disk.', 410, SurveyFileException::REASON_NOT_FOUND, $response);
-        }
-        $download = new BinaryFileResponse($absolute);
-        $download->headers->set('Content-Type', $file->getMimeType());
+        // Same delivery rules as the core's form files: markup is only downloaded,
+        // everything is sandboxed, nothing is cached.
+        $download = new BinaryFileResponse($path);
+        $downloadOnly = in_array($download->getFile()->getMimeType(), self::DOWNLOAD_ONLY_MIME_TYPES, true);
         $download->setContentDisposition(
-            ResponseHeaderBag::DISPOSITION_INLINE,
-            $file->getOriginalFilename(),
+            $downloadOnly ? ResponseHeaderBag::DISPOSITION_ATTACHMENT : ResponseHeaderBag::DISPOSITION_INLINE,
+            FormFileUploadService::nameOfKey($key),
         );
+        $download->setPrivate();
+        $download->headers->addCacheControlDirective('no-store');
+        $download->headers->set('X-Content-Type-Options', 'nosniff');
+        $download->headers->set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox");
+
         return $download;
     }
 
@@ -526,33 +493,8 @@ final class SurveysPublicController
         return [
             'responseId' => $draft->responseId,
             'pageNo' => $draft->pageNo,
-            'payload' => ['data' => $draft->answers, 'locale' => $draft->language],
+            'payload' => ['data' => $this->fileAnswers->answersToClient($draft->answers), 'locale' => $draft->language],
             'lastSavedAt' => $draft->lastChangedAt?->format(DATE_ATOM),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function filePayload(SurveyFile $file, ?int $userId, ?string $visitorId): array
-    {
-        $signed = $this->signedUrls->sign($file, $userId, $visitorId);
-        $query = http_build_query($signed);
-        return [
-            'id' => $file->getId(),
-            'responseId' => $file->getResponseId(),
-            'questionName' => $file->getQuestionName(),
-            'filename' => $file->getOriginalFilename(),
-            'mimeType' => $file->getMimeType(),
-            'sizeBytes' => $file->getSizeBytes(),
-            'sha256' => $file->getSha256(),
-            'uploadedAt' => $file->getUploadedAt()->format(DATE_ATOM),
-            // Browser-side URL: goes through the host Next.js BFF
-            // proxy at `/api/[...path]`, which validates CSRF (for
-            // unsafe methods), attaches the httpOnly JWT and rewrites
-            // the prefix to `/cms-api/v1/...` before hitting Symfony.
-            // The HMAC-signed query string is forwarded verbatim.
-            'downloadUrl' => '/api/plugins/sh2-shp-survey-js/files/' . $file->getId() . '?' . $query,
         ];
     }
 
