@@ -13,7 +13,8 @@ SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6 and 7. Web 
 plugin resource types and the section field check (H6, H7), core form files
 for a record without a form (`FormFileUploadService::storeRecordFile`, value
 type `file` for data columns), and a frontend that passes `page` to plugin
-styles (`PluginStyleHost`) and reads file keys inside answers; set the
+styles (`PluginStyleHost`), reads file keys inside answers and lends plugins
+its HTML sanitizer (`IPluginApi.sanitizeHtml`); set the
 `supports.core` / `compatibility.selfhelp` floors at release.
 
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
@@ -135,6 +136,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   their rows. The core now deletes the table, with its history and files. Once
   the survey has answers, deleting it also needs the delete grant on its data
   table.
+- **Section texts are sanitized by the host.** A text the editor wrote as
+  HTML went into the page unsanitized; it now goes through the host's
+  `sanitizeHtml` (the core pages' rules). On a host without it the HTML is
+  shown as plain text.
 - **A refused upload says why** (wrong type, too large, too many files)
   under the question, instead of nothing.
 - **The manifest declares `lookupExtend`.** It adds the resource type
