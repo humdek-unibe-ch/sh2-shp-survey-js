@@ -76,7 +76,7 @@ Style `surveyjs`, fields added by the plugin:
 | `auto_save_interval` | Save progress every N seconds |
 | `update_based_on` | Name of the column that identifies a response row; its value comes from the URL. Several surveys can then fill one row |
 | `auto_session_key` | Gives each guest a private key in the link, so guests sharing one invite link do not see each other's answers and can continue on another device |
-| `label_survey_done`, `label_survey_not_active` | Texts shown instead of the survey (translatable) |
+| `label_survey_done`, `label_survey_not_active`, `label_survey_timeout`, `label_login_required`, `label_loading`, `label_submitting`, `btn_new_response_label`, and the core form's `alert_success_title`, `alert_success`, `alert_error_title`, `alert_error` | Every text the participant sees (translatable). Empty shows nothing; only the error texts have a default |
 | `redirect_at_end` | Where to go after submitting |
 | `close_modal_on_save` | Close the popup the page was opened in, like the core form |
 | `url_params` | Pass URL parameters into the survey |

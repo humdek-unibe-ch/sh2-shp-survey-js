@@ -5,11 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 import { renderMarkdown } from './markdown';
 
-export function stateMessageHtml(label: string | null, fallback: string): string {
-    return renderStatusLabel(label) ?? renderMarkdown(fallback);
-}
-
-function renderStatusLabel(label: string | null): string | null {
+/** A section text as HTML, or null when the section leaves it empty (then nothing is shown). */
+export function stateMessageHtml(label: string | null): string | null {
     const value = label?.trim() ?? '';
     if (value === '') {
         return null;

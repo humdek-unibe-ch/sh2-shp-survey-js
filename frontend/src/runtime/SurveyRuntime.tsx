@@ -106,13 +106,29 @@ interface ISurveyRuntimeBridge {
 type LifecycleState =
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
-    | { kind: 'not-active'; label: string | null }
+    | { kind: 'not-active' }
     | { kind: 'login-required' }
-    | { kind: 'locked'; label: string | null; reason?: string }
+    | { kind: 'locked'; reason?: string }
     | { kind: 'ready' }
     | { kind: 'submitting' }
-    | { kind: 'submitted'; responseId: string; submittedAt: string }
-    | { kind: 'timed-out'; label: string | null };
+    | { kind: 'submitted' }
+    | { kind: 'submit-failed' }
+    | { kind: 'timed-out' };
+
+/** The section's texts for each step; an empty field shows nothing (the error texts have a default). */
+interface ISurveyTexts {
+    loading: string | null;
+    loginRequired: string | null;
+    notActive: string | null;
+    done: string | null;
+    timeout: string | null;
+    submitting: string | null;
+    successTitle: string | null;
+    success: string | null;
+    errorTitle: string | null;
+    error: string | null;
+    newResponse: string | null;
+}
 
 async function loadRuntime(): Promise<ISurveyRuntimeBridge> {
     const [core, ui] = await Promise.all([
@@ -141,6 +157,22 @@ export function SurveyRuntime({
         () => extractFieldString(runtimeSection, 'survey_js') ?? extractFieldString(runtimeSection, 'survey-js'),
         [runtimeSection],
     );
+    const texts = useMemo<ISurveyTexts>(() => {
+        const text = (key: string): string | null => extractFieldString(runtimeSection, key);
+        return {
+            loading: text('label_loading'),
+            loginRequired: text('label_login_required'),
+            notActive: text('label_survey_not_active'),
+            done: text('label_survey_done'),
+            timeout: text('label_survey_timeout'),
+            submitting: text('label_submitting'),
+            successTitle: text('alert_success_title'),
+            success: text('alert_success'),
+            errorTitle: text('alert_error_title'),
+            error: text('alert_error'),
+            newResponse: text('btn_new_response_label'),
+        };
+    }, [runtimeSection]);
     const sectionId = runtimeSection?.id;
     const pageId = page?.id ?? null;
     const languageId = page?.languageId ?? null;
@@ -227,7 +259,6 @@ export function SurveyRuntime({
                 if (data.state.lockoutReason && !editModeResponseId) {
                     setLifecycle({
                         kind: 'locked',
-                        label: data.runtimeConfig.labelSurveyDone,
                         reason: data.state.lockoutReason.reason,
                     });
                     return;
@@ -235,7 +266,6 @@ export function SurveyRuntime({
                 if (data.state.notActive) {
                     setLifecycle({
                         kind: 'not-active',
-                        label: data.runtimeConfig.labelSurveyNotActive,
                     });
                     return;
                 }
@@ -337,7 +367,6 @@ export function SurveyRuntime({
                     if (disposed || submittingRef.current) return;
                     setLifecycle({
                         kind: 'timed-out',
-                        label: published.runtimeConfig.labelSurveyNotActive,
                     });
                     if (draftStoreRef.current && responseIdRef.current) {
                         draftStoreRef.current.clear(responseIdRef.current);
@@ -364,21 +393,8 @@ export function SurveyRuntime({
                     if (draftStoreRef.current) {
                         draftStoreRef.current.clearAll();
                     }
-                    if (config.oncePerUser || config.oncePerSchedule) {
-                        setLifecycle({
-                            kind: 'locked',
-                            label: published.runtimeConfig.labelSurveyDone,
-                            reason: config.oncePerUser
-                                ? 'already_submitted_once'
-                                : 'already_submitted_in_window',
-                        });
-                    } else {
-                        setLifecycle({
-                            kind: 'submitted',
-                            responseId: result.responseId,
-                            submittedAt: result.submittedAt,
-                        });
-                    }
+                    // Right after a submit the success message shows; the "done" label is for coming back.
+                    setLifecycle({ kind: 'submitted' });
                     const popup = pageModalRef.current;
                     if (config.closeModalOnSave && popup?.inModal) {
                         popup.closeModal();
@@ -391,21 +407,18 @@ export function SurveyRuntime({
                     if (disposed) return;
                     const reason = (err as { reason?: string }).reason ?? '';
                     if (reason === 'not_active') {
-                        setLifecycle({ kind: 'not-active', label: config.labelSurveyNotActive });
+                        setLifecycle({ kind: 'not-active' });
                         return;
                     }
                     if (reason === 'already_submitted_once' || reason === 'already_submitted_in_window') {
                         setLifecycle({
                             kind: 'locked',
-                            label: published.runtimeConfig.labelSurveyDone,
                             reason,
                         });
                         return;
                     }
-                    setLifecycle({
-                        kind: 'error',
-                        message: `Survey submission failed: ${(err as Error).message}`,
-                    });
+                    console.error('SurveyJS submission failed', err);
+                    setLifecycle({ kind: 'submit-failed' });
                 });
         });
 
@@ -487,59 +500,62 @@ export function SurveyRuntime({
     // These lifecycle states intentionally render before the generic
     // loading guard because they do not build a SurveyJS model at all.
     if (lifecycle.kind === 'not-active') {
-        return renderInfoBlock(lifecycle.label, 'gray', 'This survey is not open right now.');
+        return renderInfoBlock(texts.notActive, 'gray');
     }
 
     if (lifecycle.kind === 'login-required') {
-        return (
-            <StateFrame>
-                <Alert color="blue">Please sign in to answer this survey.</Alert>
-            </StateFrame>
-        );
+        return renderInfoBlock(texts.loginRequired, 'blue');
     }
 
     if (lifecycle.kind === 'locked') {
-        return renderInfoBlock(lifecycle.label, 'blue', 'You have already completed this survey.');
+        return renderInfoBlock(texts.done, 'blue');
     }
 
     if (lifecycle.kind === 'timed-out') {
-        return renderInfoBlock(lifecycle.label, 'orange', 'The time for this survey is over.');
+        return renderInfoBlock(texts.timeout, 'orange');
+    }
+
+    if (lifecycle.kind === 'submit-failed') {
+        return (
+            <StateFrame>
+                <Alert color="red" role="alert" title={texts.errorTitle ?? 'Your answers could not be sent'}>
+                    <MessageHtml html={stateMessageHtml(texts.error) ?? 'Please try again later. Your answers so far are kept on this device.'} />
+                </Alert>
+            </StateFrame>
+        );
     }
 
     if (lifecycle.kind === 'loading' || !bridge || !published || !model) {
-        return (
-            <StateFrame>
-                <Stack align="center" gap="xs">
-                    <Loader size="md" />
-                    <Text>Loading survey…</Text>
-                </Stack>
-            </StateFrame>
-        );
+        return renderBusy(texts.loading);
     }
 
     if (lifecycle.kind === 'submitting') {
-        return (
-            <StateFrame>
-                <Stack align="center" gap="xs">
-                    <Loader size="md" />
-                    <Text>Submitting your response…</Text>
-                </Stack>
-            </StateFrame>
-        );
+        return renderBusy(texts.submitting);
     }
 
     if (lifecycle.kind === 'submitted') {
+        const message = stateMessageHtml(texts.success);
+        const config = published.runtimeConfig;
+        // Once per user or schedule: the server would refuse a new response.
+        const newResponse = config.oncePerUser || config.oncePerSchedule ? null : texts.newResponse;
+        if (!texts.successTitle && !message && !newResponse) {
+            return null;
+        }
         return (
             <StateFrame>
                 <Stack>
-                    <Alert color="green" title="Response recorded">
-                        Thank you — your response was recorded at {lifecycle.submittedAt}.
-                    </Alert>
-                    <Group>
-                        <Button variant="default" onClick={startOver}>
-                            Start a new response
-                        </Button>
-                    </Group>
+                    {(texts.successTitle || message) && (
+                        <Alert color="green" role="status" title={texts.successTitle ?? undefined}>
+                            {message && <MessageHtml html={message} />}
+                        </Alert>
+                    )}
+                    {newResponse && (
+                        <Group>
+                            <Button variant="default" onClick={startOver}>
+                                {newResponse}
+                            </Button>
+                        </Group>
+                    )}
                 </Stack>
             </StateFrame>
         );
@@ -564,12 +580,33 @@ function StateFrame({ children }: { children: React.ReactNode }): React.ReactEle
     return <Box py="md">{children}</Box>;
 }
 
-function renderInfoBlock(label: string | null, color: string, fallback: string): React.ReactElement {
+function MessageHtml({ html }: { html: string }): React.ReactElement {
+    return <Box dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** A step's message instead of the survey; nothing when the section leaves its text empty. */
+function renderInfoBlock(label: string | null, color: string): React.ReactElement | null {
+    const html = stateMessageHtml(label);
+    if (html === null) {
+        return null;
+    }
     return (
         <StateFrame>
-            <Alert color={color}>
-                <Box dangerouslySetInnerHTML={{ __html: stateMessageHtml(label, fallback) }} />
+            <Alert color={color} role="status">
+                <MessageHtml html={html} />
             </Alert>
+        </StateFrame>
+    );
+}
+
+/** The spinner, with the section's text next to it when there is one. */
+function renderBusy(label: string | null): React.ReactElement {
+    return (
+        <StateFrame>
+            <Stack align="center" gap="xs" role="status" aria-busy="true">
+                <Loader size="md" aria-label={label ?? 'Loading'} />
+                {label && <Text>{label}</Text>}
+            </Stack>
         </StateFrame>
     );
 }

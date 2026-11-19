@@ -146,9 +146,16 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
 - **`gpx-map` broke the page layout.** Leaflet's stylesheet was never loaded,
   so the map tiles spilled out of the section; it is now part of the plugin
   stylesheet.
-- **Empty state labels.** When a section leaves `label_survey_not_active`,
-  `label_survey_done` or the timeout label empty, the participant now sees a
-  short default text instead of an empty spot.
+- **Every text the participant sees is a section field (translatable).**
+  New: `label_survey_timeout` (the timeout reused the "not active" text),
+  `label_login_required`, `label_loading`, `label_submitting` and
+  `btn_new_response_label`; the success and error messages use the core form
+  fields `alert_success_title`, `alert_success`, `alert_error_title` and
+  `alert_error`. An empty text shows nothing: no message, the spinner alone,
+  no "new response" button (never shown with once per user or per schedule
+  either). Only the error texts fall back to a default. After a submit the
+  success message shows, also with once per user; "survey done" is for
+  coming back.
 - **Licence badge.** The admin page no longer says "License not configured"
   when the licence could not be read (for example without permission).
 - The browser could switch off a survey's limits: the backend believed the

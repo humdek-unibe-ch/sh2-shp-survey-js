@@ -302,6 +302,31 @@
             "translatable": true
         },
         {
+            "name": "label_survey_timeout",
+            "type": "markdown-inline",
+            "translatable": true
+        },
+        {
+            "name": "label_login_required",
+            "type": "markdown-inline",
+            "translatable": true
+        },
+        {
+            "name": "label_loading",
+            "type": "text",
+            "translatable": true
+        },
+        {
+            "name": "label_submitting",
+            "type": "text",
+            "translatable": true
+        },
+        {
+            "name": "btn_new_response_label",
+            "type": "text",
+            "translatable": true
+        },
+        {
             "name": "timeout",
             "type": "number"
         },
@@ -400,12 +425,57 @@
                 {
                     "name": "label_survey_done",
                     "title": "Label - Survey Done",
-                    "help": "Markdown shown when the survey is already completed and `once_per_*` blocks a re-run."
+                    "help": "Shown instead of the survey when the participant already answered and once per user or once per schedule blocks another answer. Empty: nothing is shown."
                 },
                 {
                     "name": "label_survey_not_active",
                     "title": "Label - Survey Not Active",
-                    "help": "Markdown shown when the survey is outside its `start_time` / `end_time` window."
+                    "help": "Shown instead of the survey outside its start and end time. Empty: nothing is shown."
+                },
+                {
+                    "name": "label_survey_timeout",
+                    "title": "Label - Survey Timeout",
+                    "help": "Shown when the time set in Timeout is over. Empty: nothing is shown."
+                },
+                {
+                    "name": "label_login_required",
+                    "title": "Label - Login Required",
+                    "help": "Shown instead of the survey to a visitor who is not signed in, when anonymous answers are not allowed. Empty: nothing is shown."
+                },
+                {
+                    "name": "label_loading",
+                    "title": "Label - Loading",
+                    "help": "Shown next to the spinner while the survey loads. Empty: nothing is shown."
+                },
+                {
+                    "name": "label_submitting",
+                    "title": "Label - Submitting",
+                    "help": "Shown next to the spinner while the answers are sent. Empty: nothing is shown."
+                },
+                {
+                    "name": "alert_success_title",
+                    "title": "Success Title",
+                    "help": "Title of the message shown after the survey is submitted, like a form's. Empty: nothing is shown."
+                },
+                {
+                    "name": "alert_success",
+                    "title": "Success Message",
+                    "help": "Text of the message shown after the survey is submitted, like a form's. Empty: nothing is shown."
+                },
+                {
+                    "name": "alert_error_title",
+                    "title": "Error Title",
+                    "help": "Title shown when the answers could not be sent. Empty: a default title is shown, so the participant always knows."
+                },
+                {
+                    "name": "alert_error",
+                    "title": "Error Message",
+                    "help": "Text shown when the answers could not be sent. Empty: a default text is shown, so the participant always knows."
+                },
+                {
+                    "name": "btn_new_response_label",
+                    "title": "Button - New Response",
+                    "help": "Label of the button that starts a new response after submitting. Never shown when once per user or once per schedule is on. Empty: nothing is shown."
                 },
                 {
                     "name": "timeout",

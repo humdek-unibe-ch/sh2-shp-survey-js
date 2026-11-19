@@ -224,22 +224,39 @@ host-frontend code changes are required.
 
 ## 7. Configure survey-style parameters
 
-The `surveyjs` style exposes the following fields. All are stored on
-the section, so different pages can pin different parameters.
+The `surveyjs` style's fields are stored on the section, so different pages
+can show the same survey with different settings. The server reads every
+limit from the published section; the browser cannot change them.
 
-| Field                 | Default     | Effect                                                          |
-|-----------------------|-------------|-----------------------------------------------------------------|
-| `surveyKeySlug`       | _required_  | Which survey to render.                                          |
-| `mode`                | `interactive` | `readonly` mounts the renderer in display-only mode.            |
-| `savePartialAnswers`  | `false`     | POST progress after each page change.                            |
-| `redirectOnSubmit`    | _empty_     | Absolute / relative URL; empty means stay on the same page.      |
-| `showProgressBar`     | `auto`      | `off` / `auto` / `top` / `bottom`.                               |
-| `richTextEditor`      | `false`     | Forces rich-text editing for editable fields in the runtime UI.  |
-| `cssVariables`        | _empty_     | JSON map of CSS custom properties to inject (per-section themes).|
-| `analyticsTopicKey`   | _empty_     | Per-section Mercure topic suffix for "answered" events.           |
+| Field | Effect |
+|---|---|
+| Survey (`survey_js`) | Which survey the section shows. |
+| Once Per User / Once Per Schedule | The participant may answer once, or once per daily window. |
+| Start Time / End Time | The daily window when the survey is open, in the participant's timezone. |
+| Timeout (minutes) | The survey closes this long after the participant started it; 0 = off. |
+| Allow Anonymous | Visitors who are not signed in may answer. |
+| Restart on Refresh / Auto-Save Interval | Start over on every reload / save progress every N seconds. |
+| Redirect At End / Close Popup On Save | Where to go, or close the page's popup, after submitting. |
+| Save as PDF | The participant can download their answers as a PDF. |
+| URL Parameters / Update Based On / Auto Session Key | Pass link parameters into the survey / continue the row named by a link parameter / give each guest a private link key. |
 
-When a field is left empty, the plugin falls back to the survey-level
-default (theme, rich-text) or the global default (mode).
+### Texts the participant sees
+
+All texts are translatable and empty by default. **An empty text shows
+nothing**, except the two error texts, which fall back to a default so a
+participant always knows when their answers were not sent.
+
+| Field | Shown when |
+|---|---|
+| Label - Loading | Next to the spinner while the survey loads (empty: spinner only). |
+| Label - Login Required | To a visitor who is not signed in, when anonymous answers are off. |
+| Label - Survey Not Active | Outside the start and end time. |
+| Label - Survey Done | When the participant comes back after answering and once per user / per schedule blocks another answer. |
+| Label - Survey Timeout | When the timeout ran out while answering. |
+| Label - Submitting | Next to the spinner while the answers are sent (empty: spinner only). |
+| Success Title / Success Message | After submitting (the same fields as a core form). |
+| Button - New Response | After submitting, a button to answer again. Never shown with once per user or once per schedule. |
+| Error Title / Error Message | When the answers could not be sent (empty: a default text). |
 
 ---
 
