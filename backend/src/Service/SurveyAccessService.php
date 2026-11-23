@@ -32,6 +32,7 @@ use Humdek\SurveyJsBundle\Entity\Survey;
 class SurveyAccessService
 {
     public const RESOURCE_TYPE = 'surveyjs_survey';
+    public const PERMISSION_READ = 'surveyjs.survey.read';
     public const PERMISSION_CREATE = 'surveyjs.survey.create';
     public const PERMISSION_UPDATE = 'surveyjs.survey.update';
     public const PERMISSION_PUBLISH = 'surveyjs.survey.publish';
@@ -83,6 +84,15 @@ class SurveyAccessService
         }
 
         return array_keys(array_filter($masks, static fn (int $mask): bool => ($mask & self::READ) !== 0));
+    }
+
+    /** Whether the caller holds any of the survey admin permissions (the admin routes need one). */
+    public function canOpenAdmin(): bool
+    {
+        return array_intersect(
+            [self::PERMISSION_READ, self::PERMISSION_CREATE, self::PERMISSION_UPDATE, self::PERMISSION_PUBLISH, self::PERMISSION_DELETE],
+            $this->callerPermissions(),
+        ) !== [];
     }
 
     /** Whether the caller may create surveys (the route permission; a new survey has no grant yet). */

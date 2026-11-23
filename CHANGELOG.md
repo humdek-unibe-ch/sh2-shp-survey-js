@@ -65,6 +65,13 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   **Refresh** (as on Users or Data); the filters take effect on Apply. The
   State column, which read "Active" on every row, is gone; an archived survey
   has an **Archived** badge next to its name.
+- **Survey realtime reaches the screens.** No survey event ever arrived: the
+  plugin never granted its topics (the host subscribes only to granted topics),
+  and it sent events under names `usePluginRealtime` does not listen for. A new
+  `SurveyJsRealtimeGrantSubscriber` grants the answers topic for every survey a
+  user sees and the editing topic for every survey they may edit; events are
+  named `plugin/sh2-shp-survey-js/surveys/<id>/<topic>`. This also makes "someone
+  else is editing" and the Answers tab's live counts work.
 - **The editor's frame is clean.** The editor is clipped to its rounded frame
   (its square corners covered the frame's border), and the line under the
   side panel button joins the toolbar line instead of showing as a short

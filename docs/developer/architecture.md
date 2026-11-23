@@ -55,6 +55,7 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `EventSubscriber\SurveyJsStyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog. |
 | `EventSubscriber\SurveyJsLookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                   |
 | `EventSubscriber\SurveyJsRealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.          |
+| `EventSubscriber\SurveyJsRealtimeGrantSubscriber`| Grants a user's event stream the survey topics they may follow. |
 | `EventSubscriber\SurveyJsDataAccessResourcesSubscriber`| Lists the surveys on the core role screen (H6).          |
 | `EventSubscriber\SurveyJsSectionBindingSubscriber`| Refuses placing a survey the editor has no view grant on (H7). |
 
@@ -185,10 +186,17 @@ The mobile package exports `registerMobile()` which contributes a read-only `sur
 
 Two topics scoped under `selfhelp/plugin/sh2-shp-survey-js/`:
 
-- `surveys/{surveyId}/editing` — collaborative-edit presence + "version_published" notifications. Required permission: `surveyjs.survey.update`.
-- `surveys/{surveyId}/responses` — `response_submitted` events consumed by the Answers tab. Required permission: `surveyjs.survey.read`.
+- `surveys/{surveyId}/editing` — `presence`, `draft_saved` and `version_published`, consumed by the Design tab. Granted for every survey the user may edit.
+- `surveys/{surveyId}/responses` — `response_submitted`, consumed by the Answers tab. Granted for every survey the user sees in the admin list.
 
-No polling. The Answers tab fetches a snapshot once and reloads on each `response_submitted` event.
+Two things must hold for an event to reach a screen (checked 2026-11-23):
+
+1. **Grant.** The host subscribes a user's stream only to topics a `PluginRealtimePermissionEvent` listener allows (deny by default). `SurveyJsRealtimeGrantSubscriber` allows them with the admin list's rules. The topic registry (`SurveyJsRealtimeTopicSubscriber`) only lists them; it grants nothing.
+2. **Event name.** `usePluginRealtime` listens for the SSE event `plugin/<pluginId>/<topic with params filled in>`, for example `plugin/sh2-shp-survey-js/surveys/18/editing`. `SurveyJsRealtimePublisher` sends every event under that name; the payload's `type` tells them apart.
+
+The Design tab loads a draft saved elsewhere when it has no unsaved edits; with unsaved edits it keeps them, warns, and offers the saved version (saving still asks before overwriting). No polling. The Answers tab fetches a snapshot once and reloads on each `response_submitted` event.
+
+Local development: if the hub listens on IPv4 only and the frontend reaches Symfony as `localhost`, the backend hands out the hub as `localhost:3001`, which Node may not reach (IPv6 first), and no event arrives. Set `SYMFONY_INTERNAL_URL=http://127.0.0.1/<backend path>` in the frontend's `.env.local`.
 
 ## Data flow on submission
 

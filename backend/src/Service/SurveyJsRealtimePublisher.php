@@ -28,6 +28,17 @@ class SurveyJsRealtimePublisher
 
     private const PLUGIN_ID = 'sh2-shp-survey-js';
 
+    /**
+     * The SSE event name `usePluginRealtime` listens for:
+     * `plugin/<pluginId>/<topic with its params filled in>`. Any other name
+     * reaches the browser but no listener; the payload's `type` tells the
+     * events on one topic apart.
+     */
+    private static function eventName(Survey $survey, string $topic): string
+    {
+        return 'plugin/' . self::PLUGIN_ID . '/surveys/' . (int) $survey->getId() . '/' . $topic;
+    }
+
     public function surveyVersionPublished(Survey $survey, SurveyVersion $version, ?int $userId): void
     {
         $this->host->publish(
@@ -44,7 +55,7 @@ class SurveyJsRealtimePublisher
             [
                 'audience' => 'permission',
                 'topicParams' => ['surveyId' => (string) $survey->getId()],
-                'event' => 'version_published',
+                'event' => self::eventName($survey, 'editing'),
             ],
         );
     }
@@ -65,7 +76,7 @@ class SurveyJsRealtimePublisher
             [
                 'audience' => 'permission',
                 'topicParams' => ['surveyId' => (string) $survey->getId()],
-                'event' => 'draft_saved',
+                'event' => self::eventName($survey, 'editing'),
             ],
         );
     }
@@ -87,7 +98,7 @@ class SurveyJsRealtimePublisher
             [
                 'audience' => 'permission',
                 'topicParams' => ['surveyId' => (string) $survey->getId()],
-                'event' => 'presence',
+                'event' => self::eventName($survey, 'editing'),
             ],
         );
     }
@@ -109,7 +120,7 @@ class SurveyJsRealtimePublisher
             [
                 'audience' => 'permission',
                 'topicParams' => ['surveyId' => (string) $survey->getId()],
-                'event' => 'response_submitted',
+                'event' => self::eventName($survey, 'responses'),
             ],
         );
     }
