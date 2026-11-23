@@ -65,6 +65,11 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   **Refresh** (as on Users or Data); the filters take effect on Apply. The
   State column, which read "Active" on every row, is gone; an archived survey
   has an **Archived** badge next to its name.
+- **The editor follows saves made elsewhere.** A draft saved in another window
+  or by another editor now reaches an open editor: without unsaved edits it
+  loads the new draft and says so; with unsaved edits it keeps them, warns, and
+  offers **Load the saved version** (saving still asks before overwriting). A
+  new published version updates the header and the change count.
 - **Survey realtime reaches the screens.** No survey event ever arrived: the
   plugin never granted its topics (the host subscribes only to granted topics),
   and it sent events under names `usePluginRealtime` does not listen for. A new

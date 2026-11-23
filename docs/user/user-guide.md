@@ -89,6 +89,10 @@ so there is no theme to choose.
 - "Unsaved changes" means you have edits that are not saved yet. The
   browser warns you if you close or reload the page then. Moving to
   another tab of the survey keeps your edits.
+- When the survey is saved in another window or by someone else, an
+  open editor shows that draft right away if you have no unsaved
+  changes. If you do, it keeps them and warns you; **Load the saved
+  version** switches to the other draft.
 - If someone else saved the survey while you were editing, saving
   stops and asks you to either **load the saved version** (your edits
   are dropped) or **overwrite with your version**.

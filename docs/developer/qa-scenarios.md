@@ -179,7 +179,8 @@ Add `surveyjs.survey.update` and the update grant: Edit, Archive, Save draft and
 1. Change a question, click **Save draft**: the editor does not reload, undo still works, the scroll position stays.
 2. With unsaved changes, reload the page: the browser asks to confirm. Switch to Versions and back: the changes are still there.
 3. Open the survey in two browsers as two users; both see the other named. User A saves, then user B saves: B gets "Could not save" with **Load the saved version** and **Overwrite with my version**; both work.
-4. Rename an answered question and publish: refused with the message, nothing published.
+4. Two tabs on one survey's Design tab. Save a change in tab A: tab B, without unsaved edits, shows the new draft and a blue note at once. Edit in tab B without saving, then save again in tab A: tab B keeps its edits and shows "A newer draft was saved elsewhere" with **Load the saved version**; saving in B then asks before overwriting. Publishing in tab A updates tab B's version badge.
+5. Rename an answered question and publish: refused with the message, nothing published.
 
 ### 4.4 Answers tab
 

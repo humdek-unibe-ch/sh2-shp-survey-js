@@ -68,9 +68,13 @@ interface IEditingEvent {
     userId?: number;
     userName?: string;
     at?: string;
+    draftHash?: string | null;
 }
 
 type TConflict = { action: 'save' | 'publish'; message: string } | null;
+
+/** A draft saved in another window or by another editor: loaded here, or held back because of unsaved edits. */
+type TRemoteDraft = 'loaded' | 'held' | null;
 
 export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerPageProps): React.ReactElement {
     const surveyId = survey.id;
@@ -86,6 +90,7 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
     const [dirty, setDirty] = useState<boolean>(false);
     const [changeCount, setChangeCount] = useState<number>(0);
     const [presence, setPresence] = useState<Record<number, { name: string; at: string }>>({});
+    const [remoteDraft, setRemoteDraft] = useState<TRemoteDraft>(null);
 
     // The latest survey record, read by the Creator's callbacks, which are
     // set once when it is built.
@@ -93,6 +98,11 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
     surveyRef.current = survey;
     const surveyModelRef = useRef<TSurveyModelConstructor | null>(null);
     const ownUserIdRef = useRef<number | null>(null);
+    const dirtyRef = useRef(dirty);
+    dirtyRef.current = dirty;
+    const busyRef = useRef(busy);
+    busyRef.current = busy;
+    const handledEventRef = useRef<IEditingEvent | null>(null);
     const normalizedPublishedRef = useRef<{ source: unknown; value: Record<string, unknown> | null } | null>(null);
 
     const realtime = usePluginRealtime<IEditingEvent>({
@@ -137,6 +147,7 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
             });
             onSurveyChanged(updated);
             setDirty(false);
+            setRemoteDraft(null);
             return true;
         } catch (err) {
             if (err instanceof SurveyApiError && err.reason === 'draft_conflict') {
@@ -199,13 +210,16 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
         try {
             const fresh = await getSurvey(surveyId);
             creator.JSON = fresh.definition ?? { pages: [] };
+            surveyRef.current = fresh;
             onSurveyChanged(fresh);
+            recomputeChanges(creator);
             setDirty(false);
             setConflict(null);
+            setRemoteDraft(null);
         } catch (err) {
             setActionError(`Could not load the saved version: ${(err as Error).message}`);
         }
-    }, [creator, onSurveyChanged, surveyId]);
+    }, [creator, onSurveyChanged, recomputeChanges, surveyId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -357,6 +371,36 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
         });
     }, [realtime.data]);
 
+    // A save or publish elsewhere (another tab, another editor) arrives on the same topic.
+    useEffect(() => {
+        const event = realtime.data;
+        if (!creator || !event || (event.type !== 'draft_saved' && event.type !== 'version_published')) return;
+        // The effect also re-runs when its callbacks change; each event is handled once.
+        if (handledEventRef.current === event) return;
+        handledEventRef.current = event;
+        // This page's own save or publish; it reloads the survey itself.
+        if (busyRef.current !== null) return;
+        if (event.type === 'draft_saved' && event.draftHash === surveyRef.current.draftHash) return;
+        void getSurvey(surveyId)
+            .then((fresh) => {
+                const draftChanged = fresh.draftHash !== surveyRef.current.draftHash;
+                if (draftChanged && dirtyRef.current) {
+                    // Keep the edits and the old draft hash, so saving still reports the conflict.
+                    setRemoteDraft('held');
+                    return;
+                }
+                if (draftChanged) {
+                    creator.JSON = fresh.definition ?? { pages: [] };
+                    setDirty(false);
+                    setRemoteDraft('loaded');
+                }
+                surveyRef.current = fresh;
+                onSurveyChanged(fresh);
+                recomputeChanges(creator);
+            })
+            .catch(() => undefined);
+    }, [creator, onSurveyChanged, realtime.data, recomputeChanges, surveyId]);
+
     const otherEditors = useMemo(
         () => Object.values(presence).filter((entry) => Date.now() - new Date(entry.at).getTime() < 90000),
         [presence],
@@ -437,6 +481,26 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
                                 onClick={() => void (conflict.action === 'save' ? save(true) : publish(true))}
                             >
                                 {conflict.action === 'save' ? 'Overwrite with my version' : 'Publish my version anyway'}
+                            </Button>
+                        </Group>
+                    </Stack>
+                </Alert>
+            )}
+            {remoteDraft === 'loaded' && (
+                <Alert color="blue" withCloseButton onClose={() => setRemoteDraft(null)} role="status">
+                    A newer draft was saved in another window or by another editor. The editor now shows it.
+                </Alert>
+            )}
+            {remoteDraft === 'held' && !conflict && (
+                <Alert color="yellow" title="A newer draft was saved elsewhere" withCloseButton onClose={() => setRemoteDraft(null)}>
+                    <Stack gap="xs">
+                        <Text size="sm">
+                            It was saved in another window or by another editor while you have unsaved changes here.
+                            Saving asks before it overwrites that draft.
+                        </Text>
+                        <Group gap="xs">
+                            <Button size="xs" variant="default" onClick={() => void loadTheirVersion()}>
+                                Load the saved version
                             </Button>
                         </Group>
                     </Stack>
