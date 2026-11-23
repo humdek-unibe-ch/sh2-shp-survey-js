@@ -5,14 +5,19 @@ SPDX-License-Identifier: MPL-2.0
 /**
  * Admin Surveys API client.
  *
- * Used by the Survey Designer / Responses / Dashboard pages mounted
- * under `/admin/plugins-host/sh2-shp-survey-js/*`. The host's
- * `permissionAwareApiClient` (frontend) handles auth headers and
- * permission metadata; we wrap its calls here so the pages stay free
- * of HTTP boilerplate.
+ * Used by the survey admin screens mounted under
+ * `/admin/plugins-host/sh2-shp-survey-js/surveys`. Calls go through the
+ * host's BFF proxy (below); the pages stay free of HTTP boilerplate.
  */
 
 import { csrfHeaders } from './csrf';
+
+/** What the caller may do with a survey; the server checks again on every call. */
+export interface IAdminSurveyRights {
+    update: boolean;
+    publish: boolean;
+    delete: boolean;
+}
 
 export interface IAdminSurveySummary {
     id: number;
@@ -25,7 +30,16 @@ export interface IAdminSurveySummary {
     draftHash: string | null;
     draftUpdatedAt: string | null;
     draftUpdatedByUserId: number | null;
-    responseCount: number;
+    /** Null when the caller may not read the answers (no grant on the data table). */
+    responseCount: number | null;
+    /** The answers' table in the core data screen; null before the first response or without the grant. */
+    dataTableId: number | null;
+    rights: IAdminSurveyRights;
+}
+
+export interface IAdminSurveyList {
+    items: IAdminSurveySummary[];
+    canCreate: boolean;
 }
 
 export interface IAdminSurveyDetail extends IAdminSurveySummary {
@@ -62,10 +76,24 @@ export interface IAdminSurveyVersionDetail extends IAdminSurveyVersion {
 // `api_routes`.
 const BASE = '/api/admin/plugins/sh2-shp-survey-js';
 
+/**
+ * A refused admin call. `reason` is the server's `data.reason` when it gives
+ * one, e.g. `draft_conflict` or `answered_question_renamed` on a save or
+ * publish.
+ */
+export class SurveyApiError extends Error {
+    constructor(message: string, readonly status: number, readonly reason: string | null = null) {
+        super(message);
+        this.name = 'SurveyApiError';
+    }
+}
+
 async function asJson<T>(res: Response): Promise<T> {
     const body = (await res.json().catch(() => ({}))) as { data?: T; error?: string };
     if (!res.ok) {
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+        const data = body.data as { reason?: unknown } | null | undefined;
+        const reason = typeof data?.reason === 'string' ? data.reason : null;
+        throw new SurveyApiError(body.error ?? `HTTP ${res.status}`, res.status, reason);
     }
     if (body.data === undefined) {
         throw new Error('Response missing data envelope.');
@@ -73,12 +101,12 @@ async function asJson<T>(res: Response): Promise<T> {
     return body.data;
 }
 
-export async function listSurveys(): Promise<IAdminSurveySummary[]> {
+export async function listSurveys(): Promise<IAdminSurveyList> {
     const res = await fetch(`${BASE}/surveys`, {
         credentials: 'include',
         headers: { Accept: 'application/json' },
     });
-    return asJson<IAdminSurveySummary[]>(res);
+    return asJson<IAdminSurveyList>(res);
 }
 
 export async function getSurvey(id: number): Promise<IAdminSurveyDetail> {
@@ -171,7 +199,7 @@ export async function restoreVersion(id: number, versionId: number): Promise<IAd
 export async function publishPresence(
     id: number,
     state: 'editing' | 'idle' | 'left',
-): Promise<{ published: boolean }> {
+): Promise<{ published: boolean; userId: number | null }> {
     const res = await fetch(`${BASE}/surveys/${id}/presence`, {
         method: 'POST',
         credentials: 'include',
@@ -182,7 +210,7 @@ export async function publishPresence(
         },
         body: JSON.stringify({ state }),
     });
-    return asJson<{ published: boolean }>(res);
+    return asJson<{ published: boolean; userId: number | null }>(res);
 }
 
 export async function fetchLicenseKey(): Promise<{ licenseKey: string | null; configured: boolean }> {
@@ -220,23 +248,14 @@ export async function deleteSurvey(id: number): Promise<{ deleted: boolean }> {
 }
 
 /**
- * Duplicate a survey by creating a fresh `surveys` row with a new
- * generated survey id and copying the source's current definition into it as the
- * first published revision. Composed client-side because the host
- * admin API does not (yet) expose a `/duplicate` endpoint; collapsing
- * it here keeps the call site free of orchestration noise.
+ * Copies a survey's current definition into a new survey, as an unpublished
+ * draft, so the copy is reviewed before anyone can answer it.
  */
 export async function duplicateSurvey(source: IAdminSurveyDetail): Promise<IAdminSurveySummary> {
-    const newName = `${source.name} (copy)`;
-    const definition = source.definition ?? { pages: [] };
-    const created = await createSurvey({ name: newName, definition });
-    if (Object.keys(definition).length > 0) {
-        await publishVersion(created.id, { definition, force: true });
-    }
-    return created;
+    return createSurvey({ name: `${source.name} (copy)`, definition: source.definition ?? { pages: [] } });
 }
 
-/** A response as the admin endpoints list it: one row of the survey's data table. */
+/** One response: a row of the survey's data table. */
 export interface ISurveyResponseSummary {
     id: number;
     responseId: string;
@@ -250,42 +269,12 @@ export interface ISurveyResponseSummary {
     language: string | null;
 }
 
-export async function fetchResponses(
-    surveyId: number,
-    params: { page?: number; limit?: number } = {},
-): Promise<{
-    items: ISurveyResponseSummary[];
-    page: number;
-    limit: number;
-    total: number;
-}> {
-    const search = new URLSearchParams();
-    if (params.page) search.set('page', String(params.page));
-    if (params.limit) search.set('limit', String(params.limit));
-    const qs = search.toString() ? `?${search.toString()}` : '';
-    const res = await fetch(`${BASE}/surveys/${surveyId}/responses${qs}`, {
-        credentials: 'include',
-        headers: { Accept: 'application/json' },
-    });
-    return asJson(res);
-}
-
 export async function fetchDashboard(surveyId: number): Promise<{
     id: number;
     surveyId: string;
     completedResponses: number;
     totalResponses: number;
     currentVersionRevision: number | null;
-    recent: Array<{
-        id: number;
-        responseId: string;
-        startedAt: string;
-        completedAt: string | null;
-        status: string;
-        idUser: number | null;
-        visitorId: string | null;
-        idDataRow: number | null;
-    }>;
 }> {
     const res = await fetch(`${BASE}/surveys/${surveyId}/dashboard`, {
         credentials: 'include',
@@ -312,17 +301,6 @@ export async function fetchDashboardResults(
         headers: { Accept: 'application/json' },
     });
     return asJson<IDashboardResults>(res);
-}
-
-export async function deleteResponse(surveyId: number, rid: string): Promise<void> {
-    const res = await fetch(`${BASE}/surveys/${surveyId}/responses/${encodeURIComponent(rid)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { Accept: 'application/json', ...csrfHeaders() },
-    });
-    if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-    }
 }
 
 export async function fetchResponseDetail(

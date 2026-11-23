@@ -79,6 +79,7 @@ declare module 'survey-core' {
         currentPageNo: number;
         elementIdPrefix: string;
         questionsOnPageMode: string;
+        readOnly: boolean;
         validate(fireCallback?: boolean, focusOnFirstError?: boolean): boolean;
         completedHtml: string;
         showCompletedPage: boolean;
@@ -144,19 +145,10 @@ declare module 'survey-creator-react' {
 }
 
 // Optional commercial / heavy modules. Declared as `any` so the
-// runtime + dashboard pages can dynamically import them with full
+// runtime and the Answers tab can dynamically import them with full
 // TypeScript narrowing on the consumer side, but `tsc --noEmit` in
 // the plugin repo does not require the matching `@types/` to be
 // installed when the operator hasn't opted into the feature.
-declare module 'tabulator-tables' {
-    export const Tabulator: new (element: HTMLElement, options: Record<string, unknown>) => {
-        destroy: () => void;
-        replaceData: (data: Array<Record<string, unknown>>) => Promise<unknown>;
-        download: (format: string, filename: string, options?: Record<string, unknown>) => void;
-        setColumns: (columns: Array<Record<string, unknown>>) => void;
-    };
-}
-
 declare module 'survey-analytics' {
     export const VisualizationPanel: new (
         questions: Array<unknown>,

@@ -6,8 +6,9 @@ SPDX-License-Identifier: MPL-2.0
  * Survey Versions tab.
  *
  * Lists every published `survey_versions` row for the selected
- * survey, lets the operator restore an older revision (publishes it
- * as the new current version), and compares two revisions
+ * survey, lets the operator restore another version (it becomes the
+ * current one again and the draft is reset to it; no new version is
+ * made), and compares two revisions
  * side-by-side via a structural diff. Each row shows the SHA-256 of
  * the stored definition so external audits can match a CI pipeline's
  * snapshot to the live revision.
@@ -29,7 +30,6 @@ import {
     Code,
     Group,
     Loader,
-    Modal,
     ScrollArea,
     Stack,
     Table,
@@ -51,9 +51,14 @@ import {
     formatChangeSummary,
     type IDefinitionDiffEntry,
 } from './definitionDiff';
+import { AdminModal } from './ui/AdminUi';
 
 export interface ISurveyVersionsPageProps {
     surveyId?: number;
+    /** Whether the caller may publish, which restoring is. */
+    canRestore?: boolean;
+    /** The version participants get; restoring points it at another version. */
+    currentRevision?: number | null;
     onRestored?: () => void;
 }
 
@@ -62,7 +67,7 @@ interface ICompareState {
     targetId: number | null;
 }
 
-export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPageProps = {}): React.ReactElement {
+export function SurveyVersionsPage({ surveyId, canRestore = false, currentRevision = null, onRestored }: ISurveyVersionsPageProps = {}): React.ReactElement {
     const [versions, setVersions] = useState<IAdminSurveyVersion[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<boolean>(false);
@@ -193,10 +198,10 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
         <Stack gap="md">
             <Group justify="space-between">
                 <Stack gap={2}>
-                    <Title order={4}>Version history</Title>
+                    <Title order={2} size="h4">Version history</Title>
                     <Text size="sm" c="dimmed">
-                        Each publish creates an immutable revision. Compare two revisions to see exactly
-                        what changed; restore an older revision to publish it as the new current version.
+                        Each publish creates a version that never changes. Tick two versions to see what
+                        changed between them{canRestore ? '; restore one to make it the version participants get' : ''}.
                     </Text>
                 </Stack>
                 <Group gap="xs">
@@ -232,10 +237,10 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                 </Group>
             ) : versions.length === 0 ? (
                 <Alert color="gray" title="No published versions yet">
-                    Publish the survey from the Designer to create the first revision.
+                    Publish the survey from the Design tab to create the first version.
                 </Alert>
             ) : (
-                <Card withBorder p={0}>
+                <div className="sjs-admin-table">
                     <Group justify="space-between" px="md" py="xs">
                         <Text size="sm" c="dimmed">{selectionSummary}</Text>
                         {(compareState.baseId !== null || compareState.targetId !== null) && (
@@ -248,8 +253,8 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                             </Button>
                         )}
                     </Group>
-                    <Table verticalSpacing="sm" striped highlightOnHover>
-                        <Table.Thead>
+                    <Table verticalSpacing="sm" highlightOnHover>
+                        <Table.Thead className="sjs-admin-table__head">
                             <Table.Tr>
                                 <Table.Th style={{ width: 60 }}>Compare</Table.Th>
                                 <Table.Th>Revision</Table.Th>
@@ -260,7 +265,7 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                            {versions.map((version, idx) => {
+                            {versions.map((version) => {
                                 const isBase = compareState.baseId === version.id;
                                 const isTarget = compareState.targetId === version.id;
                                 return (
@@ -277,7 +282,7 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                                         <Table.Td>
                                             <Group gap="xs">
                                                 <Badge variant="light">v{version.revision}</Badge>
-                                                {idx === 0 && <Badge color="green" variant="light">current</Badge>}
+                                                {version.revision === currentRevision && <Badge color="green" variant="light">current</Badge>}
                                             </Group>
                                         </Table.Td>
                                         <Table.Td>
@@ -298,7 +303,7 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                                             </Tooltip>
                                         </Table.Td>
                                         <Table.Td>
-                                            {idx !== 0 && (
+                                            {version.revision !== currentRevision && canRestore && (
                                                 <Button
                                                     size="xs"
                                                     variant="light"
@@ -314,39 +319,24 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                             })}
                         </Table.Tbody>
                     </Table>
-                </Card>
+                </div>
             )}
-            <Modal
+            <AdminModal
                 opened={pendingRestore !== null}
                 onClose={() => setPendingRestore(null)}
-                title={pendingRestore ? `Restore v${pendingRestore.revision}?` : ''}
-                centered
+                title={pendingRestore ? `Restore v${pendingRestore.revision}?` : 'Restore version'}
+                size="md"
+                onSave={() => void confirmRestore()}
+                saveLabel={pendingRestore ? `Make v${pendingRestore.revision} current` : 'Restore'}
+                isLoading={busy}
             >
-                <Stack gap="sm">
-                    <Text size="sm">
-                        Restoring will publish the definition stored in v{pendingRestore?.revision} as a
-                        new current revision. Existing responses remain attached to the revision they
-                        were collected against.
-                    </Text>
-                    <Alert color="yellow" title="What restore actually does">
-                        <Text size="sm">
-                            Restore is non-destructive. The current published revision is preserved in
-                            the history. A new revision will be created whose definition matches the one
-                            you are restoring. Already-collected responses keep pointing to their
-                            original revision, so existing answers and aggregations are not affected.
-                        </Text>
-                    </Alert>
-                    <Group justify="flex-end" gap="xs">
-                        <Button variant="default" onClick={() => setPendingRestore(null)} disabled={busy}>
-                            Cancel
-                        </Button>
-                        <Button color="orange" onClick={() => void confirmRestore()} loading={busy}>
-                            Restore as new revision
-                        </Button>
-                    </Group>
-                </Stack>
-            </Modal>
-            <Modal
+                <Text size="sm">
+                    Participants get v{pendingRestore?.revision} again from now on, and the editor is reset
+                    to it. Unsaved or unpublished changes in the editor are replaced. The other versions
+                    stay in the history, and answers already given keep the version they were given with.
+                </Text>
+            </AdminModal>
+            <AdminModal
                 opened={compareModalOpen}
                 onClose={() => { setCompareModalOpen(false); setCompareData(null); setCompareError(null); }}
                 title={
@@ -355,7 +345,7 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                         : 'Compare versions'
                 }
                 size="xl"
-                centered
+                cancelLabel="Close"
             >
                 <Stack gap="md">
                     {compareLoading ? (
@@ -430,7 +420,7 @@ export function SurveyVersionsPage({ surveyId, onRestored }: ISurveyVersionsPage
                         </>
                     ) : null}
                 </Stack>
-            </Modal>
+            </AdminModal>
         </Stack>
     );
 }

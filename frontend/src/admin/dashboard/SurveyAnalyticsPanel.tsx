@@ -3,12 +3,9 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * SurveyJS Analytics chart panel for the Dashboard tab.
- *
- * Lazily imports `survey-analytics` (commercial) and renders one
- * visualizer per question. When the package isn't installed we
- * display a notice — the Tabulator-backed table still gives the
- * operator full access to the raw data.
+ * Charts per question for the Answers tab: the SurveyJS Dashboard
+ * (`survey-analytics`, commercial), which draws with Chart.js. Loaded only
+ * when the tab opens. The raw answers are in the core data screen.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -95,8 +92,8 @@ export function SurveyAnalyticsPanel({ results }: ISurveyAnalyticsPanelProps): R
             <Alert color="yellow" title="Charts package not installed">
                 <Stack gap="xs">
                     <Text size="sm">
-                        Install <Code>survey-analytics</Code> (commercial) to enable per-question chart
-                        visualizations. The table tab still gives full access to the response data.
+                        Install <Code>survey-analytics</Code> (commercial) to show charts per question. The
+                        answers themselves are in the Data screen.
                     </Text>
                 </Stack>
             </Alert>

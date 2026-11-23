@@ -44,7 +44,7 @@ export function SurveyJsSurveySelectField({
         listSurveys()
             .then((data) => {
                 if (cancelled) return;
-                setSurveys(data);
+                setSurveys(data.items);
                 setError(null);
             })
             .catch((err: Error) => {
@@ -68,10 +68,14 @@ export function SurveyJsSurveySelectField({
     return (
         <Select
             key={fieldId}
-            data={surveys.map((survey) => ({
-                value: survey.surveyId,
-                label: `${survey.name} (${survey.surveyId})${survey.currentRevision ? ` · v${survey.currentRevision}` : ' · draft only'}`,
-            }))}
+            // Archived surveys take no answers, so they are not offered; one the
+            // section already shows stays, marked, so the editor sees why it is empty.
+            data={surveys
+                .filter((survey) => !survey.archived || survey.surveyId === value)
+                .map((survey) => ({
+                    value: survey.surveyId,
+                    label: `${survey.name} (${survey.surveyId})${survey.archived ? ' · archived' : survey.currentRevision ? ` · v${survey.currentRevision}` : ' · draft only'}`,
+                }))}
             value={localValue}
             onChange={(next) => {
                 const nextValue = next ?? '';

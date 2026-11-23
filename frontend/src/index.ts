@@ -34,11 +34,10 @@ SPDX-License-Identifier: MPL-2.0
 import 'survey-core/survey-core.css';
 import 'survey-creator-core/survey-creator-core.css';
 import 'survey-analytics/survey.analytics.min.css';
-import 'survey-analytics/survey.analytics.tabulator.min.css';
-import 'tabulator-tables/dist/css/tabulator_site_dark.min.css';
 import 'leaflet/dist/leaflet.css';
 import './theme/mantine-adapter.css';
 import './custom-questions/custom-questions.css';
+import './admin/ui/admin-ui.css';
 
 import { definePlugin } from '@selfhelp/shared/plugin-sdk';
 import type { IPluginApi, IPluginRegistration } from '@selfhelp/shared/plugin-sdk';
