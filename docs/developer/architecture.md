@@ -3,7 +3,7 @@
 Audience: Developers and technical operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-11-16 (theming section; the rest 2026-06-29).
+Last verified: 2026-11-19 (admin screens, backend layout, file layout; theming 2026-11-16).
 Source of truth: Runtime code, configuration, and tests in this repository.
 
 This document describes the moving parts of the SurveyJS v3 plugin and how they connect to the SelfHelp host. The plugin is split into three packages: a Symfony bundle (`backend/`), a React/Mantine npm package (`frontend/`), and a read-only React Native package (`mobile/`).
@@ -23,7 +23,7 @@ This document describes the moving parts of the SurveyJS v3 plugin and how they 
 │         │ Doctrine entities   │ definePlugin()      │ defineMo…│
 │         │ services            │ → SurveyJS Style    │ →readonly│
 │         │ event subscribers   │ → Survey Designer   │   style  │
-│         │ migrations          │ → Dashboard         │          │
+│         │ migrations          │ → Admin screens     │          │
 │         │                     │ → Realtime topics   │          │
 │         └─────────┬───────────┴────────┬────────────┘          │
 │                   ▼                    ▼                       │
@@ -39,20 +39,24 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | ---------------------------------------- | -------------------------------------------------------------------- |
 | `Entity\Survey`                          | Aggregate root (key slug, theme, current version pointer).           |
 | `Entity\SurveyVersion`                   | Immutable JSON definition snapshots.                                 |
-| `Entity\SurveyFile`                      | A file uploaded to a response (by `response_id`).                    |
 | `Service\SurveyService`                  | CRUD + publish flow with `EM::wrapInTransaction()`.                  |
+| `Service\SurveyAccessService`            | Grants on a survey (resource type `surveyjs_survey`) and on its data table; the rights the admin screens show per survey. |
+| `Service\SurveySectionResolver`          | Public calls: the core checks page and section (H4), the settings are read from the published section. |
 | `Service\SurveyAnswerNormalizer`         | One cell per question; a complex answer stays whole (JSON).          |
 | `Service\SurveyJsHtmlSanitizer`          | Whitelist-based HTML sanitization for rich-text answers.             |
 | `Service\SurveyResponseStore`            | The one home of responses: rows of the core data table `sh2_surveyjs_<survey id>`, written through `DataService::saveData()`, read through `DataQueryEngine`. |
 | `Service\SurveyResponseService`          | Submit: limits, then the response saved as `finished`.               |
 | `Service\SurveyResponseDraftService`     | Progress: the same row saved as `started` / `updated`, resume, discard. |
-| `Service\SurveyDashboardService`         | Totals and chart rows for the dashboard, read from the store.        |
+| `Service\SurveyDashboardService`         | Totals and chart rows for the Answers tab, read from the store.      |
+| `Service\SurveyPdfService`               | One response as a PDF (dompdf when installed, else a printable page). |
 | `Service\SurveyFileAnswers`               | File answers: keys stored without links, links added on load, keys of other responses dropped. |
 | `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
 | `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
-| `EventSubscriber\StyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog.       |
-| `EventSubscriber\LookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                          |
-| `EventSubscriber\RealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.                |
+| `EventSubscriber\SurveyJsStyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog. |
+| `EventSubscriber\SurveyJsLookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                   |
+| `EventSubscriber\SurveyJsRealtimeTopicSubscriber`| Registers the realtime topic catalog for JWT scoping.          |
+| `EventSubscriber\SurveyJsDataAccessResourcesSubscriber`| Lists the surveys on the core role screen (H6).          |
+| `EventSubscriber\SurveyJsSectionBindingSubscriber`| Refuses placing a survey the editor has no view grant on (H7). |
 
 The plugin owns two tables: `surveys` and `survey_versions`. The install migration `Version20260522063620.php` creates them (and four older ones that `Version20261117132938.php` drops again: responses and their uploads now live only in the core data store). `surveys.survey_id` and the `response_id` cell of each response are generated stable external keys; shared CMS rows and generated core `data_tables` are tagged with `id_plugins` so the host purger can delete them by plugin ownership. `down()` is safe (drops only plugin-owned objects).
 
@@ -68,7 +72,7 @@ The bundle depends on host contracts, not concrete host services:
 The npm package's entry point (`src/index.ts`) returns an `IPluginRegistration` from `definePlugin()`:
 
 - **Styles**: `surveyjs` (runtime), `gpx-map` (route map from `sample_points`).
-- **Admin pages**: list, designer, responses, dashboard, settings — all under `/admin/plugins-host/sh2-shp-survey-js/*`.
+- **Admin page**: one page, `/admin/plugins-host/sh2-shp-survey-js/surveys`, opened with `surveyjs.survey.read` (see "Admin screens").
 - **Menu items**: one entry under the host's `admin` section.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.
 - **Realtime topics**: `surveys/{surveyId}/editing`, `surveys/{surveyId}/responses`.
@@ -77,6 +81,24 @@ The npm package's entry point (`src/index.ts`) returns an `IPluginRegistration` 
 SurveyJS modules (`survey-core`, `survey-react-ui`, `survey-creator-react`) are declared as `peerDependencies` and imported through dynamic `import()` inside the style/admin components, so the host shell only pays for them when the SurveyJS plugin is actively rendering something.
 
 The look comes from one stylesheet, `src/theme/mantine-adapter.css`. SurveyJS 3 is styled through design tokens (CSS variables starting with `--sjs2-`), set on `.sjs-theme-overrides`, the class SurveyJS puts on the root of every survey and of the Creator. The adapter points those tokens at Mantine's variables (`--mantine-*`) and copies no value, so the site's primary colour, radius, font and light or dark mode restyle the survey, the Creator and the dashboard with no plugin code. No theme is applied in JavaScript. The few things tokens cannot express are targeted rules at the end of the file. `src/theme/surveyDefaults.ts` holds the one model default that belongs to the look: a question's error is shown under its field.
+
+### Admin screens
+
+The host gives a plugin page one path segment, so `SurveyAdminPage` keeps its place in the query string (`admin/adminUrl.ts`): no `id` is the survey list, `?id=<id>&view=design|answers|versions|settings` is one survey's tab. Opening a survey and going back are history entries (browser back and forward work); a tab change replaces the entry. Links from before wave 8 (`view=designer|dashboard|responses`) land on the matching tab.
+
+| Screen | File | What it does |
+| --- | --- | --- |
+| Survey list | `SurveyListPage.tsx` | Search, state filter (active, archived, all), table with answer count (links to the core Data screen), row actions view, edit, duplicate, archive, delete |
+| Design | `SurveyDesignerPage.tsx` | The SurveyJS Creator, built once per survey: saving or publishing does not rebuild it. Read-only without the update right. A save names the draft it started from; a 409 offers "load the saved version" or "overwrite". Warns before leaving the page with unsaved changes |
+| Answers | `SurveyAnswersPage.tsx` | Counts, charts (`survey-analytics`, drawn with Chart.js), and one response drawn as the survey (`SurveyResponseView.tsx`) with its PDF. Needs the grant on the survey's data table |
+| Versions | `SurveyVersionsPage.tsx` | Version history, structural compare; restore only with the publish right |
+| Settings | `SurveySettingsPage.tsx` | Name and survey ID |
+
+The plugin lists no responses and exports nothing: that is the core Data screen (`/admin/data?tableIds=<data table id>`), linked from the list and the survey header.
+
+**Rights in the screen.** A plugin cannot read the user's permissions, so the list and detail replies carry them: `canCreate` on the list, and per survey `rights: {update, publish, delete}` and `dataTableId` (null before the first response or without the grant on the table). `SurveyAccessService::rightsFor()` reads the caller's permissions (`UserPermissionService`) and their grants in one query, without an audit row per check; an action needs its route permission and the matching grant bit (publishing: the update grant). The screen only hides what will be refused; every call is still checked on the server.
+
+**Look.** A plugin may import only `@selfhelp/shared/plugin-sdk` from the host, not its components. `admin/ui/AdminUi.tsx` and `admin/ui/admin-ui.css` rebuild the host's `PageHeader`, `ModalWrapper`, `EmptyState` and admin table with the same Mantine props; keep them in step with the host.
 
 To work on the look, run `npm --prefix frontend run dev:theme` and open `http://localhost:5175`. The page shows every question type next to real Mantine controls and needs no SelfHelp host. URL parameters fix a state: `scheme=light|dark`, `primary=<mantine colour>`, `page=<number>`, `single=1`, `errors=1`, `view=creator`. `tests/mantineAdapter.test.ts` fails when a SurveyJS or Mantine update renames a variable the adapter uses.
 
@@ -108,13 +130,14 @@ copies of that JSON per survey row:
 
 ### Restore
 
-`SurveyService::restoreVersion()` is non-destructive: it copies the
-target version's definition into a brand-new revision (revision =
-`max + 1`) and points `id_current_survey_versions` at that new row.
-Old responses still reference the revision they were collected
-against, so historical data stays intact and re-runnable. The diff
-between the restored revision and the previously current revision
-shows up as the change set in the next admin **Versions** comparison.
+`SurveyService::restoreVersion()` points `id_current_survey_versions`
+back at the chosen version and resets the draft to its definition; it
+creates no new revision and deletes nothing, so the version list keeps
+its order and the next publish gets `max + 1`. Responses keep the
+revision they were given with. The admin Versions tab marks the version
+`id_current_survey_versions` points at as current (not the newest), and
+offers Restore on every other version. (Corrected 2026-11-19: an older
+version of this page said restore copied into a new revision.)
 
 ### Change detection (Designer "N unpublished changes" badge)
 
@@ -145,7 +168,7 @@ SHA-256 as the durable "did anything change" signal for audit purposes.
 | `GET`  | `/admin/.../surveys/{id}/versions`                     | List version summaries.          |
 | `GET`  | `/admin/.../surveys/{id}/versions/{versionId}`         | Single version with definition.  |
 | `POST` | `/admin/.../surveys/{id}/versions`                     | Publish a new version.           |
-| `POST` | `/admin/.../surveys/{id}/versions/{versionId}/restore` | Restore as a new revision.       |
+| `POST` | `/admin/.../surveys/{id}/versions/{versionId}/restore` | Make that version current again. |
 | `PUT`  | `/admin/.../surveys/{id}/draft`                        | Save a draft (with optimistic lock). |
 
 The single-version GET endpoint is used by the Versions comparison
@@ -163,9 +186,9 @@ The mobile package exports `registerMobile()` which contributes a read-only `sur
 Two topics scoped under `selfhelp/plugin/sh2-shp-survey-js/`:
 
 - `surveys/{surveyId}/editing` — collaborative-edit presence + "version_published" notifications. Required permission: `surveyjs.survey.update`.
-- `surveys/{surveyId}/responses` — new-response stream consumed by the dashboard. Required permission: `surveyjs.survey.read`.
+- `surveys/{surveyId}/responses` — `response_submitted` events consumed by the Answers tab. Required permission: `surveyjs.survey.read`.
 
-No polling. The dashboard fetches an initial snapshot once and listens for SSE updates after that.
+No polling. The Answers tab fetches a snapshot once and reloads on each `response_submitted` event.
 
 ## Data flow on submission
 
@@ -177,7 +200,7 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
    - normalizes + sanitizes the answers (`SurveyAnswerNormalizer` + `SurveyJsHtmlSanitizer`),
    - saves the response through `SurveyResponseStore` as one row of the data table `sh2_surveyjs_<survey id>` with trigger `finished` (the participant's own unfinished row when they saved progress before),
    - publishes `surveys/{surveyId}/responses` on Mercure.
-5. The dashboard receives the SSE event and reloads — no polling, no manual refresh.
+5. An open Answers tab receives the SSE event and reloads — no polling, no manual refresh.
 
 ### One row per response
 
@@ -187,7 +210,7 @@ No polling. The dashboard fetches an initial snapshot once and listens for SSE u
 | Later progress saves | same row, trigger `updated` (the page reached never goes back) |
 | Submit | same row, trigger `finished`; progress sent later for it is ignored |
 | Edit of a submitted response (`editMode`) | same row, stays `finished` |
-| Discard, or delete by an admin | core soft delete, trigger `deleted` (history kept) |
+| Discard, or delete in the core Data screen | core soft delete, trigger `deleted` (history kept) |
 
 Besides the answers each row carries reserved columns: `response_id`, `survey_revision`, `guest_key`, `language`, `page_no`. A question may not use these names, nor the core's row columns; publishing refuses them (HTTP `422`).
 
@@ -239,31 +262,35 @@ sh2-shp-survey-js/
 ├── AGENTS.md
 ├── README.md
 ├── CHANGELOG.md
-├── docs/architecture.md  (this file)
-├── .github/workflows/validate-plugin.yml
+├── docs/developer/architecture.md  (this file)
 ├── backend/
-│   ├── composer.json
 │   ├── src/HumdekSurveyJsBundle.php
-│   ├── src/Entity/{Survey, SurveyVersion, SurveyFile}.php
+│   ├── src/Entity/{Survey, SurveyVersion}.php
 │   ├── src/Repository/{Survey…, SurveyVersion…}Repository.php
-│   ├── src/Service/{SurveyService, SurveyResponseStore, SurveyResponseRecord,
-│   │                SurveyResponseService, SurveyResponseDraftService, SurveyDashboardService,
+│   ├── src/Service/{SurveyService, SurveyAccessService, SurveySectionResolver,
+│   │                SurveyResponseStore, SurveyResponseRecord, SurveyResponseService,
+│   │                SurveyResponseDraftService, SurveyDashboardService, SurveyPdfService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
-│   │                SurveyJsHealthCheck, SurveyFileAnswers, SurveyPdfService, …}.php
+│   │                SurveyJsApi, SurveyJsHealthCheck, SurveyFileAnswers, SignedFileUrlService, …}.php
 │   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
-│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic, …}Subscriber.php
-│   ├── src/Resources/config/services.php
-│   └── src/Migrations/Version20260522063620.php
+│   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic,
+│   │                        SurveyJsDataAccessResources, SurveyJsSectionBinding}Subscriber.php
+│   ├── src/Resources/{config/services.php, schemas/requests/*.json}
+│   ├── src/Migrations/{Version20260522063620, Version20261117132938}.php
+│   └── tests/
 ├── frontend/
 │   ├── package.json
-│   ├── tsconfig.json
 │   └── src/{index.ts, external.d.ts,
 │            api/{surveys, surveys-admin}.ts,
 │            styles/{SurveyJsStyle, GpxMapStyle}.tsx,
-│            admin/{SurveyAdminPage, SurveyDesignerPage, SurveyResponsesPage,
-│                   SurveyDashboardPage, SurveySettingsPage,
-│                   SurveyVersionsPage, definitionDiff}.tsx,
-│            custom-questions/register.ts,
+│            runtime/SurveyRuntime.tsx, …,
+│            admin/{SurveyAdminPage, SurveyListPage, SurveyDetailPage, SurveyDesignerPage,
+│                   SurveyAnswersPage, SurveyResponseView, SurveyVersionsPage,
+│                   SurveySettingsPage}.tsx,
+│            admin/{adminUrl, surveyListFilter, dataScreenUrl, definitionDiff}.ts,
+│            admin/dashboard/SurveyAnalyticsPanel.tsx,
+│            admin/ui/{AdminUi.tsx, admin-ui.css},
+│            custom-questions/…,
 │            theme/{mantine-adapter.css, surveyDefaults.ts}}
 └── mobile/
     ├── package.json

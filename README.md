@@ -7,7 +7,7 @@ SurveyJS v3 plugin for the SelfHelp CMS. Provides:
 - Optional custom question types: GPX (Leaflet map preview), Video, and Tiptap rich-text.
 - A standalone `gpx-map` style that draws a route from `sample_points` (a list of points or a GPX answer).
 - A readonly mobile renderer with an "Open on web" fallback for unsupported question types.
-- A response dashboard, response list, PDF export, and collaborative-edit notifications via Mercure.
+- An Answers tab with charts, one response drawn as the survey with its PDF, and collaborative-edit notifications via Mercure. Answers are listed and exported in the core Data screen.
 
 > **Looking for end-user documentation?**
 > - **[Install guide](./docs/operations/install.md) — start here.** Three ways to install (two UI flows + one terminal one-liner).

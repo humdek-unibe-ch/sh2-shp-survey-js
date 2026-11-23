@@ -3,7 +3,7 @@
 Audience: Developers and technical operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-24.
+Last verified: 2026-11-19 (admin screens); the rest 2026-06-24.
 Source of truth: Runtime code, configuration, and tests in this repository.
 
 This document captures the manual QA scenarios that the legacy
@@ -154,83 +154,61 @@ Automated coverage:
 3. The answer contains `{ url, durationMs, mimeType }` and the
    playback element streams the uploaded recording.
 
-## 4. Dashboard
+## 4. Admin screens
 
-### 4.1 Tabulator table
+### 4.1 Survey list
 
-1. Open the Dashboard tab for a survey with ≥ 1 response.
-2. The table shows internal columns + one column per question.
-3. Filter by `status = completed`: only completed rows remain.
-4. Re-order a column, reload: the order persists.
+1. Open **Admin → SurveyJS**: the list shows active surveys, newest change first.
+2. Search by part of a name and by a survey ID; switch the state filter to Archived and All.
+3. The answer count links to `/admin/data?tableIds=<id>` and opens that table.
+4. Open a survey, use the browser's back and forward buttons: list and survey come back.
+5. An old link (`?id=<id>&view=dashboard`) opens the Answers tab.
 
-### 4.2 Charts panel
+### 4.2 Rights in the screen
 
-1. With `survey-analytics` installed, switch to the Charts tab.
-2. Each question gets a visualiser (bar / pie / wordcloud).
+As a role with only `surveyjs.survey.read` and a view grant on one survey (impersonate it):
 
-### 4.3 Realtime updates
+1. No **New survey**, no Edit, Duplicate, Archive or Delete icons; only the Answers icon.
+2. The Design tab is read-only, without Save draft or Publish; Settings has no Save; Versions has no Restore.
+3. Without a grant on the survey's data table: the answer count is a dash, the Answers tab says there is no access, no Data screen button.
 
-1. Open the Dashboard in one tab.
-2. Submit a response from another tab / device.
-3. The table refreshes without manual reload.
+Add `surveyjs.survey.update` and the update grant: Edit, Archive, Save draft and Settings appear, Publish and Restore do not. Add `surveyjs.survey.publish`: Publish and Restore appear. The server still refuses each call the screen hides (try it with the API).
 
-### 4.4 Versions tab
+### 4.3 Design tab
 
-1. Publish two versions of a survey.
-2. The Versions tab lists both with timestamps + SHA-256.
-3. Restore the older version: a new revision is created with the
-   restored definition.
+1. Change a question, click **Save draft**: the editor does not reload, undo still works, the scroll position stays.
+2. With unsaved changes, reload the page: the browser asks to confirm. Switch to Versions and back: the changes are still there.
+3. Open the survey in two browsers as two users; both see the other named. User A saves, then user B saves: B gets "Could not save" with **Load the saved version** and **Overwrite with my version**; both work.
+4. Rename an answered question and publish: refused with the message, nothing published.
 
-## 5. Export
+### 4.4 Answers tab
 
-### 5.1 CSV
+1. With `survey-analytics` installed, each question gets a chart (drawn with Chart.js).
+2. Submit a response in another browser: counts and charts update without a reload (Mercure).
+3. Enter a record ID from the Data screen in **Look at one response**: the response is drawn read-only with its version; **PDF** downloads it (a printable page without `dompdf`). An unknown ID shows an error.
 
-1. Click Export → CSV.
-2. The browser downloads `<surveyId>_<timestamp>.csv` with UTF-8
-   BOM and a row per response.
+### 4.5 Versions tab
 
-### 5.2 XLSX
+1. Publish two versions: both are listed with timestamps and SHA-256.
+2. Tick both, **Compare selected**: the changes are listed.
+3. Restore the older version: it is marked current (no new version), the header shows it, the Design tab shows its content, and Restore now shows on the newer one.
 
-1. With `phpoffice/phpspreadsheet` installed, click Export → Excel.
-2. The browser downloads a real `.xlsx`.
-3. Without the package, the endpoint returns a 501 with an
-   actionable message — the admin UI surfaces the error.
-
-### 5.3 JSON
-
-1. Click Export → JSON.
-2. The download contains `{ surveyId, name, responses: [...] }`.
-
-### 5.4 Per-response PDF
-
-1. Click the download icon next to a response.
-2. With `dompdf/dompdf` installed, the browser downloads a PDF.
-3. Without it, the browser opens an HTML page with a banner that
-   tells the operator to use _Print → Save as PDF_.
-
-### 5.5 Runtime Save-as-PDF
+### 4.6 Runtime Save-as-PDF
 
 1. Enable `save_pdf = true` on the section.
-2. With `survey-pdf` installed + a license key, the runtime adds
-   a "Save as PDF" nav button that downloads the rendered survey.
-3. Without the package, the button invokes `window.print()` so the
-   user can still _Save as PDF_ from the print dialog.
+2. With `survey-pdf` installed and a licence key, the runtime adds a "Save as PDF" button that downloads the survey.
+3. Without the package, the button opens the print dialog.
 
-## 6. Realtime
+Listing, exporting (CSV, Excel, JSON) and deleting responses is tested with the core Data screen; the plugin no longer has these.
 
-### 6.1 Collaborative-edit presence
+## 5. Realtime
 
-1. Open the Designer tab as user `A`.
-2. Open the same Designer tab as user `B`.
-3. Each user sees the other in the presence list.
+### 5.1 Collaborative-edit presence
 
-### 6.2 Live response feed
+1. Open a survey's Design tab as user `A` and as user `B`.
+2. Each sees the other named above the editor.
 
-1. Open the Responses tab.
-2. Submit a response in another browser.
-3. The list refreshes without polling.
-
-## 7. Mobile (WebView renderer)
+## 6. Mobile (WebView renderer)
 
 The mobile renderer hosts the official SurveyJS runtime inside a
 self-contained WebView (`react-native-webview` on native, an iframe on
@@ -238,7 +216,7 @@ the Expo web export) driven by the typed host-services bridge. Each
 behaviour leg below is also covered by an automated test, listed under
 the scenario.
 
-### 7.1 REQUIRED — CMS mobile-preview acceptance smoke (release gate)
+### 6.1 REQUIRED — CMS mobile-preview acceptance smoke (release gate)
 
 This is the gating acceptance for every mobile renderer release. Run it
 in the CMS mobile preview (the `selfhelp-mobile-preview` image bundling
@@ -284,7 +262,7 @@ The live run remains required because only an end-to-end CMS preview
 exercises the published npm package + rebuilt image + real browser
 WebView together.
 
-### 7.2 WebView security
+### 6.2 WebView security
 
 1. The WebView only loads the bundled self-contained runtime document;
    any attempt to navigate it to an external/remote URL is blocked
@@ -303,7 +281,7 @@ WebView together.
    (`Linking.openURL` for external), so an off-origin jump requires
    native-host action, not WebView self-navigation.
 
-### 7.3 Missing / incompatible package fallback
+### 6.3 Missing / incompatible package fallback
 
 1. Install a plugin whose `compatibility.mobile` the app's mobile
    renderer version does not satisfy (or omit the mobile package).
@@ -311,7 +289,7 @@ WebView together.
    section (the ONLY legitimate open-on-web case).
 3. Other sections on the page keep rendering natively.
 
-### 7.4 Session expiry mid-survey
+### 6.4 Session expiry mid-survey
 
 1. Start a long survey on the mobile app; let the access token expire.
 2. On save/submit the native host refreshes the token once and retries;

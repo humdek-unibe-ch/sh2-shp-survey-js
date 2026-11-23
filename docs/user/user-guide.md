@@ -3,222 +3,162 @@
 Audience: Non-technical users, admins, and operators.
 Status: active.
 Applies to: SelfHelp2 SurveyJS plugin (sh2-shp-survey-js).
-Last verified: 2026-06-26.
+Last verified: 2026-11-19.
 Source of truth: Observable product behavior of the current build.
 
-This guide walks an admin through everything they can do with the
-SurveyJS plugin once it's installed in their SelfHelp CMS:
+This guide walks an editor through everything they can do with the
+SurveyJS plugin once it is installed in their SelfHelp CMS:
 
-1. [Create a survey](#1-create-a-survey)
-2. [Edit a survey with SurveyJS Creator](#2-edit-a-survey-with-surveyjs-creator)
-3. [Publish a version](#3-publish-a-version)
-4. [Monitor & compare versions](#4-monitor--compare-versions)
-5. [Restore a previous version](#5-restore-a-previous-version)
-6. [Embed a survey in a CMS page](#6-embed-a-survey-in-a-cms-page)
+1. [Find your surveys](#1-find-your-surveys)
+2. [Create a survey](#2-create-a-survey)
+3. [Edit a survey](#3-edit-a-survey)
+4. [Publish a version](#4-publish-a-version)
+5. [Compare and restore versions](#5-compare-and-restore-versions)
+6. [Put a survey on a page](#6-put-a-survey-on-a-page)
 7. [Configure survey-style parameters](#7-configure-survey-style-parameters)
-8. [Collect responses](#8-collect-responses)
-9. [Display responses on a page](#9-display-responses-on-a-page)
-10. [Permissions reference](#10-permissions-reference)
-11. [Mobile experience](#11-mobile-experience)
-12. [Troubleshooting](#12-troubleshooting)
+8. [See the answers](#8-see-the-answers)
+9. [Permissions reference](#9-permissions-reference)
+10. [Mobile experience](#10-mobile-experience)
+11. [Troubleshooting](#11-troubleshooting)
 
-> All admin routes live under **Admin → SurveyJS Surveys**. The
-> Plugin Management page at **Admin → System Tools → Plugin
-> Management** is only for installing / updating / removing the
+> The surveys live under **Admin → SurveyJS**. The plugin page at
+> **Admin → Plugins** is only for installing, updating and removing the
 > plugin itself.
 
----
-
-## 1. Create a survey
-
-1. Open **Admin → SurveyJS Surveys**.
-2. Click **New survey** (top-right).
-3. Enter a **name** (free text, shown to the admin) and a **key slug**
-   (URL-safe, used by the `surveyjs` style to reference the survey).
-4. Optionally pick a **theme** (Default / Modern / High contrast).
-5. Click **Create**.
-
-The survey is created as a draft with no versions yet. SurveyJS
-Creator opens immediately.
-The plugin also generates a stable `survey_id` (`SV_...`) for external
-references. The generated `survey_id` is the public identifier.
-
-> **Tip**: the key slug is what you'll paste into the `surveyjs`
-> style's "Survey" dropdown, so pick something meaningful
-> (`patient-intake-v2`, not `survey-1`).
+You only see the buttons for what your roles allow. If a button you
+expect is missing (for example **New survey** or **Delete**), ask an
+administrator; see [Permissions reference](#9-permissions-reference).
 
 ---
 
-## 2. Edit a survey with SurveyJS Creator
+## 1. Find your surveys
 
-The SurveyJS Creator hosts the full Creator v2 UI:
+Open **Admin → SurveyJS**. The list shows the surveys shared with your
+roles.
 
-| Tab          | Purpose                                                 |
-|--------------|---------------------------------------------------------|
-| **Designer**  | Drag-and-drop question editor.                          |
-| **Test**      | Live preview of the survey from the respondent's POV.   |
-| **Logic**     | Conditional show/hide, calculated fields, triggers.     |
-| **JSON**      | Raw JSON view; useful for copy-pasting between surveys. |
-| **Translations** | Multi-locale strings; ships with the host's locales. |
+- **Search** by part of the name or the survey ID.
+- **State** shows the active surveys by default; switch to
+  **Archived** or **All** to see the others.
+- **Answers** is the number of responses. Click it to open them in the
+  Data screen. A dash means you may not see this survey's answers.
+- The icons on each row are, in order: **Answers** (eye), **Edit**
+  (pencil), **Duplicate**, **Archive** and **Delete**.
+
+Click a survey's name to open it. A survey has four tabs: **Design**,
+**Answers**, **Versions** and **Settings**. **All surveys** at the top
+takes you back to the list; the browser's back button works too.
+
+---
+
+## 2. Create a survey
+
+1. Click **New survey** (top right).
+2. Enter a name. Only editors see it; you can change it later in
+   **Settings**.
+3. Click **Create and edit**.
+
+The survey opens on the **Design** tab, empty and not published. It gets
+a survey ID (`SV_...`) that never changes; the page section stores this
+ID.
+
+To start from an existing survey, click **Duplicate** on its row. The
+copy is a new draft with the same questions and no answers; publish it
+when it is ready.
+
+---
+
+## 3. Edit a survey
+
+The **Design** tab holds the SurveyJS editor:
+
+| Tab | Purpose |
+|---|---|
+| **Designer** | Add, arrange and set up questions. |
+| **Preview** | The survey as a participant sees it. |
+| **Logic** | Show or hide questions, calculated values, triggers. |
+| **JSON Editor** | The survey as text; useful to copy between surveys. |
+
+The survey always has the site's look and follows light and dark mode,
+so there is no theme to choose.
+
+- **Save draft** (or the editor's own save button) keeps your work.
+  Participants do not see a draft.
+- "Unsaved changes" means you have edits that are not saved yet. The
+  browser warns you if you close or reload the page then. Moving to
+  another tab of the survey keeps your edits.
+- If someone else saved the survey while you were editing, saving
+  stops and asks you to either **load the saved version** (your edits
+  are dropped) or **overwrite with your version**.
+- When someone else has the survey open, a note names them.
+- Without the right to edit, the editor is read-only.
 
 ### Rich-text editing
 
-For text fields that accept HTML (`description`, `title`, `html`,
-`correctAnswerText`), the plugin can opt the host's Tiptap-based
-rich-text editor into the Creator's property grid. To enable it
-**per-survey**:
+For text that accepts formatting (descriptions, titles, HTML), the
+plugin can switch the editor's text boxes to a rich-text editor. Per
+survey:
 
-1. Open the **JSON** tab of the Creator.
-2. Add `"richTextEditor": true` at the top level of the survey
-   definition.
-3. Save. The relevant property editors switch from a plain `<input>`
-   to the Tiptap toolbar.
-
-> **Why per-survey?** Some surveys ship to mobile devices that don't
-> bundle Tiptap; keeping it opt-in lets you decide which surveys
-> need it.
-
-### Mantine theming
-
-The Creator is mounted inside a Mantine `Paper` shell so the
-toolbar, modals, and panel chrome inherit the host's color scheme
-and spacing. The respondent-facing renderer (`survey-react-ui`)
-defaults to its own theme — switch it to the **Default** theme in
-the survey's *Themes* tab to get the Mantine-bridged colors.
+1. In the **Designer**, select the survey itself and open
+   **General**.
+2. Turn on **Rich-text editor (Tiptap)**.
+3. Save and reopen the survey.
 
 ---
 
-## 3. Publish a version
+## 4. Publish a version
 
-A survey is *always* served from a **version**, never directly from
-the draft. The Designer header shows the publish state at a glance:
+Participants always get a published **version**, never the draft. The
+bar above the editor shows where you are:
 
-- **Draft only** badge — never been published. The runtime style
-  cannot serve the survey yet.
-- **Published vN** badge — at least one revision exists; the public
-  renderer serves the latest one.
-- **N unpublished changes** orange badge — the draft differs from the
-  latest published revision. Counts pages, questions, and settings
-  that were added / removed / modified / moved.
+- **Not published yet**: participants cannot answer the survey.
+- **Published vN**: participants get version N.
+- **N unpublished changes**: the draft differs from the published
+  version (pages, questions and settings added, removed, changed or
+  moved).
 
-The **Publish** button (orange) is **only enabled when there are
-unpublished changes**. This prevents redundant revisions that contain
-no real difference. When the draft is identical to the published
-version, the button is disabled and the helper text reads "Publish
-is disabled until you make changes".
+**Publish** is only active when there is something to publish. Click it
+to make the current editor content the new version. A published version
+never changes.
 
-To publish:
-
-1. Edit the survey in the Creator. The orange badge updates as you
-   work.
-2. Click **Publish (N)** in the Designer header. `N` is the live
-   change count.
-3. The plugin creates a new immutable `survey_versions` row, computes
-   a SHA-256 over the definition, and sets it as the current version
-   (`surveys.id_current_survey_versions`).
-4. The change badge resets to zero and the **Published vN+1** badge
-   updates immediately.
-
-Every published version is durable; you cannot delete a version that
-has even one response attached to it.
-
-> **You cannot rename or remove a question that already has responses.**
-> A question's **name** is its permanent storage key — it is how every saved
-> answer is linked across versions. If your draft renames or deletes a question
-> that already has stored responses, **Publish is rejected** with a clear
-> message. To change the *wording* a respondent sees, edit the question's
-> **title** instead (the title is only a display label and is always safe to
-> change). To ask something genuinely new, add a **new** question with a new
-> name. This is what keeps your collected data from splitting into two columns
-> when you edit a live survey.
-
-> **Renaming**: hover the survey name in the Designer header and
-> click the pencil icon (or double-click the title) to rename inline
-> without leaving the Designer. The same shortcut is available in the
-> survey list (pencil icon next to each row, or **right-click → Rename**).
+> **You cannot rename or remove a question that already has answers.**
+> A question's **name** is where its answers are stored. If your changes
+> rename or delete a question that already has answers, publishing is
+> refused with a message. To change the wording, edit the question's
+> **title** (always safe). To ask something new, add a new question.
 
 ---
 
-## 4. Monitor & compare versions
+## 5. Compare and restore versions
 
-The **Versions** tab on the survey detail page shows:
+The **Versions** tab lists every published version, newest first.
 
-| Column        | What it tells you                                  |
-|---------------|----------------------------------------------------|
-| Compare       | Two checkboxes per row to select base + target.    |
-| Revision      | Auto-incremented integer with `current` badge.     |
-| Published at  | Local timestamp (server stores UTC).               |
-| By            | User id that published this revision.              |
-| SHA-256       | Content hash; identical hashes = identical JSON.   |
-| Restore       | Promote that version back to the live one.        |
+To see what changed between two versions:
 
-### Comparing two revisions
+1. Tick two versions.
+2. Click **Compare selected**.
 
-1. Tick the **Compare** checkbox on a base revision (turns blue).
-2. Tick a second checkbox to set the target (turns orange).
-3. Click **Compare selected** in the toolbar.
+The comparison lists every page, question or setting that was added,
+removed, changed or moved.
 
-The diff modal renders a structural per-entry table:
-
-| Type      | Meaning                                                      |
-|-----------|--------------------------------------------------------------|
-| added     | Page or question present in target, missing in base.         |
-| removed   | Page or question removed in target.                          |
-| modified  | Same question name, but title / type / required / choices / other fields differ. |
-| moved     | Same question name, different position.                      |
-| setting   | Top-level survey setting changed (title, theme, locale, …). Old / new value shown inline. |
-
-Each row carries a stable path like `pages[0].elements[2]` for easy
-cross-referencing with the JSON editor in the Designer.
-
-### Change-count semantics
-
-The Designer's "N unpublished changes" badge and the comparison modal
-use the **same diff engine** (`frontend/src/admin/definitionDiff.ts`).
-A question reorder counts once as a `moved` entry — not once per
-position — so renumbering ten questions does not inflate the count
-to ten.
+To go back to another version, click **Restore** on its row and
+confirm. Participants get that version again from now on, and the
+editor is reset to it (unsaved or unpublished edits are replaced). No
+version is deleted or added; the list marks the one participants get
+as **current**. Answers already given keep the version they were given
+with. **Restore** shows only if you may publish.
 
 ---
 
-## 5. Restore a previous version
+## 6. Put a survey on a page
 
-1. Open the **Versions** tab.
-2. Click **Restore** on any non-current row.
-3. The confirmation modal explains that restore is **non-destructive**:
-   - The current published revision stays in the history.
-   - A new revision is created whose definition matches the one you
-     are restoring.
-   - Existing responses keep pointing to the revision they were
-     collected against, so already-collected answers are not lost.
-4. Click **Restore as new revision** (orange button) to confirm.
+1. Open the page in **Admin → Pages** and add a section with the style
+   **SurveyJS**.
+2. In the section's **Survey** field, pick the survey. You can only
+   pick surveys shared with your roles.
+3. Set how it behaves on this page (see section 7) and save.
 
-The plugin creates a new `survey_versions` row, flips
-`surveys.id_current_survey_versions` to point at it, and emits a
-Mercure invalidation so any live `surveyjs` style picks up the change
-on the next request.
-
----
-
-## 6. Embed a survey in a CMS page
-
-The plugin contributes a **`surveyjs`** style. To embed a survey:
-
-1. Open **Admin → Pages → \<your-page\> → Sections**.
-2. Add a new section of style **`surveyjs`**.
-3. Set the section's fields:
-   - **Survey** — pick the survey by key slug (dropdown is populated
-     from `surveys.survey_id`).
-   - **Mode** — `interactive` (default) or `readonly`.
-   - **Submit redirect** — optional path to redirect to on submit.
-   - **Save partial answers** — if true, the runtime POSTs partial
-     state on every page change (Mercure-broadcast for resume).
-4. Save the section.
-
-The frontend renderer downloads the version pointed to by
-`surveys.id_current_survey_versions`, mounts `survey-react-ui`, and
-posts every answer through the host's `dataTables` write API. No
-host-frontend code changes are required.
+The section shows the latest published version. Archived surveys are
+not shown to participants.
 
 ---
 
@@ -260,49 +200,36 @@ participant always knows when their answers were not sent.
 
 ---
 
-## 8. Collect responses
+## 8. See the answers
 
-Each survey has its own data table, named after the survey id
-(`sh2_surveyjs_...`). It appears in the admin **Data** screen like any
-form's data. Every response is one row there, with one column per
-question:
+Each survey has its own data table in the **Data** screen, like any
+form. Every response is one row, with one column per question:
 
 - A participant who saved progress but has not submitted yet has a row
   marked **started** or **updated**.
 - A submitted response is marked **finished**.
 
-Use the **Data** screen to browse, filter and export responses (CSV,
-Excel or JSON), and to delete one.
+To list, filter, export (CSV, Excel, JSON) or delete answers, use the
+**Data** screen. **Answers in Data screen** on the survey, or the
+answer count in the survey list, opens the right table.
 
-The plugin's **Responses** tab on the survey shows the latest
-responses. Per-response actions:
+The survey's **Answers** tab shows:
 
-- **Export PDF** — the response printed as a page.
-- **Delete** — removes the response from the survey's data, the same as
-  deleting it in the Data screen (its history is kept).
+- how many responses are finished and how many are started but not
+  finished;
+- a chart per question for the finished responses (updates by itself
+  when new responses come in);
+- **Look at one response**: enter a record ID from the Data screen (or
+  a response ID) and click **Show**. The response is drawn as the
+  survey, read-only, with the version it was given with. **PDF**
+  downloads it.
 
----
-
-## 9. Display responses on a page
-
-The plugin contributes a second style: **`surveyjsAnswers`**, which
-renders a respondent's own answers (or, with the read grant on the
-survey's data table, every response). Drop
-it on any page to give respondents a "Here's what you answered"
-view.
-
-Common fields:
-
-| Field             | Effect                                              |
-|-------------------|-----------------------------------------------------|
-| `surveyKeySlug`   | Which survey to summarize.                          |
-| `scope`           | `self` (default) / `all` (admin only).               |
-| `groupByQuestion` | `true` shows per-question aggregates.                |
-| `chartTypes`      | JSON map of question name → `bar`/`pie`/`heatmap`.   |
+You need the right to see the survey's data table for all of this; see
+the next section.
 
 ---
 
-## 10. Permissions reference
+## 9. Permissions reference
 
 Five permissions say what a role may do with surveys at all:
 
@@ -330,7 +257,7 @@ to see the survey.
 
 ---
 
-## 11. Mobile experience
+## 10. Mobile experience
 
 The mobile package (`@selfhelp/sh2-shp-survey-js-mobile`) hosts the
 **official SurveyJS runtime** inside a self-contained WebView, so the
@@ -347,7 +274,7 @@ WebView + typed host-services bridge design.
 
 ---
 
-## 12. Troubleshooting
+## 11. Troubleshooting
 
 ### "The survey is empty / shows a spinner forever"
 

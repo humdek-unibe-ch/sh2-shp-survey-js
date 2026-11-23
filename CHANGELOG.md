@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6 and 7. Web only; mobile still ships SurveyJS 2 and the old field names (wave 9).
+SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6, 7 and 8. Web only; mobile still ships SurveyJS 2 and the old field names (wave 9).
 
 **Needs** a core with the section access check and section variables (H4, H1),
 plugin resource types and the section field check (H6, H7), core form files
@@ -20,6 +20,54 @@ its HTML sanitizer (`IPluginApi.sanitizeHtml`); set the
 Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer rule).
 
 ### Changed
+- **Admin screens redone (wave 8).** The survey list is its own screen with
+  search, a state filter and the host's table look; opening a survey shows its
+  tabs **Design**, **Answers**, **Versions**, **Settings**, and the browser's
+  back and forward buttons work. Buttons follow the caller's rights: the list
+  reply now is `{items, canCreate}` and each survey carries `rights`
+  (`update`, `publish`, `delete`) and `dataTableId`, so a read-only role no
+  longer sees **New survey**, edit, publish, restore or delete. The editor is
+  built once per survey (saving or publishing no longer reloads it and loses
+  undo), is read-only without the update right, offers "load the saved
+  version" or "overwrite" on a draft conflict, and warns before leaving with
+  unsaved changes. Duplicate makes an unpublished draft. Modals and tables
+  copy the host's `ModalWrapper` and admin table.
+- **Archived surveys stay visible (wave 8 fix).** The admin list left them
+  out, so an archived survey vanished from every filter. The list now returns
+  them; archiving shows a note with **Undo** and **Show archived**. The
+  section's survey picker hides archived surveys, except one the section
+  already uses (marked "archived").
+- **Restore is described as it works.** It makes the chosen version current
+  again and resets the draft to it; it creates no new version. The Versions tab
+  marks the version participants get as current (it marked the newest) and
+  offers Restore on every other one.
+- **A refused publish is no longer shown as a conflict.** Save and publish
+  refusals carry `data.reason` (`draft_conflict`, `answered_question_renamed`,
+  `reserved_question_name`). Only a real conflict offers "load the saved
+  version" or "overwrite"; a renamed answered question shows the message, and
+  the editor carries on from the draft the server saved, so the next save is
+  not reported as a conflict with itself.
+- Smaller fixes from the full test: old links (`view=dashboard`) are rewritten
+  in the address bar; an unknown or unshared survey says so in words; a blank
+  name says "Enter a name."; the response lookup is hidden while a survey has
+  no responses; unarchiving offers "Show active"; the archive note clears on
+  the next action.
+- Fixes from the code review: Delete shows only with the delete grant on the
+  survey's data table too (once it has answers), as deleting checks; a survey
+  without responses shows 0 answers instead of "no access"; the editor no
+  longer warns about the user's own presence (the presence reply now carries
+  `userId`) and only users who may edit announce themselves; after a restore
+  the editor is rebuilt from the restored draft; a publish whose follow-up
+  reload fails is not reported as failed; the delete dialog stays open and
+  shows the error when deleting fails; the list looks up each data table once.
+- **The response list, its delete and the dashboard's results table are gone
+  (wave 8).** Listing, exporting and deleting answers is the core Data screen,
+  linked from the list and the survey. The Answers tab keeps the counts, the
+  charts (`survey-analytics`, Chart.js) and one response drawn as the survey
+  with its PDF. Routes `surveyjs_admin_responses` and
+  `surveyjs_admin_response_delete` and the `response_deleted` realtime event
+  are removed; the dashboard summary no longer has `recent`. Tabulator and its
+  stylesheets left the bundle.
 - **New permission `surveyjs.survey.read`** opens the SurveyJS admin screens,
   like `admin.page.read` for pages. The admin page, its menu entry, the
   read-only routes and the response stream use it; changing a survey still
