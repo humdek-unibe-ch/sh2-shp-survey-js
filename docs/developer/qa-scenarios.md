@@ -159,7 +159,7 @@ Automated coverage:
 ### 4.1 Survey list
 
 1. Open **Admin → SurveyJS**: the list shows active surveys, newest change first.
-2. Search by part of a name and by a survey ID; switch the state filter to Archived and All.
+2. Search by part of a name and by a survey ID; set State to Archived and All. Nothing changes until **Apply Filters** (greyed out while the filters are unchanged); **Reset** shows all active surveys again; **Refresh** reloads the list.
 3. The answer count links to `/admin/data?tableIds=<id>` and opens that table.
 4. Open a survey, use the browser's back and forward buttons: list and survey come back.
 5. An old link (`?id=<id>&view=dashboard`) opens the Answers tab.

@@ -37,8 +37,11 @@ Open **Admin → SurveyJS**. The list shows the surveys shared with your
 roles.
 
 - **Search** by part of the name or the survey ID.
-- **State** shows the active surveys by default; switch to
-  **Archived** or **All** to see the others.
+- **State** shows the active surveys by default; choose **Archived**
+  or **All** to see the others.
+  An archived survey has an **Archived** badge next to its name.
+- Click **Apply Filters** to show the result. **Reset** goes back to
+  all active surveys; **Refresh** reloads the list.
 - **Answers** is the number of responses. Click it to open them in the
   Data screen. A dash means you may not see this survey's answers.
 - The icons on each row are, in order: **Answers** (eye), **Edit**

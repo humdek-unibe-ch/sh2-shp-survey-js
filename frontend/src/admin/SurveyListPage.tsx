@@ -21,7 +21,7 @@ import {
     Group,
     Loader,
     Popover,
-    SegmentedControl,
+    Select,
     Stack,
     Table,
     Text,
@@ -29,7 +29,7 @@ import {
     Tooltip,
     VisuallyHidden,
 } from '@mantine/core';
-import { IconArchive, IconArchiveOff, IconCode, IconCopy, IconEye, IconPencil, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconArchiveOff, IconCode, IconCopy, IconEye, IconPencil, IconPlus, IconSearch, IconTrash, IconX } from '@tabler/icons-react';
 
 import {
     createSurvey,
@@ -46,7 +46,14 @@ import { IS_DEV_RUNTIME } from '../runtime-mode';
 import type { TSurveyView } from './adminUrl';
 import { dataScreenUrl } from './dataScreenUrl';
 import { filterSurveys, type TStateFilter } from './surveyListFilter';
-import { AdminModal, EmptyState, PageHeader } from './ui/AdminUi';
+import { AdminModal, EmptyState, FilterActions, PageHeader } from './ui/AdminUi';
+
+interface ISurveyFilters {
+    search: string;
+    state: TStateFilter;
+}
+
+const DEFAULT_FILTERS: ISurveyFilters = { search: '', state: 'active' };
 
 interface ISurveyListPageProps {
     onOpen: (surveyId: number, view: TSurveyView) => void;
@@ -56,20 +63,30 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
     const [list, setList] = useState<IAdminSurveyList | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);
-    const [search, setSearch] = useState<string>('');
-    const [state, setState] = useState<TStateFilter>('active');
+    // As on the host's list screens: the card edits a draft, Apply Filters makes it the shown filter.
+    const [draft, setDraft] = useState<ISurveyFilters>(DEFAULT_FILTERS);
+    const [filters, setFilters] = useState<ISurveyFilters>(DEFAULT_FILTERS);
+    const [fetching, setFetching] = useState<boolean>(false);
     const [creating, setCreating] = useState<boolean>(false);
     const [pendingDelete, setPendingDelete] = useState<IAdminSurveySummary | null>(null);
     // The last archive or unarchive, so the row leaving the current filter is explained and can be undone.
     const [archivedNotice, setArchivedNotice] = useState<{ survey: IAdminSurveySummary; archived: boolean } | null>(null);
 
     const reload = useCallback(async (): Promise<void> => {
+        setFetching(true);
         try {
             setList(await listSurveys());
             setError(null);
         } catch (err) {
             setError((err as Error).message);
+        } finally {
+            setFetching(false);
         }
+    }, []);
+
+    const showState = useCallback((state: TStateFilter): void => {
+        setDraft((current) => ({ ...current, state }));
+        setFilters((current) => ({ ...current, state }));
     }, []);
 
     useEffect(() => {
@@ -98,7 +115,7 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
         setArchivedNotice(ok ? { survey, archived } : null);
     }, [run]);
 
-    const visible = useMemo(() => filterSurveys(list?.items ?? [], search, state), [list, search, state]);
+    const visible = useMemo(() => filterSurveys(list?.items ?? [], filters.search, filters.state), [list, filters]);
     const archivedCount = useMemo(() => (list?.items ?? []).filter((survey) => survey.archived).length, [list]);
 
     return (
@@ -119,34 +136,56 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
             </PageHeader>
 
             <Card withBorder p="md">
-                <Group gap="md" align="flex-end" wrap="wrap">
+                <Stack gap="md">
                     <TextInput
-                        label="Search"
-                        placeholder="Name or survey ID"
-                        leftSection={<IconSearch size={14} />}
-                        value={search}
-                        onChange={(event) => setSearch(event.currentTarget.value)}
-                        style={{ flex: 1, minWidth: 220 }}
+                        aria-label="Search surveys"
+                        placeholder="Search surveys by name or survey ID..."
+                        leftSection={<IconSearch size={16} />}
+                        rightSection={
+                            draft.search ? (
+                                <ActionIcon
+                                    variant="subtle"
+                                    color="gray"
+                                    size="sm"
+                                    aria-label="Clear search"
+                                    onClick={() => setDraft((current) => ({ ...current, search: '' }))}
+                                >
+                                    <IconX size={14} />
+                                </ActionIcon>
+                            ) : null
+                        }
+                        value={draft.search}
+                        onChange={(event) => {
+                            const search = event.currentTarget.value;
+                            setDraft((current) => ({ ...current, search }));
+                        }}
                     />
-                    <Stack gap={4}>
-                        <Text size="sm" fw={500} id="survey-state-filter">State</Text>
-                        <SegmentedControl
-                            aria-labelledby="survey-state-filter"
-                            value={state}
-                            onChange={(value) => setState(value as TStateFilter)}
+                    <Group gap="md" align="flex-end" justify="space-between" wrap="wrap">
+                        <Select
+                            label="State"
+                            value={draft.state}
+                            onChange={(value) => value && setDraft((current) => ({ ...current, state: value as TStateFilter }))}
                             data={[
                                 { value: 'active', label: 'Active' },
                                 { value: 'archived', label: `Archived (${archivedCount})` },
                                 { value: 'all', label: 'All' },
                             ]}
+                            withCheckIcon={false}
+                            allowDeselect={false}
+                            w={160}
                         />
-                    </Stack>
-                    {(search !== '' || state !== 'active') && (
-                        <Button variant="subtle" onClick={() => { setSearch(''); setState('active'); }}>
-                            Reset
-                        </Button>
-                    )}
-                </Group>
+                        <FilterActions
+                            onApply={() => setFilters(draft)}
+                            onReset={() => {
+                                setDraft(DEFAULT_FILTERS);
+                                setFilters(DEFAULT_FILTERS);
+                            }}
+                            onRefresh={() => void reload()}
+                            isFetching={fetching}
+                            isApplyDisabled={draft.search === filters.search && draft.state === filters.state}
+                        />
+                    </Group>
+                </Stack>
             </Card>
 
             {error && (
@@ -165,13 +204,13 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                                 : 'is active again: participants can answer it.'}
                         </Text>
                         <Group gap="xs">
-                            {archivedNotice.archived && state === 'active' && (
-                                <Button size="xs" variant="subtle" onClick={() => setState('archived')}>
+                            {archivedNotice.archived && filters.state === 'active' && (
+                                <Button size="xs" variant="subtle" onClick={() => showState('archived')}>
                                     Show archived
                                 </Button>
                             )}
-                            {!archivedNotice.archived && state === 'archived' && (
-                                <Button size="xs" variant="subtle" onClick={() => setState('active')}>
+                            {!archivedNotice.archived && filters.state === 'archived' && (
+                                <Button size="xs" variant="subtle" onClick={() => showState('active')}>
                                     Show active
                                 </Button>
                             )}
@@ -184,7 +223,7 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                                         if (!ok) return;
                                         setArchivedNotice(null);
                                         // Show the survey where it is now, so undoing never hides it.
-                                        if (state !== 'all') setState(archived ? 'active' : 'archived');
+                                        if (filters.state !== 'all') showState(archived ? 'active' : 'archived');
                                     });
                                 }}
                                 loading={busyId === archivedNotice.survey.id}
@@ -213,7 +252,6 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                                     <Table.Th>Version</Table.Th>
                                     <Table.Th>Answers</Table.Th>
                                     <Table.Th>Updated</Table.Th>
-                                    <Table.Th>State</Table.Th>
                                     <Table.Th>
                                         <VisuallyHidden>Actions</VisuallyHidden>
                                     </Table.Th>
@@ -222,7 +260,7 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                             <Table.Tbody>
                                 {visible.length === 0 ? (
                                     <Table.Tr>
-                                        <Table.Td colSpan={6}>
+                                        <Table.Td colSpan={5}>
                                             {list.items.length === 0 ? (
                                                 <EmptyState
                                                     title="No surveys yet"
@@ -231,7 +269,7 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                                                         : 'No survey is shared with your roles.'}
                                                 />
                                             ) : (
-                                                <EmptyState title="No surveys match" description="Change the search or the state filter." />
+                                                <EmptyState title="No surveys match" description="Change the search or the state, then apply the filters." />
                                             )}
                                         </Table.Td>
                                     </Table.Tr>
@@ -319,9 +357,12 @@ function SurveyRow({ survey, busy, canCreate, onOpen, onDuplicate, onArchive, on
     return (
         <Table.Tr>
             <Table.Td>
-                <Anchor component="button" type="button" fw={500} onClick={() => onOpen(survey.id, openView)}>
-                    {survey.name}
-                </Anchor>
+                <Group gap="xs" wrap="nowrap">
+                    <Anchor component="button" type="button" fw={500} onClick={() => onOpen(survey.id, openView)}>
+                        {survey.name}
+                    </Anchor>
+                    {survey.archived && <Badge color="gray" variant="light">Archived</Badge>}
+                </Group>
                 <Text className="sjs-admin-table__mono">{survey.surveyId}</Text>
             </Table.Td>
             <Table.Td>
@@ -348,13 +389,6 @@ function SurveyRow({ survey, busy, canCreate, onOpen, onDuplicate, onArchive, on
             </Table.Td>
             <Table.Td>
                 <Text size="sm">{new Date(survey.updatedAt).toLocaleString()}</Text>
-            </Table.Td>
-            <Table.Td>
-                {survey.archived ? (
-                    <Badge color="gray" variant="light">Archived</Badge>
-                ) : (
-                    <Badge color="green" variant="light">Active</Badge>
-                )}
             </Table.Td>
             <Table.Td className="sjs-admin-table__actions">
                 <Group gap={4} wrap="nowrap" justify="flex-end">

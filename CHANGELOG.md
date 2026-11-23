@@ -60,6 +60,11 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   the editor is rebuilt from the restored draft; a publish whose follow-up
   reload fails is not reported as failed; the delete dialog stays open and
   shows the error when deleting fails; the list looks up each data table once.
+- **The list's filter card works like the host's.** Full-width search with a
+  clear button, a **State** select, and **Apply Filters**, **Reset**,
+  **Refresh** (as on Users or Data); the filters take effect on Apply. The
+  State column, which read "Active" on every row, is gone; an archived survey
+  has an **Archived** badge next to its name.
 - **The response list, its delete and the dashboard's results table are gone
   (wave 8).** Listing, exporting and deleting answers is the core Data screen,
   linked from the list and the survey. The Answers tab keeps the counts, the

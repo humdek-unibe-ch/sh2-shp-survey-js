@@ -3,14 +3,16 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * The host admin's shared look (page header, modal, empty state), rebuilt
+ * The host admin's shared look (page header, filter buttons, modal, empty
+ * state), rebuilt
  * with the same Mantine props. A plugin cannot import the host's components
  * (only `@selfhelp/shared/plugin-sdk`), so these mirror `PageHeader`,
- * `ModalWrapper` and `EmptyState` in the host frontend; keep them in step
+ * `FilterActions`, `ModalWrapper` and `EmptyState` in the host frontend; keep them in step
  * when those change.
  */
 
 import { Badge, Box, Button, Center, CloseButton, Group, Modal, Stack, Text, Title } from '@mantine/core';
+import { IconRefresh, IconRestore } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
 interface IPageHeaderProps {
@@ -125,5 +127,30 @@ export function AdminModal({
                 </Group>
             </Group>
         </Modal>
+    );
+}
+
+interface IFilterActionsProps {
+    onApply: () => void;
+    onReset: () => void;
+    onRefresh: () => void;
+    isFetching: boolean;
+    isApplyDisabled?: boolean;
+}
+
+/** The filter card's buttons, as on the host's list screens: apply, reset, refresh. */
+export function FilterActions({ onApply, onReset, onRefresh, isFetching, isApplyDisabled = false }: IFilterActionsProps): React.ReactElement {
+    return (
+        <Group gap="sm" justify="flex-end" wrap="nowrap">
+            <Button variant="filled" color="blue" onClick={onApply} loading={isFetching} disabled={isApplyDisabled}>
+                Apply Filters
+            </Button>
+            <Button leftSection={<IconRestore size={16} />} color="gray" onClick={onReset} loading={isFetching}>
+                Reset
+            </Button>
+            <Button variant="light" leftSection={<IconRefresh size={16} />} onClick={onRefresh} loading={isFetching} disabled={isFetching}>
+                Refresh
+            </Button>
+        </Group>
     );
 }
