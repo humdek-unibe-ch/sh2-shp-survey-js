@@ -404,6 +404,14 @@ class SurveyResponseStore
         return $this->table($survey) !== null;
     }
 
+    /** Id of the survey's data table, null before the first response. */
+    public function dataTableId(Survey $survey): ?int
+    {
+        $id = $this->table($survey)?->getId();
+
+        return $id === null ? null : (int) $id;
+    }
+
     private function table(Survey $survey): ?DataTable
     {
         return $this->dataService->getDataTableByName(self::tableNameFor($survey));

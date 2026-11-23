@@ -723,24 +723,6 @@
             ]
         },
         {
-            "name": "surveyjs_admin_responses",
-            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::responses",
-            "methods": [
-                "GET"
-            ],
-            "requirements": {
-                "id": "\\d+"
-            },
-            "permissions": [
-                "surveyjs.survey.read",
-                "surveyjs.survey.create",
-                "surveyjs.survey.update",
-                "surveyjs.survey.publish",
-                "surveyjs.survey.delete"
-            ]
-        },
-        {
             "name": "surveyjs_admin_response_detail",
             "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
             "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::responseDetail",
@@ -772,24 +754,6 @@
             },
             "permissions": [
                 "surveyjs.survey.read",
-                "surveyjs.survey.create",
-                "surveyjs.survey.update",
-                "surveyjs.survey.publish",
-                "surveyjs.survey.delete"
-            ]
-        },
-        {
-            "name": "surveyjs_admin_response_delete",
-            "path": "/admin/plugins/sh2-shp-survey-js/surveys/{id}/responses/{rid}",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysAdminController::deleteResponse",
-            "methods": [
-                "DELETE"
-            ],
-            "requirements": {
-                "id": "\\d+",
-                "rid": "[A-Za-z0-9_-]+"
-            },
-            "permissions": [
                 "surveyjs.survey.create",
                 "surveyjs.survey.update",
                 "surveyjs.survey.publish",

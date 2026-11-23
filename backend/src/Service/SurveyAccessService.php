@@ -12,6 +12,7 @@ use App\Entity\DataTable;
 use App\Entity\Role;
 use App\Entity\RoleDataAccess;
 use App\Service\CMS\Admin\AdminDataAccessService;
+use App\Service\CMS\UserPermissionService;
 use App\Service\Core\LookupService;
 use App\Service\Core\UserContextAwareService;
 use App\Service\Security\DataAccessSecurityService;
@@ -32,6 +33,9 @@ class SurveyAccessService
 {
     public const RESOURCE_TYPE = 'surveyjs_survey';
     public const PERMISSION_CREATE = 'surveyjs.survey.create';
+    public const PERMISSION_UPDATE = 'surveyjs.survey.update';
+    public const PERMISSION_PUBLISH = 'surveyjs.survey.publish';
+    public const PERMISSION_DELETE = 'surveyjs.survey.delete';
     public const READ = DataAccessSecurityService::PERMISSION_READ;
     public const UPDATE = DataAccessSecurityService::PERMISSION_UPDATE;
     public const DELETE = DataAccessSecurityService::PERMISSION_DELETE;
@@ -46,6 +50,7 @@ class SurveyAccessService
         private readonly AdminDataAccessService $dataAccess,
         private readonly LookupService $lookups,
         private readonly UserContextAwareService $userContext,
+        private readonly UserPermissionService $userPermissions,
     ) {
     }
 
@@ -72,12 +77,75 @@ class SurveyAccessService
      */
     public function readableSurveyIdsOrNull(): ?array
     {
-        $userId = $this->userId();
-        if ($userId !== null && $this->security->userHasAdminRole($userId)) {
+        $masks = $this->grantMasksOrNull();
+        if ($masks === null) {
             return null;
         }
+
+        return array_keys(array_filter($masks, static fn (int $mask): bool => ($mask & self::READ) !== 0));
+    }
+
+    /** Whether the caller may create surveys (the route permission; a new survey has no grant yet). */
+    public function canCreate(): bool
+    {
+        return in_array(self::PERMISSION_CREATE, $this->callerPermissions(), true);
+    }
+
+    /**
+     * What the caller may do with each survey, so the admin screens show only
+     * the actions that will succeed: the route permission and the grant
+     * together, as the actions check them. One query for all surveys and no
+     * audit row per check; the actions themselves still check and audit.
+     *
+     * @param list<Survey> $surveys
+     * @return array<int, array{update: bool, publish: bool, delete: bool}> keyed by survey id
+     */
+    public function rightsFor(array $surveys): array
+    {
+        $permissions = $this->callerPermissions();
+
+        return self::rightsFromGrants($surveys, $permissions, $permissions === [] ? [] : $this->grantMasksOrNull());
+    }
+
+    /**
+     * The decision behind {@see rightsFor()}: an action needs its route
+     * permission and the matching grant bit (publishing: the update grant).
+     *
+     * @param list<Survey> $surveys
+     * @param list<string> $permissions the caller's permission names
+     * @param array<int, int>|null $masks grant bits per survey id; null: admin, every grant
+     * @return array<int, array{update: bool, publish: bool, delete: bool}>
+     */
+    public static function rightsFromGrants(array $surveys, array $permissions, ?array $masks): array
+    {
+        $rights = [];
+        foreach ($surveys as $survey) {
+            $id = (int) $survey->getId();
+            $mask = $masks === null ? self::FULL_ACCESS : ($masks[$id] ?? 0);
+            $rights[$id] = [
+                'update' => ($mask & self::UPDATE) !== 0 && in_array(self::PERMISSION_UPDATE, $permissions, true),
+                'publish' => ($mask & self::UPDATE) !== 0 && in_array(self::PERMISSION_PUBLISH, $permissions, true),
+                'delete' => ($mask & self::DELETE) !== 0 && in_array(self::PERMISSION_DELETE, $permissions, true),
+            ];
+        }
+
+        return $rights;
+    }
+
+    /**
+     * The caller's grant on every survey (bits OR-ed over their roles), or
+     * null for the admin role (every right on every survey).
+     *
+     * @return array<int, int>|null
+     */
+    private function grantMasksOrNull(): ?array
+    {
+        $userId = $this->userId();
         if ($userId === null) {
             return [];
+        }
+        if ($this->security->userHasAdminRole($userId)) {
+            return null;
         }
 
         /** @var list<array{resourceId: int|string, crud: int|string}> $rows */
@@ -93,14 +161,26 @@ class SurveyAccessService
             ->getQuery()
             ->getArrayResult();
 
-        $ids = [];
+        $masks = [];
         foreach ($rows as $row) {
-            if (((int) $row['crud'] & self::READ) !== 0) {
-                $ids[(int) $row['resourceId']] = (int) $row['resourceId'];
-            }
+            $id = (int) $row['resourceId'];
+            $masks[$id] = ($masks[$id] ?? 0) | (int) $row['crud'];
         }
 
-        return array_values($ids);
+        return $masks;
+    }
+
+    /**
+     * The caller's permission names, from the same cached source as the
+     * host's own checks (the request's user entity carries no loaded roles).
+     *
+     * @return list<string>
+     */
+    private function callerPermissions(): array
+    {
+        $user = $this->userContext->getCurrentUser();
+
+        return $user === null || $user->getId() === null ? [] : $this->userPermissions->getUserPermissions($user);
     }
 
     /**
@@ -180,7 +260,18 @@ class SurveyAccessService
             return false;
         }
 
-        return $this->security->hasPermission($userId, LookupService::RESOURCE_TYPES_DATA_TABLE, (int) $table->getId(), $permission);
+        return $this->canOnDataTable((int) $table->getId(), $permission);
+    }
+
+    /** Whether the caller holds `$permission` on data table `$tableId` (the admin role always does). */
+    public function canOnDataTable(int $tableId, int $permission): bool
+    {
+        $userId = $this->userId();
+        if ($userId === null) {
+            return false;
+        }
+
+        return $this->security->hasPermission($userId, LookupService::RESOURCE_TYPES_DATA_TABLE, $tableId, $permission);
     }
 
     /**

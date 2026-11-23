@@ -11,10 +11,10 @@ namespace Humdek\SurveyJsBundle\Service;
 use Humdek\SurveyJsBundle\Entity\Survey;
 
 /**
- * What the admin Dashboard tab shows: totals and the latest responses
- * (summary), and the finished responses as flat rows for the SurveyJS
- * analytics charts (results). Everything is read from the survey's data
- * table through {@see SurveyResponseStore}.
+ * What the admin Answers tab shows: totals (summary) and the finished
+ * responses as flat rows for the SurveyJS charts (results). Everything is
+ * read from the survey's data table through {@see SurveyResponseStore}; the
+ * list of responses is the core data screen's.
  */
 final class SurveyDashboardService
 {
@@ -28,26 +28,11 @@ final class SurveyDashboardService
      */
     public function buildSummary(Survey $survey): array
     {
-        $recent = $this->responses->list($survey, 0, 10);
-
         return [
             'id' => $survey->getId(),
             'surveyId' => $survey->getSurveyId(),
             'completedResponses' => $this->responses->list($survey, 0, 1, true)['total'],
-            'totalResponses' => $recent['total'],
-            'recent' => array_map(
-                static fn (SurveyResponseRecord $record): array => [
-                    'id' => $record->recordId,
-                    'responseId' => $record->responseId,
-                    'status' => $record->isFinished() ? 'completed' : 'in_progress',
-                    'startedAt' => $record->lastChangedAt?->format(DATE_ATOM),
-                    'completedAt' => $record->isFinished() ? $record->lastChangedAt?->format(DATE_ATOM) : null,
-                    'idDataRow' => $record->recordId,
-                    'idUser' => $record->userId,
-                    'visitorId' => $record->guestKey,
-                ],
-                $recent['records'],
-            ),
+            'totalResponses' => $this->responses->list($survey, 0, 1)['total'],
             'currentVersionRevision' => $survey->getCurrentVersion()?->getRevision(),
         ];
     }

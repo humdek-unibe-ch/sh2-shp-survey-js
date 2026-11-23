@@ -13,6 +13,7 @@ use App\Entity\User;
 use App\Plugin\Event\DataAccessResourcesEvent;
 use App\Plugin\Event\SectionFieldBindingEvent;
 use App\Service\CMS\Admin\AdminDataAccessService;
+use App\Service\CMS\UserPermissionService;
 use App\Service\Core\LookupService;
 use App\Service\Core\UserContextAwareService;
 use App\Service\Security\DataAccessSecurityService;
@@ -114,6 +115,42 @@ final class SurveyAccessTest extends TestCase
         }
     }
 
+    public function testTheAdminScreenOffersAnActionOnlyWithItsPermissionAndTheMatchingGrant(): void
+    {
+        $surveys = [$this->survey(4), $this->survey(5), $this->survey(6)];
+        $editor = ['surveyjs.survey.read', 'surveyjs.survey.update', 'surveyjs.survey.delete'];
+        $masks = [
+            4 => SurveyAccessService::READ | SurveyAccessService::UPDATE | SurveyAccessService::DELETE,
+            5 => SurveyAccessService::READ,
+        ];
+
+        $rights = SurveyAccessService::rightsFromGrants($surveys, $editor, $masks);
+
+        self::assertSame(['update' => true, 'publish' => false, 'delete' => true], $rights[4], 'no publish permission: no publish');
+        self::assertSame(['update' => false, 'publish' => false, 'delete' => false], $rights[5], 'a view grant allows no change');
+        self::assertSame(['update' => false, 'publish' => false, 'delete' => false], $rights[6], 'no grant at all');
+
+        $publisher = SurveyAccessService::rightsFromGrants($surveys, ['surveyjs.survey.publish'], $masks);
+        self::assertTrue($publisher[4]['publish'], 'publishing needs the publish permission and the update grant');
+        self::assertFalse($publisher[4]['update'], 'publishing is not editing');
+    }
+
+    public function testTheAdminRoleMayDoWhatItsPermissionsAllowOnEverySurvey(): void
+    {
+        $all = ['surveyjs.survey.update', 'surveyjs.survey.publish', 'surveyjs.survey.delete'];
+
+        $rights = SurveyAccessService::rightsFromGrants([$this->survey(4)], $all, null);
+
+        self::assertSame(['update' => true, 'publish' => true, 'delete' => true], $rights[4]);
+    }
+
+    public function testOnlyARoleWithTheCreatePermissionMayCreateASurvey(): void
+    {
+        self::assertTrue($this->access(permissions: ['surveyjs.survey.read', 'surveyjs.survey.create'])->canCreate());
+        self::assertFalse($this->access(permissions: ['surveyjs.survey.read'])->canCreate(), 'a read-only user gets no New Survey button');
+        self::assertFalse($this->access(signedIn: false)->canCreate());
+    }
+
     public function testTheRoleScreenListsTheSurveysUnderTheirOwnTypeOnly(): void
     {
         $surveys = $this->createMock(SurveyRepository::class);
@@ -129,7 +166,10 @@ final class SurveyAccessTest extends TestCase
         self::assertSame([], $other->getResources());
     }
 
-    private function access(bool $signedIn = true): SurveyAccessService
+    /**
+     * @param list<string> $permissions
+     */
+    private function access(bool $signedIn = true, array $permissions = []): SurveyAccessService
     {
         $repository = $this->createMock(EntityRepository::class);
         $repository->method('findOneBy')->willReturnCallback(fn (): ?DataTable => $this->table);
@@ -143,7 +183,10 @@ final class SurveyAccessTest extends TestCase
 
         $lookups = (new \ReflectionClass(LookupService::class))->newInstanceWithoutConstructor();
 
-        return new SurveyAccessService($em, $this->security, $this->createMock(AdminDataAccessService::class), $lookups, $userContext);
+        $userPermissions = $this->createMock(UserPermissionService::class);
+        $userPermissions->method('getUserPermissions')->willReturn($permissions);
+
+        return new SurveyAccessService($em, $this->security, $this->createMock(AdminDataAccessService::class), $lookups, $userContext, $userPermissions);
     }
 
     private function survey(int $id, string $name = 'Test'): Survey

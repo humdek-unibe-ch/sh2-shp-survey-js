@@ -27,11 +27,15 @@ class SurveyRepository extends ServiceEntityRepository
         return $this->findOneBy(['surveyId' => $surveyId]);
     }
 
-    /** @return Survey[] */
-    public function findAllActive(): array
+    /**
+     * Every survey, archived ones included (the admin list filters them by
+     * state; the section picker hides them), last changed first.
+     *
+     * @return Survey[]
+     */
+    public function findAllNewestFirst(): array
     {
         return $this->createQueryBuilder('s')
-            ->andWhere('s.archived = false')
             ->orderBy('s.updatedAt', 'DESC')
             ->getQuery()
             ->getResult();

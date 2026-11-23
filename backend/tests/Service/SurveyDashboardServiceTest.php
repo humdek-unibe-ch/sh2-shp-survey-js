@@ -17,24 +17,22 @@ use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The admin Dashboard tab reads the survey's responses from the core data
- * table ({@see SurveyResponseStore}): totals and the latest responses, and
- * the finished responses as flat rows for the charts.
+ * The admin Answers tab reads the survey's responses from the core data
+ * table ({@see SurveyResponseStore}): totals, and the finished responses as
+ * flat rows for the charts. It lists no responses: that is the core data
+ * screen's.
  */
 #[AllowMockObjectsWithoutExpectations]
 final class SurveyDashboardServiceTest extends TestCase
 {
-    public function testSummaryCountsFinishedAndAllResponsesAndListsTheLatest(): void
+    public function testSummaryCountsFinishedAndAllResponsesWithoutListingThem(): void
     {
         $survey = $this->survey();
         $store = $this->createMock(SurveyResponseStore::class);
         $store->method('list')->willReturnCallback(
             fn (Survey $s, int $offset, int $limit, bool $finishedOnly = false): array => $finishedOnly
                 ? ['records' => [], 'total' => 3]
-                : ['records' => [
-                    $this->record(101, 'R_OPEN', 'updated', null, 'guest-1'),
-                    $this->record(100, 'R_DONE', 'finished', 7, null),
-                ], 'total' => 5],
+                : ['records' => [$this->record(101, 'R_OPEN', 'updated', null, 'guest-1')], 'total' => 5],
         );
 
         $summary = (new SurveyDashboardService($store))->buildSummary($survey);
@@ -42,13 +40,7 @@ final class SurveyDashboardServiceTest extends TestCase
         self::assertSame(3, $summary['completedResponses']);
         self::assertSame(5, $summary['totalResponses']);
         self::assertSame(1, $summary['currentVersionRevision']);
-        self::assertSame(['R_OPEN', 'R_DONE'], array_column($summary['recent'], 'responseId'));
-        self::assertSame('in_progress', $summary['recent'][0]['status']);
-        self::assertNull($summary['recent'][0]['completedAt'], 'an unfinished response has no submit time');
-        self::assertSame('guest-1', $summary['recent'][0]['visitorId']);
-        self::assertSame('completed', $summary['recent'][1]['status']);
-        self::assertSame(7, $summary['recent'][1]['idUser']);
-        self::assertSame(100, $summary['recent'][1]['idDataRow'], 'the response is its data row');
+        self::assertArrayNotHasKey('recent', $summary, 'the response list is the core data screen\'s');
     }
 
     public function testResultsAreFinishedResponsesAsMetaColumnsPlusAnswersUpToTheLimit(): void

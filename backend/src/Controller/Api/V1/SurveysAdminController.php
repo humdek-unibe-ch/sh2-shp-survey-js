@@ -38,6 +38,13 @@ use Humdek\SurveyJsBundle\Service\SurveyJsApi;
 #[AsController]
 final class SurveysAdminController
 {
+    /** Someone else saved the draft since the caller loaded it (`data.reason`). */
+    public const REASON_DRAFT_CONFLICT = 'draft_conflict';
+    /** Publishing would rename or remove a question that has answers. */
+    public const REASON_ANSWERED_QUESTION_RENAMED = 'answered_question_renamed';
+    /** A question takes a column name the plugin or the core uses. */
+    public const REASON_RESERVED_QUESTION_NAME = 'reserved_question_name';
+
     public function __construct(
         private readonly SurveyJsApi $api,
         private readonly SurveyRepository $surveys,
@@ -56,10 +63,15 @@ final class SurveysAdminController
     {
         $readable = $this->access->readableSurveyIdsOrNull();
         $items = array_values(array_filter(
-            $this->surveys->findAllActive(),
+            $this->surveys->findAllNewestFirst(),
             static fn (Survey $survey): bool => $readable === null || in_array((int) $survey->getId(), $readable, true),
         ));
-        return $this->api->success(array_map(fn (Survey $survey) => $this->summarize($survey), $items));
+        $rights = $this->access->rightsFor($items);
+
+        return $this->api->success([
+            'items' => array_map(fn (Survey $survey) => $this->summarize($survey, $rights[(int) $survey->getId()]), $items),
+            'canCreate' => $this->access->canCreate(),
+        ]);
     }
 
     public function create(Request $request): JsonResponse
@@ -152,11 +164,11 @@ final class SurveysAdminController
         }
         $body = $this->decode($request);
         $userId = $this->userId($request);
-        try {
-            if (array_key_exists('definition', $body)) {
-                if (!is_array($body['definition'])) {
-                    return $this->api->failure('definition must be an object.', 422);
-                }
+        if (array_key_exists('definition', $body)) {
+            if (!is_array($body['definition'])) {
+                return $this->api->failure('definition must be an object.', 422);
+            }
+            try {
                 $this->surveyService->saveDraft(
                     $survey,
                     $this->normaliseSurveyDefinition($body['definition']),
@@ -164,17 +176,25 @@ final class SurveysAdminController
                     $userId,
                     (bool) ($body['force'] ?? false),
                 );
+            } catch (\DomainException $e) {
+                if ($e->getCode() === 409) {
+                    return $this->api->failure($e->getMessage(), 409, self::REASON_DRAFT_CONFLICT);
+                }
+                throw $e;
             }
+        }
+        // The draft is saved by now, also when publishing is refused below:
+        // the editor reloads the survey to carry on from that draft.
+        try {
             $version = $this->surveyService->publishDraft($survey, $userId);
         } catch (\DomainException $e) {
-            // 409: draft conflict or an immutable-key violation (issue #56) -
-            // a renamed/removed answered question.name.
+            // 409: a question with answers renamed or removed (issue #56).
             if ($e->getCode() === 409) {
-                return $this->api->failure($e->getMessage(), 409, null, null, $this->detail($survey));
+                return $this->api->failure($e->getMessage(), 409, self::REASON_ANSWERED_QUESTION_RENAMED);
             }
             // 422: a question takes a name the system uses as a column.
             if ($e->getCode() === 422) {
-                return $this->api->failure($e->getMessage(), 422);
+                return $this->api->failure($e->getMessage(), 422, self::REASON_RESERVED_QUESTION_NAME);
             }
             throw $e;
         }
@@ -215,7 +235,7 @@ final class SurveysAdminController
             );
         } catch (\DomainException $e) {
             if ($e->getCode() === 409) {
-                return $this->api->failure($e->getMessage(), 409, null, null, $this->detail($survey));
+                return $this->api->failure($e->getMessage(), 409, self::REASON_DRAFT_CONFLICT);
             }
             throw $e;
         }
@@ -301,7 +321,8 @@ final class SurveysAdminController
             return $this->api->failure('Authenticated user required.', 401);
         }
         $this->realtime->surveyEditingPresence($survey, $userId, $this->userName($request, $userId), $state);
-        return $this->api->success(['published' => true]);
+        // `userId` lets the editor drop its own presence events from the topic.
+        return $this->api->success(['published' => true, 'userId' => $userId]);
     }
 
     public function dashboard(int $id): JsonResponse
@@ -317,10 +338,9 @@ final class SurveysAdminController
     }
 
     /**
-     * Flat row payload consumed by the SurveyAnalyticsTabulator-based
-     * admin table. The full SurveyJS definition is included so the
-     * client-side SurveyAnalytics package can render charts without a
-     * second round-trip.
+     * Finished responses as flat rows for the charts of the Answers tab,
+     * with the SurveyJS definition so `survey-analytics` needs no second
+     * request.
      */
     public function dashboardResults(int $id, Request $request): JsonResponse
     {
@@ -333,33 +353,6 @@ final class SurveysAdminController
         }
         $limit = min(20000, max(1, (int) $request->query->get('limit', 5000)));
         return $this->api->success($this->dashboardService->buildResults($survey, $limit));
-    }
-
-    /**
-     * Responses of a survey, newest first, unfinished ones included (admin
-     * Responses tab; the full list and exports are the core data screen's).
-     * Paginated; default page=1, limit=50 (the store reads at most 100).
-     */
-    public function responses(int $id, Request $request): JsonResponse
-    {
-        $survey = $this->surveys->find($id);
-        if (!$survey instanceof Survey) {
-            return $this->api->failure('Not found.', 404);
-        }
-        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
-            return $this->forbidden();
-        }
-
-        $pageNo = max(1, (int) $request->query->get('page', 1));
-        $limit = min(100, max(1, (int) $request->query->get('limit', 50)));
-        $page = $this->responseStore->list($survey, ($pageNo - 1) * $limit, $limit);
-
-        return $this->api->success([
-                'items' => array_map(fn (SurveyResponseRecord $record): array => $this->responseSummary($survey, $record), $page['records']),
-                'page' => $pageNo,
-                'limit' => $limit,
-                'total' => $page['total'],
-            ]);
     }
 
     /**
@@ -384,29 +377,9 @@ final class SurveysAdminController
     }
 
     /**
-     * Deletes a single response: the core soft delete of its data row (trigger
-     * `deleted`, history kept), the same as deleting it in the data screen.
+     * One response with its answers, to draw it as the survey (admin Answers
+     * tab). The list of responses and their deletion are the core data screen's.
      */
-    public function deleteResponse(int $id, string $rid, Request $request): JsonResponse
-    {
-        $survey = $this->surveys->find($id);
-        if (!$survey instanceof Survey) {
-            return $this->api->failure('Not found.', 404);
-        }
-        if (!$this->access->canOnResponses($survey, SurveyAccessService::DELETE)) {
-            return $this->forbidden();
-        }
-        $record = $this->resolveResponse($survey, $rid);
-        if ($record === null) {
-            return $this->api->failure('Response not found.', 404);
-        }
-        $responseId = $record->responseId;
-        $this->responseStore->delete($survey, $record);
-        $userId = is_int($request->attributes->get('_auth_user_id')) ? (int) $request->attributes->get('_auth_user_id') : null;
-        $this->realtime->surveyResponseDeleted($survey, $responseId, $userId);
-        return $this->api->success(['deleted' => true]);
-    }
-
     public function responseDetail(int $id, string $rid): JsonResponse
     {
         $survey = $this->surveys->find($id);
@@ -447,10 +420,27 @@ final class SurveysAdminController
     }
 
     /**
+     * `rights` says which actions the caller may take on the survey, so the
+     * screen hides the others; `dataTableId` links its answers in the core
+     * data screen and is set only for a caller who may read them.
+     *
+     * Before the first response there is no data table and nothing to hide:
+     * the count is 0. Once it exists, the count needs the read grant on it,
+     * and deleting the survey also needs the delete grant on it, as
+     * {@see delete()} checks.
+     *
+     * @param array{update: bool, publish: bool, delete: bool}|null $rights null: computed here
      * @return array<string, mixed>
      */
-    private function summarize(Survey $survey): array
+    private function summarize(Survey $survey, ?array $rights = null): array
     {
+        $rights ??= $this->access->rightsFor([$survey])[(int) $survey->getId()];
+        $tableId = $this->responseStore->dataTableId($survey);
+        $readsAnswers = $tableId === null || $this->access->canOnDataTable($tableId, SurveyAccessService::READ);
+        if ($tableId !== null && $rights['delete']) {
+            $rights['delete'] = $this->access->canOnDataTable($tableId, SurveyAccessService::DELETE);
+        }
+
         return [
             'id' => $survey->getId(),
             'surveyId' => $survey->getSurveyId(),
@@ -463,9 +453,9 @@ final class SurveysAdminController
             'draftUpdatedAt' => $survey->getDraftUpdatedAt()?->format(DATE_ATOM),
             'draftUpdatedByUserId' => $survey->getDraftUpdatedByUserId(),
             // A count of answers is answers' data: only with the data-table grant.
-            'responseCount' => $this->access->canOnResponses($survey, SurveyAccessService::READ)
-                ? $this->responseStore->list($survey, 0, 1)['total']
-                : null,
+            'responseCount' => !$readsAnswers ? null : ($tableId === null ? 0 : $this->responseStore->list($survey, 0, 1)['total']),
+            'dataTableId' => $readsAnswers ? $tableId : null,
+            'rights' => $rights,
         ];
     }
 
