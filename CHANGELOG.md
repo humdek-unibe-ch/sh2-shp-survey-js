@@ -65,6 +65,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   **Refresh** (as on Users or Data); the filters take effect on Apply. The
   State column, which read "Active" on every row, is gone; an archived survey
   has an **Archived** badge next to its name.
+- **The editor's frame is clean.** The editor is clipped to its rounded frame
+  (its square corners covered the frame's border), and the line under the
+  side panel button joins the toolbar line instead of showing as a short
+  loose dash.
 - **The response list, its delete and the dashboard's results table are gone
   (wave 8).** Listing, exporting and deleting answers is the core Data screen,
   linked from the list and the survey. The Answers tab keeps the counts, the

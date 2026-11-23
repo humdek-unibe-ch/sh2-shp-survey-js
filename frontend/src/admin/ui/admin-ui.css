@@ -80,3 +80,17 @@ SPDX-License-Identifier: MPL-2.0
 .sjs-admin-modal__bar--bottom {
   border-top: 1px solid var(--mantine-color-default-border);
 }
+
+/* SurveyJS Creator draws the line under the side panel button 12px in
+   from both edges, so it looks like a broken piece of the toolbar line
+   it sits level with. Run it edge to edge so the two join. */
+.svc-creator .svc-sidebar-tabs__separator {
+  padding-inline-start: 0;
+  padding-inline-end: 0;
+}
+
+/* The Creator paints square corners; clip it to the rounded frame around it.
+   Its popups are position: fixed, so the clip does not cut them off. */
+.surveyjs-creator-shell {
+  overflow: hidden;
+}
