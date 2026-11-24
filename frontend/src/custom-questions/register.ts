@@ -19,6 +19,7 @@ import { registerRichTextQuestion } from './richText';
 import { registerVideoQuestion, mountVideoQuestion } from './video';
 import { registerGpxQuestion, mountGpxQuestion } from './gpx';
 import { registerMicrophoneQuestion, mountMicrophoneQuestion } from './microphone';
+import { applyStorageSettings } from '../runtime/storageSettings';
 
 export interface IRegisterOptions {
     flags: {
@@ -35,11 +36,12 @@ let customQuestionsRegistered = false;
 
 export async function registerCustomQuestions(opts: IRegisterOptions): Promise<void> {
     // Skip registration if already done - custom questions persist globally in SurveyJS
+    const core = await import('survey-core');
+    applyStorageSettings(core);
     if (customQuestionsRegistered) {
         return;
     }
 
-    const core = await import('survey-core');
     const { ComponentCollection, Serializer } = core;
 
     if (opts.flags.richText) {

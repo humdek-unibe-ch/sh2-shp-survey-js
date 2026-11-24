@@ -189,6 +189,8 @@ export function SurveyRuntime({
     const [published, setPublished] = useState<IPublishedSurvey | null>(null);
     const [lifecycle, setLifecycle] = useState<LifecycleState>({ kind: 'loading' });
     const [model, setModel] = useState<import('survey-core').ISurveyModel | null>(null);
+    // Bumped by "new response" to build a fresh survey (timers, response id, hydration).
+    const [runKey, setRunKey] = useState(0);
 
     const draftStoreRef = useRef<LocalDraftStore | null>(null);
     const metaRef = useRef<ISurveyMeta | null>(null);
@@ -251,7 +253,7 @@ export function SurveyRuntime({
                     ensureSessionKeyInUrl();
                 }
                 setPublished(data);
-                draftStoreRef.current = new LocalDraftStore(`sh2-shp-survey-js:${data.surveyId}`);
+                draftStoreRef.current = new LocalDraftStore(`sh2-shp-survey-js:${data.surveyId}`, data.state.viewer);
 
                 const editModeResponseId = readQueryParam('record_id') ?? readQueryParam('responseId');
                 editModeResponseIdRef.current = editModeResponseId;
@@ -306,6 +308,8 @@ export function SurveyRuntime({
             responseIdProvider: () => responseIdRef.current ?? '',
             uploadFile: async (questionName, file) => {
                 const responseId = ensureResponseId();
+                // The server takes files only for a response saved at least once.
+                await persistProgress(nextModel, 'updated');
                 return uploadSurveyFile(published.surveyId, sectionRef, {
                     responseId,
                     questionName,
@@ -330,6 +334,10 @@ export function SurveyRuntime({
             editModeResponseId: editModeResponseIdRef.current,
             assignResponseId(value) {
                 responseIdRef.current = value;
+            },
+            editUnavailable() {
+                // The link's response could not be opened: this is a new answer, not an edit.
+                editModeResponseIdRef.current = null;
             },
             captureMeta(value) {
                 metaRef.current = value;
@@ -389,6 +397,11 @@ export function SurveyRuntime({
                 .then((result) => {
                     if (disposed) return;
                     submittingRef.current = false;
+                    // Answered: no more autosaves, and the time limit no longer applies.
+                    if (autosaveTimer) clearInterval(autosaveTimer);
+                    autosaveTimer = null;
+                    timerRef.current?.cancel();
+                    timerRef.current = null;
                     responseIdRef.current = result.responseId;
                     if (draftStoreRef.current) {
                         draftStoreRef.current.clearAll();
@@ -465,17 +478,20 @@ export function SurveyRuntime({
                 // holds the answer; the next autosave will retry.
             }
         }
-    }, [bridge, published, sectionId, sectionRef]);
+    }, [bridge, published, sectionId, sectionRef, runKey]);
 
     const startOver = useCallback(() => {
-        if (!published || !model) return;
+        if (!published) return;
         if (draftStoreRef.current && responseIdRef.current) {
             draftStoreRef.current.clear(responseIdRef.current);
         }
         responseIdRef.current = null;
+        editModeResponseIdRef.current = null;
         metaRef.current = captureSurveyMeta();
-        model.clear(true, true);
-    }, [published, model]);
+        setModel(null);
+        setLifecycle({ kind: 'ready' });
+        setRunKey((key) => key + 1);
+    }, [published]);
 
     if (!surveyIdentifier) {
         return (
@@ -618,11 +634,13 @@ interface IHydrateArgs {
     draftStore: LocalDraftStore | null;
     editModeResponseId: string | null;
     assignResponseId: (value: string) => void;
+    /** The edit link's response could not be opened; the survey starts as a new answer. */
+    editUnavailable: () => void;
     captureMeta: (value: ISurveyMeta) => void;
 }
 
 async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHydrateArgs): Promise<void> {
-    const { published, sectionRef, draftStore, editModeResponseId, assignResponseId, captureMeta } = args;
+    const { published, sectionRef, draftStore, editModeResponseId, assignResponseId, editUnavailable, captureMeta } = args;
     captureMeta(captureSurveyMeta());
 
     if (editModeResponseId) {
@@ -632,6 +650,7 @@ async function hydrateModel(model: import('survey-core').ISurveyModel, args: IHy
             model.data = { ...editable.answers };
             return;
         }
+        editUnavailable();
     }
 
     if (published.runtimeConfig.restartOnRefresh) {

@@ -54,6 +54,8 @@ export interface IRuntimeConfig {
 
 export interface IPublishedRuntimeState {
     isAuthenticated: boolean;
+    /** Who is answering: `user:<id>` or `guest`; owns the answers kept in this browser. */
+    viewer: string;
     /** Outside the section's daily window, in the participant's timezone. */
     notActive: boolean;
     lockoutReason: { reason: string; responseId: string; submittedAt: string | null } | null;

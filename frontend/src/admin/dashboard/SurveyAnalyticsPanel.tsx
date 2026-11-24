@@ -13,6 +13,7 @@ import { Alert, Code, Stack, Text } from '@mantine/core';
 
 import { fetchLicenseKey } from '../../api/surveys-admin';
 import type { IDashboardResults } from '../../api/surveys-admin';
+import { applyStorageSettings } from '../../runtime/storageSettings';
 
 interface IAnalyticsBridge {
     Model: new (definition: unknown) => unknown;
@@ -33,6 +34,7 @@ async function loadAnalytics(): Promise<IAnalyticsBridge | null> {
             import('survey-core'),
             import('survey-analytics'),
         ]);
+        applyStorageSettings(core);
         return {
             Model: (core as unknown as IAnalyticsBridge).Model,
             setLicenseKey: (core as unknown as IAnalyticsBridge).setLicenseKey,

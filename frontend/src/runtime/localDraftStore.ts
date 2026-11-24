@@ -24,18 +24,26 @@ export interface ILocalDraftEntry {
     data: Record<string, unknown>;
     meta?: ISurveyMeta | null;
     savedAt: string;
+    /** Who wrote it (`state.viewer` of the published survey): only they get it back. */
+    owner?: string;
 }
 
 const LATEST_SUFFIX = ':__latest';
 
 export class LocalDraftStore {
-    constructor(private readonly namespace: string) {}
+    /**
+     * `owner` is who is answering now (`user:<id>` or `guest`). The browser is
+     * shared by whoever uses it: after a user logs out, the next person must not
+     * get their unsent answers.
+     */
+    constructor(private readonly namespace: string, private readonly owner: string = 'guest') {}
 
-    save(entry: Omit<ILocalDraftEntry, 'savedAt'>): void {
+    save(entry: Omit<ILocalDraftEntry, 'savedAt' | 'owner'>): void {
         if (!this.isAvailable()) return;
         const stored: ILocalDraftEntry = {
             ...entry,
             savedAt: new Date().toISOString(),
+            owner: this.owner,
         };
         try {
             window.localStorage.setItem(this.key(entry.responseId), JSON.stringify(stored));
@@ -60,7 +68,8 @@ export class LocalDraftStore {
         try {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object' && typeof parsed.responseId === 'string') {
-                return parsed as ILocalDraftEntry;
+                // Someone else's answers (or from before owners were kept): not for this person.
+                return (parsed as ILocalDraftEntry).owner === this.owner ? (parsed as ILocalDraftEntry) : null;
             }
         } catch {
             // Drop the unparsable entry below.

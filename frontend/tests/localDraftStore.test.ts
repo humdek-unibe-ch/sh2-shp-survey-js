@@ -32,6 +32,14 @@ describe('LocalDraftStore', () => {
         expect(store.load('r2')?.data).toEqual({ b: 2 });
     });
 
+    it('gives a draft back only to the person who wrote it', () => {
+        new LocalDraftStore('sh2-test', 'user:7').save({ responseId: 'r1', data: { name: 'teste' }, pageNo: 0 });
+
+        expect(new LocalDraftStore('sh2-test', 'guest').loadLatest(), 'the next person after logout').toBeNull();
+        expect(new LocalDraftStore('sh2-test', 'user:8').load('r1'), 'another user').toBeNull();
+        expect(new LocalDraftStore('sh2-test', 'user:7').loadLatest()?.data).toEqual({ name: 'teste' });
+    });
+
     it('clear removes only the targeted draft', () => {
         store.save({ responseId: 'r1', data: { a: 1 }, pageNo: 0 });
         store.save({ responseId: 'r2', data: { b: 2 }, pageNo: 1 });

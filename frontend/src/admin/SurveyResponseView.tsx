@@ -16,6 +16,7 @@ import { fetchResponseDetail, getVersion, listVersions, type ISurveyResponseSumm
 import { applyMantineSurveyDefaults } from '../theme/surveyDefaults';
 import { registerCustomQuestions } from '../custom-questions/register';
 import { getPluginApi } from '../runtime/pluginApi';
+import { applyStorageSettings } from '../runtime/storageSettings';
 
 interface IViewState {
     response: ISurveyResponseSummary;
@@ -53,6 +54,7 @@ export function SurveyResponseView({ surveyId, responseRef, fallbackDefinition, 
                 throw new Error('The survey version of this response could not be found.');
             }
             applyMantineSurveyDefaults(core.Serializer);
+            applyStorageSettings(core);
             const pluginApi = getPluginApi();
             const flag = (key: string, fallback: boolean): boolean => {
                 try {

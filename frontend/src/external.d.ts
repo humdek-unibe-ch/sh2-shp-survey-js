@@ -105,6 +105,8 @@ declare module 'survey-core' {
         onClearFiles: IEvent<{ value: unknown; callback: (status: string) => void }>;
     }
     export function setLicenseKey(key: string): void;
+    /** Global SurveyJS settings; the plugin sets `commentSuffix` (see `runtime/storageSettings.ts`). */
+    export const settings: { commentSuffix: string; [key: string]: unknown };
     export const ComponentCollection: {
         Instance: {
             add: (descriptor: {
