@@ -15,7 +15,6 @@ use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
-use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -151,6 +150,103 @@ final class SurveyServicePublishGuardTest extends TestCase
         }
     }
 
+    public function testPublishRefusesNamesTheDataTableCannotStore(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        $survey->setDraftDefinition([
+            'pages' => [[
+                'name' => 'page1',
+                'elements' => [
+                    ['type' => 'text', 'name' => 'mood_score', 'title' => 'Mood score'],
+                    ['type' => 'text', 'name' => 'Q 1', 'title' => 'With a space'],
+                    ['type' => 'text', 'name' => 'q-2', 'title' => 'With a hyphen'],
+                    ['type' => 'text', 'name' => 'deleted', 'title' => 'A core column'],
+                    // A panel name is not a column: any name is fine.
+                    ['type' => 'panel', 'name' => 'About you', 'elements' => [
+                        ['type' => 'text', 'name' => 'age', 'title' => 'Age'],
+                    ]],
+                ],
+            ]],
+        ], null);
+
+        try {
+            $this->buildService(completedRuns: 0)->publishDraft($survey, null);
+            self::fail('Expected names the core data table refuses to be refused at publish.');
+        } catch (\DomainException $e) {
+            self::assertSame(422, $e->getCode());
+            self::assertStringContainsString('"deleted" are used by the system', $e->getMessage());
+            self::assertStringContainsString('"Q 1", "q-2" may only use letters', $e->getMessage());
+            self::assertStringNotContainsString('About you', $e->getMessage(), 'a panel name is not a column');
+        }
+    }
+
+    public function testAQuestionNobodyAnsweredMayBeRemovedEvenWhenTheSurveyHasAnswers(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        // v2 added `notes`; nobody answered it yet.
+        $withNotes = new SurveyVersion($survey, 2, [
+            'pages' => [['name' => 'page1', 'elements' => [
+                ['type' => 'rating', 'name' => 'mood_score', 'title' => 'Mood score'],
+                ['type' => 'text', 'name' => 'notes', 'title' => 'Notes'],
+            ]]],
+        ], null);
+        $this->setEntityId($withNotes, 13);
+        $survey->setCurrentVersion($withNotes);
+        $survey->setDraftDefinition($this->singleQuestionDefinition('mood_score', 'Mood score'), null);
+
+        $version = $this->buildService(completedRuns: 3)->publishDraft($survey, null);
+
+        self::assertSame(2, $version->getRevision(), 'removing the unanswered `notes` is allowed');
+    }
+
+    public function testRestoringAnOlderVersionWithoutAnUnansweredNewQuestionWorks(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        $v1 = $survey->getCurrentVersion();
+        self::assertNotNull($v1);
+        $v2 = new SurveyVersion($survey, 2, [
+            'pages' => [['name' => 'page1', 'elements' => [
+                ['type' => 'rating', 'name' => 'mood_score', 'title' => 'Mood score'],
+                ['type' => 'text', 'name' => 'my_answer', 'title' => 'New, unanswered'],
+            ]]],
+        ], null);
+        $this->setEntityId($v2, 12);
+        $survey->setCurrentVersion($v2);
+
+        $this->buildService(completedRuns: 3)->restoreVersion($survey, $v1, null);
+
+        self::assertSame(11, $survey->getCurrentVersion()?->getId(), 'v1 is current again');
+    }
+
+    public function testRestoringAVersionRunsThePublishGuards(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        // A version from before the name guard existed.
+        $old = new SurveyVersion($survey, 2, $this->singleQuestionDefinition('page_no', 'Page'), null);
+        $this->setEntityId($old, 12);
+
+        try {
+            $this->buildService(completedRuns: 0)->restoreVersion($survey, $old, null);
+            self::fail('Expected restoring a version with a reserved name to be refused.');
+        } catch (\DomainException $e) {
+            self::assertSame(422, $e->getCode());
+        }
+        self::assertSame(11, $survey->getCurrentVersion()?->getId(), 'the version participants get is unchanged');
+    }
+
+    public function testRestoringAnotherSurveysVersionIsNotFound(): void
+    {
+        $survey = $this->surveyWithPublishedQuestion('mood_score', 'Mood score');
+        $other = new Survey('Other', 'SV_OTHER');
+        $this->setEntityId($other, 2);
+        $foreign = new SurveyVersion($other, 1, $this->singleQuestionDefinition('mood_score', 'Mood score'), null);
+        $this->setEntityId($foreign, 21);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionCode(404);
+        $this->buildService(completedRuns: 0)->restoreVersion($survey, $foreign, null);
+    }
+
     private function surveyWithPublishedQuestion(string $name, string $title): Survey
     {
         $survey = new Survey('Test', 'SV_' . strtoupper($name));
@@ -186,8 +282,6 @@ final class SurveyServicePublishGuardTest extends TestCase
         // before this is ever reached.
         $em->method('wrapInTransaction')->willReturn($this->publishedSentinel());
 
-        $responses = $this->createMock(SurveyResponseStore::class);
-        $responses->method('list')->willReturn(['records' => [], 'total' => $completedRuns]);
 
         $surveys = (new \ReflectionClass(SurveyRepository::class))->newInstanceWithoutConstructor();
         \assert($surveys instanceof SurveyRepository);
@@ -199,9 +293,22 @@ final class SurveyServicePublishGuardTest extends TestCase
             $surveys,
             $versions,
             $this->createMock(SurveyJsRealtimePublisher::class),
-            $responses,
-            $this->createMock(DataTableService::class),
+            $this->tablesWithAnswersTo($completedRuns > 0 ? ['mood_score'] : null),
         );
+    }
+
+    /**
+     * The survey's data table with a column per answered question, or none
+     * before the first answer.
+     *
+     * @param list<string>|null $answered
+     */
+    private function tablesWithAnswersTo(?array $answered): DataTableService
+    {
+        $tables = $this->createMock(DataTableService::class);
+        $tables->method('getColumnsNames')->willReturn($answered === null ? false : ['record_id', 'id_users', ...$answered]);
+
+        return $tables;
     }
 
     private function publishedSentinel(): SurveyVersion

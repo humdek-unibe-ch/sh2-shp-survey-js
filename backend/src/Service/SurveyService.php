@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Service;
 
+use App\Service\CMS\DataColumnService;
 use App\Service\CMS\DataTableService;
 use Doctrine\ORM\EntityManagerInterface;
 use Humdek\SurveyJsBundle\Entity\Survey;
@@ -35,7 +36,6 @@ final class SurveyService
         private readonly SurveyRepository $surveys,
         private readonly SurveyVersionRepository $versions,
         private readonly SurveyJsRealtimePublisher $realtime,
-        private readonly SurveyResponseStore $responses,
         private readonly DataTableService $dataTables,
     ) {
     }
@@ -92,7 +92,7 @@ final class SurveyService
         // question would orphan or fragment its host data column, so block
         // the publish (title-only edits and new questions stay allowed).
         $this->assertNoRenamedAnsweredQuestions($survey, $definition);
-        $this->assertNoReservedQuestionNames($definition);
+        $this->assertStorableQuestionNames($definition);
 
         return $this->em->wrapInTransaction(function () use ($survey, $definition, $userId): SurveyVersion {
             $revision = $this->versions->nextRevision($survey);
@@ -109,8 +109,13 @@ final class SurveyService
     public function restoreVersion(Survey $survey, SurveyVersion $version, ?int $userId): Survey
     {
         if ($version->getSurvey()->getId() !== $survey->getId()) {
-            throw new \DomainException('Version does not belong to this survey.');
+            throw new \DomainException('Version does not belong to this survey.', 404);
         }
+        // A restored version goes live like a published one: the same guards
+        // (a version from before a guard existed may break it).
+        $definition = $this->normaliseDefinition($version->getDefinition());
+        $this->assertNoRenamedAnsweredQuestions($survey, $definition);
+        $this->assertStorableQuestionNames($definition);
 
         $survey->setCurrentVersion($version);
         $survey->setDraftDefinition($version->getDefinition(), $userId);
@@ -156,13 +161,20 @@ final class SurveyService
         if ($current === null) {
             return;
         }
-        if ($this->responses->list($survey, 0, 1)['total'] === 0) {
+        // A question has stored answers when the survey's data table has its
+        // column (SurveyJS sends only answered questions, and every answer key
+        // is a column). A question nobody answered may still go.
+        $columns = $this->dataTables->getColumnsNames(SurveyResponseStore::tableNameFor($survey));
+        if ($columns === false) {
             return;
         }
 
         $oldNames = $this->collectQuestionNames($current->getDefinition());
         $newNames = $this->collectQuestionNames($newDefinition);
-        $removed = array_values(array_diff(array_keys($oldNames), array_keys($newNames)));
+        $removed = array_values(array_intersect(
+            array_diff(array_map('strval', array_keys($oldNames)), array_map('strval', array_keys($newNames))),
+            $columns,
+        ));
 
         if ($removed !== []) {
             sort($removed);
@@ -178,26 +190,42 @@ final class SurveyService
     }
 
     /**
-     * A question's name is its column in the survey's data table, so it may
-     * not take a column the plugin or the core writes itself.
+     * A question's name is its column in the survey's data table, so it must
+     * be a key the core stores (letters, digits, `_` and `.`, starting with a
+     * letter) and may not take a column the plugin or the core writes itself.
+     * Panel names are not columns and are not checked.
      *
      * @param array<string, mixed> $definition
      *
-     * @throws \DomainException (code 422) naming the clashing questions
+     * @throws \DomainException (code 422) naming the questions
      */
-    private function assertNoReservedQuestionNames(array $definition): void
+    private function assertStorableQuestionNames(array $definition): void
     {
-        $reserved = [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS];
-        $clashes = array_values(array_intersect(array_keys($this->collectQuestionNames($definition)), $reserved));
-        if ($clashes === []) {
+        $reserved = [...SurveyResponseStore::RESERVED_COLUMNS, ...SurveyResponseStore::SYSTEM_COLUMNS, ...DataColumnService::RESERVED_KEYS];
+        $taken = [];
+        $invalid = [];
+        foreach (array_keys($this->collectQuestionNames($definition, false)) as $name) {
+            $name = (string) $name;
+            if (in_array($name, $reserved, true)) {
+                $taken[] = $name;
+            } elseif (!SurveyResponseStore::isStorableKey($name)) {
+                $invalid[] = $name;
+            }
+        }
+        if ($taken === [] && $invalid === []) {
             return;
         }
-        sort($clashes);
+        sort($taken);
+        sort($invalid);
+        $problems = [];
+        if ($taken !== []) {
+            $problems[] = sprintf('the name(s) "%s" are used by the system', implode('", "', $taken));
+        }
+        if ($invalid !== []) {
+            $problems[] = sprintf('the name(s) "%s" may only use letters, digits, "_" and "." and must start with a letter', implode('", "', $invalid));
+        }
         throw new \DomainException(
-            sprintf(
-                'Cannot publish: the question name(s) "%s" are used by the system. Give these questions another name.',
-                implode('", "', $clashes)
-            ),
+            'Cannot publish: ' . implode('; ', $problems) . '. Give these questions another name.',
             422
         );
     }
@@ -211,13 +239,13 @@ final class SurveyService
      * @param array<string, mixed> $node
      * @return array<string, true>
      */
-    private function collectQuestionNames(array $node): array
+    private function collectQuestionNames(array $node, bool $withPanels = true): array
     {
         $out = [];
         if (isset($node['pages']) && is_array($node['pages'])) {
             foreach ($node['pages'] as $page) {
                 if (is_array($page)) {
-                    $out += $this->collectQuestionNames($page);
+                    $out += $this->collectQuestionNames($page, $withPanels);
                 }
             }
         }
@@ -229,11 +257,12 @@ final class SurveyService
                 $type = isset($element['type']) && is_string($element['type']) ? $element['type'] : '';
                 if (
                     !in_array($type, self::NON_DATA_ELEMENT_TYPES, true)
+                    && ($withPanels || $type !== 'panel')
                     && isset($element['name']) && is_string($element['name']) && $element['name'] !== ''
                 ) {
                     $out[$element['name']] = true;
                 }
-                $out += $this->collectQuestionNames($element);
+                $out += $this->collectQuestionNames($element, $withPanels);
             }
         }
         return $out;

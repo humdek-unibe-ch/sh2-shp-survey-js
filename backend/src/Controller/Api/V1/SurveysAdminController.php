@@ -268,7 +268,16 @@ final class SurveysAdminController
         if (!$this->access->can($survey, SurveyAccessService::UPDATE)) {
             return $this->forbidden();
         }
-        $this->surveyService->restoreVersion($survey, $version, $this->userId($request));
+        try {
+            $this->surveyService->restoreVersion($survey, $version, $this->userId($request));
+        } catch (\DomainException $e) {
+            return match ($e->getCode()) {
+                404 => $this->api->failure('Not found.', 404),
+                409 => $this->api->failure($e->getMessage(), 409, self::REASON_ANSWERED_QUESTION_RENAMED),
+                422 => $this->api->failure($e->getMessage(), 422, self::REASON_RESERVED_QUESTION_NAME),
+                default => throw $e,
+            };
+        }
         return $this->api->success($this->detail($survey));
     }
 
@@ -331,7 +340,7 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return $this->api->failure('Not found.', 404);
         }
-        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+        if (!$this->canReadAnswers($survey)) {
             return $this->forbidden();
         }
         return $this->api->success($this->dashboardService->buildSummary($survey));
@@ -348,11 +357,23 @@ final class SurveysAdminController
         if (!$survey instanceof Survey) {
             return $this->api->failure('Not found.', 404);
         }
-        if (!$this->access->canOnResponses($survey, SurveyAccessService::READ)) {
+        if (!$this->canReadAnswers($survey)) {
             return $this->forbidden();
         }
         $limit = min(20000, max(1, (int) $request->query->get('limit', 5000)));
         return $this->api->success($this->dashboardService->buildResults($survey, $limit));
+    }
+
+    /**
+     * Whether the caller may see the survey's answers (the Answers tab): the
+     * read grant on its data table, or, before the first answer created the
+     * table, the read grant on the survey (the list shows 0 answers then).
+     */
+    private function canReadAnswers(Survey $survey): bool
+    {
+        return $this->responseStore->hasDataTable($survey)
+            ? $this->access->canOnResponses($survey, SurveyAccessService::READ)
+            : $this->access->can($survey, SurveyAccessService::READ);
     }
 
     /**

@@ -14,7 +14,6 @@ use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
 use Humdek\SurveyJsBundle\Repository\SurveyVersionRepository;
 use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
-use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -45,7 +44,6 @@ final class SurveyServiceDeleteTest extends TestCase
             $surveys,
             $versions,
             $this->createMock(SurveyJsRealtimePublisher::class),
-            $this->createMock(SurveyResponseStore::class),
             $tables,
         ))->delete($survey);
     }

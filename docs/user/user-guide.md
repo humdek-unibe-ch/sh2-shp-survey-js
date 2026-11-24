@@ -132,6 +132,14 @@ never changes.
 > rename or delete a question that already has answers, publishing is
 > refused with a message. To change the wording, edit the question's
 > **title** (always safe). To ask something new, add a new question.
+>
+> A question nobody has answered yet may still be renamed or removed.
+
+> **A question's name may use letters, digits, `_` and `.`, and must
+> start with a letter** (for example `mood_score`, not `mood score` or
+> `1st`). A few names are used by the system (such as `id` or
+> `language`). Publishing such a name is refused with a message naming
+> the question. The title can be anything.
 
 ---
 

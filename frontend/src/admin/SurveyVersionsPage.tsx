@@ -72,6 +72,8 @@ export function SurveyVersionsPage({ surveyId, canRestore = false, currentRevisi
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<boolean>(false);
     const [pendingRestore, setPendingRestore] = useState<IAdminSurveyVersion | null>(null);
+    // A refused restore is told in its dialog, which stays open.
+    const [restoreError, setRestoreError] = useState<string | null>(null);
     const [compareState, setCompareState] = useState<ICompareState>({ baseId: null, targetId: null });
     const [compareModalOpen, setCompareModalOpen] = useState<boolean>(false);
     const [compareLoading, setCompareLoading] = useState<boolean>(false);
@@ -101,13 +103,14 @@ export function SurveyVersionsPage({ surveyId, canRestore = false, currentRevisi
     const confirmRestore = useCallback(async (): Promise<void> => {
         if (!surveyId || !pendingRestore) return;
         setBusy(true);
+        setRestoreError(null);
         try {
             await restoreVersion(surveyId, pendingRestore.id);
             setPendingRestore(null);
             await reload();
             onRestored?.();
         } catch (err) {
-            setError((err as Error).message);
+            setRestoreError((err as Error).message);
         } finally {
             setBusy(false);
         }
@@ -323,7 +326,10 @@ export function SurveyVersionsPage({ surveyId, canRestore = false, currentRevisi
             )}
             <AdminModal
                 opened={pendingRestore !== null}
-                onClose={() => setPendingRestore(null)}
+                onClose={() => {
+                    setPendingRestore(null);
+                    setRestoreError(null);
+                }}
                 title={pendingRestore ? `Restore v${pendingRestore.revision}?` : 'Restore version'}
                 size="md"
                 onSave={() => void confirmRestore()}
@@ -335,6 +341,11 @@ export function SurveyVersionsPage({ surveyId, canRestore = false, currentRevisi
                     to it. Unsaved or unpublished changes in the editor are replaced. The other versions
                     stay in the history, and answers already given keep the version they were given with.
                 </Text>
+                {restoreError && (
+                    <Alert color="red" title="Could not restore" mt="sm">
+                        {restoreError}
+                    </Alert>
+                )}
             </AdminModal>
             <AdminModal
                 opened={compareModalOpen}
