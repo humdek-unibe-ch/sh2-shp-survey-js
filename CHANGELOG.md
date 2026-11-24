@@ -81,6 +81,33 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   (its square corners covered the frame's border), and the line under the
   side panel button joins the toolbar line instead of showing as a short
   loose dash.
+- **Fixes from the pre-PR review.**
+  - A guest key no longer opens a response a signed-in user owns: a signed-in
+    write clears the row's guest key, and guest lookups skip user rows. Before,
+    the next anonymous person on the same browser got that user's answers.
+  - Unsent answers the browser keeps (localStorage) carry their owner
+    (`state.viewer` of the published survey: `user:<id>` or `guest`) and go back
+    only to them, so after logging out the next person no longer sees a user's
+    unfinished answers.
+  - Once per user is all time even with a daily window: submit checks it the
+    way the lockout does (`SurveySectionSettings::limitWindow()`).
+  - Answer keys the core data table refuses no longer break every save. The
+    "Other" comment is stored as `<question>_Comment` (the runtime sets
+    SurveyJS's `commentSuffix`; a leftover `-Comment` is mapped). Publish and
+    restore refuse question names the core cannot store (letters, digits, `_`
+    and `.`, starting with a letter) or that the core reserves (`id`,
+    `deleted`, ...); panel names are not checked.
+  - A file question on the first page works without autosave: the runtime saves
+    progress before the first upload.
+  - After a submit the time limit and the autosave stop; **new response**
+    really starts a new answer; an edit link whose response cannot be opened
+    submits as a new answer instead of a refused edit.
+  - Restore runs the publish guards (409 or 422 with a reason, 404 for another
+    survey's version; the refusal shows in the restore dialog). The answered
+    question guard now counts only questions with stored answers, so an older
+    version without a newer, unanswered question can be restored.
+  - The Answers tab of a survey without answers opens for every survey reader
+    (empty charts) instead of being refused.
 - **The response list, its delete and the dashboard's results table are gone
   (wave 8).** Listing, exporting and deleting answers is the core Data screen,
   linked from the list and the survey. The Answers tab keeps the counts, the
