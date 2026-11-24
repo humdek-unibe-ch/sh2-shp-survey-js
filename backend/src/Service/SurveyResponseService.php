@@ -94,7 +94,7 @@ final class SurveyResponseService
             $version,
             $this->normalizer->normalize($version, $answers),
             $responseId,
-            SurveyResponseStore::guestKeyToStore($userId, $guestKey, $existing),
+            SurveyResponseStore::guestKeyToStore($userId, $guestKey),
             $language ?? $existing?->language,
             $pageNo,
             true,

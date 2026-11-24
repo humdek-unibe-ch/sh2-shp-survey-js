@@ -110,7 +110,9 @@ final class SurveyResponseRecord
             return true;
         }
 
-        return $guestKey !== null && $guestKey !== '' && $this->guestKey === $guestKey;
+        // A guest key never opens a row a user owns: the next person on the
+        // same browser sends the same key.
+        return $this->userId === null && $guestKey !== null && $guestKey !== '' && $this->guestKey === $guestKey;
     }
 
     private static function decode(mixed $value): mixed

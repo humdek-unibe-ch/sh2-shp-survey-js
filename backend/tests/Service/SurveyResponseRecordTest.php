@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace Humdek\SurveyJsBundle\Tests\Service;
 
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
+use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -68,6 +69,15 @@ final class SurveyResponseRecordTest extends TestCase
         self::assertSame(['q1' => 'x'], $record->answers);
     }
 
+    public function testAnswerKeysAreStoredUnderColumnsTheCoreAccepts(): void
+    {
+        self::assertSame('mood', SurveyResponseStore::storedKey('mood'));
+        self::assertSame('q1_Comment', SurveyResponseStore::storedKey('q1_Comment'), 'the runtime\'s comment suffix');
+        self::assertSame('q1_Comment', SurveyResponseStore::storedKey('q1-Comment'), 'a client with the old suffix');
+        self::assertNull(SurveyResponseStore::storedKey('Q 1'), 'skipped instead of failing the whole save');
+        self::assertNull(SurveyResponseStore::storedKey('1st'));
+    }
+
     public function testAResponseBelongsToItsUserOrToTheGuestWithItsKey(): void
     {
         $users = SurveyResponseRecord::fromRow(['record_id' => 1, 'id_users' => 7, 'triggerType' => 'finished']);
@@ -77,6 +87,10 @@ final class SurveyResponseRecordTest extends TestCase
         self::assertFalse($users->belongsTo(8, 'guest-1'));
         self::assertTrue($guests->belongsTo(null, 'guest-1'));
         self::assertTrue($guests->belongsTo(7, 'guest-1'), 'a guest who signed in keeps their response');
+        $takenOver = SurveyResponseRecord::fromRow(['record_id' => 3, 'id_users' => 7, 'triggerType' => 'finished', 'guest_key' => 'guest-1']);
+        self::assertFalse($takenOver->belongsTo(null, 'guest-1'), 'the next guest on the same browser does not get a signed-in user\'s response');
+        self::assertNull(SurveyResponseStore::guestKeyToStore(7, 'guest-1'), 'a signed-in write clears the guest key');
+        self::assertSame('guest-1', SurveyResponseStore::guestKeyToStore(null, 'guest-1'));
         self::assertFalse($guests->belongsTo(null, 'guest-2'));
         self::assertFalse($guests->belongsTo(null, ''));
     }

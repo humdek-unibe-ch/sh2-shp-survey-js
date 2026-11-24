@@ -92,7 +92,18 @@ final class SurveySectionSettingsTest extends TestCase
         return [$window[0]->format(DATE_ATOM), $window[1]->format(DATE_ATOM)];
     }
 
-    private function settings(?string $start, ?string $end, string $timezone, ?string $updateBasedOn = null, bool $autoSessionKey = false): SurveySectionSettings
+    public function testOncePerUserIsAllTimeEvenWithADailyWindow(): void
+    {
+        $now = new \DateTimeImmutable('2026-11-17 09:30:00', new \DateTimeZone('UTC'));
+
+        self::assertNotNull($this->settings('08:00', '12:00', 'UTC')->limitWindow($now), 'once per window: only the window of today counts');
+        self::assertNull(
+            $this->settings('08:00', '12:00', 'UTC', oncePerUser: true)->limitWindow($now),
+            'once per user and per window: an answer on any earlier day still counts',
+        );
+    }
+
+    private function settings(?string $start, ?string $end, string $timezone, ?string $updateBasedOn = null, bool $autoSessionKey = false, bool $oncePerUser = false): SurveySectionSettings
     {
         // The window needs no section content; works with the host class and its stub.
         $scope = (new \ReflectionClass(PublicSectionScope::class))->newInstanceWithoutConstructor();
@@ -102,7 +113,7 @@ final class SurveySectionSettingsTest extends TestCase
             languageId: 1,
             routeParams: [],
             timezone: new \DateTimeZone($timezone),
-            oncePerUser: false,
+            oncePerUser: $oncePerUser,
             oncePerSchedule: true,
             startTime: $start,
             endTime: $end,

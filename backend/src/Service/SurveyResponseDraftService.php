@@ -75,7 +75,7 @@ final class SurveyResponseDraftService
             $version,
             $this->normalizer->normalize($version, $answers),
             $existing->responseId ?? ($responseId !== null && $responseId !== '' ? $responseId : $this->submissions->generateResponseId($survey)),
-            SurveyResponseStore::guestKeyToStore($userId, $guestKey, $existing),
+            SurveyResponseStore::guestKeyToStore($userId, $guestKey),
             $language ?? $existing?->language,
             // A slower autosave must not move the participant back a page.
             max($pageNo, $existing->pageNo ?? 0),
@@ -139,7 +139,7 @@ final class SurveyResponseDraftService
             $existing->responseId ?? ($responseId !== null && $responseId !== '' && $this->responses->findByResponseId($survey, $responseId) === null
                 ? $responseId
                 : $this->submissions->generateResponseId($survey)),
-            SurveyResponseStore::guestKeyToStore($userId, $guestKey, $existing),
+            SurveyResponseStore::guestKeyToStore($userId, $guestKey),
             $language ?? $existing?->language,
             max($pageNo, $existing->pageNo ?? 0),
             false,

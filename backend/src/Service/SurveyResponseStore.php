@@ -81,14 +81,36 @@ class SurveyResponseStore
     }
 
     /**
-     * A row keeps the guest key only when a guest wrote it: a signed-in
-     * participant is found by user, and a key on their row would let the next
-     * person on the same browser match it. A response a guest started keeps
-     * its key when they finish it signed in.
+     * A row keeps the guest key only while a guest writes it: a signed-in
+     * participant is found by user, and a key left on their row would let the
+     * next person on the same browser match it. A guest who signs in takes the
+     * response over and the key is cleared.
      */
-    public static function guestKeyToStore(?int $userId, ?string $guestKey, ?SurveyResponseRecord $existing): ?string
+    public static function guestKeyToStore(?int $userId, ?string $guestKey): ?string
     {
-        return $userId === null ? $guestKey : $existing?->guestKey;
+        return $userId === null ? $guestKey : null;
+    }
+
+    /** The core's key rule for a data column ({@see DataColumnService}): a question name must pass it. */
+    public static function isStorableKey(string $key): bool
+    {
+        return preg_match('/^[A-Za-z][A-Za-z0-9_.]{0,254}$/', $key) === 1;
+    }
+
+    /**
+     * The column an answer key is stored under. SurveyJS keeps the comment of
+     * an "Other" choice as `<question>-Comment`; the runtime sets the suffix
+     * to `_Comment`, and a client still sending the old one is mapped to it.
+     * Null for a key the core cannot store (a definition published before the
+     * name guard): it is skipped rather than failing the whole save.
+     */
+    public static function storedKey(string $key): ?string
+    {
+        if (str_ends_with($key, '-Comment')) {
+            $key = substr($key, 0, -strlen('-Comment')) . '_Comment';
+        }
+
+        return self::isStorableKey($key) ? $key : null;
     }
 
     public static function tableNameFor(Survey $survey): string
@@ -132,16 +154,22 @@ class SurveyResponseStore
         $data = [];
         $labels = [];
         foreach ($cells as $cell) {
-            if (in_array($cell['name'], self::RESERVED_COLUMNS, true) || in_array($cell['name'], self::SYSTEM_COLUMNS, true)) {
+            $key = self::storedKey($cell['name']);
+            if (
+                $key === null
+                || in_array($key, self::RESERVED_COLUMNS, true)
+                || in_array($key, self::SYSTEM_COLUMNS, true)
+                || in_array($key, DataColumnService::RESERVED_KEYS, true)
+            ) {
                 continue;
             }
-            $data[$cell['name']] = self::stringify(SurveyFileAnswers::toStored($cell['value'], $owns));
-            if (FormFileUploadService::keysIn($data[$cell['name']]) !== []) {
-                $fileColumns[] = $cell['name'];
+            $data[$key] = self::stringify(SurveyFileAnswers::toStored($cell['value'], $owns));
+            if (FormFileUploadService::keysIn($data[$key]) !== []) {
+                $fileColumns[] = $key;
             }
             $title = $cell['title'] ?? null;
             if (is_string($title) && $title !== '') {
-                $labels[$cell['name']] = $title;
+                $labels[$key] = $title;
             }
         }
         // The row key (`update_based_on`, `auto_session_key`) is a cell of the
@@ -245,10 +273,16 @@ class SurveyResponseStore
             return null;
         }
 
-        return $this->first($survey, [
+        return self::unlessUserOwned($userId, $this->first($survey, [
             $owner,
             new DataFilter('triggerType', DataFilter::OP_IN, self::UNFINISHED_TRIGGERS),
-        ]);
+        ]));
+    }
+
+    /** A guest lookup never returns a row a user owns (rows saved before the key was cleared on takeover). */
+    private static function unlessUserOwned(?int $userId, ?SurveyResponseRecord $record): ?SurveyResponseRecord
+    {
+        return $userId === null && $record?->userId !== null ? null : $record;
     }
 
     /**
@@ -292,7 +326,7 @@ class SurveyResponseStore
             $filters[] = new DataFilter('entry_date', DataFilter::OP_LTE, $to->format('Y-m-d H:i:s'));
         }
 
-        return $this->first($survey, $filters);
+        return self::unlessUserOwned($userId, $this->first($survey, $filters));
     }
 
     /**

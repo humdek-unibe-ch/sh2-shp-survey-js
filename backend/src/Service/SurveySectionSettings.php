@@ -101,6 +101,18 @@ final class SurveySectionSettings
         return [$windowStart->setTimezone($utc), $windowEnd->setTimezone($utc)];
     }
 
+    /**
+     * The window that limits how often a participant answers, or null for no
+     * window limit. Once per user is all time, so with it the window does not
+     * narrow the check; submit and the lockout read it the same way.
+     *
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable}|null
+     */
+    public function limitWindow(?\DateTimeImmutable $now = null): ?array
+    {
+        return $this->oncePerSchedule && !$this->oncePerUser ? $this->window($now) : null;
+    }
+
     /** Whether the survey is closed now because of its daily window. */
     public function isOutsideWindow(?\DateTimeImmutable $now = null): bool
     {

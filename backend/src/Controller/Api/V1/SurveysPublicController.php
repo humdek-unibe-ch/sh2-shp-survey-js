@@ -129,6 +129,8 @@ final class SurveysPublicController
                 ],
                 'state' => [
                     'isAuthenticated' => $userId !== null,
+                    // Owner of the answers the browser keeps: a user's never reach the next person after logout.
+                    'viewer' => $userId !== null ? 'user:' . $userId : 'guest',
                     'notActive' => $settings->isOutsideWindow(),
                     'lockoutReason' => $alreadyLocked,
                     'draft' => $existingDraft !== null ? [
@@ -178,7 +180,7 @@ final class SurveysPublicController
         if (!$editMode && $settings->isOutsideWindow()) {
             return $this->api->failure('The survey is not open now.', 409, SurveySubmissionRejectedException::REASON_NOT_ACTIVE);
         }
-        $window = $settings->oncePerSchedule ? $settings->window() : null;
+        $window = $settings->limitWindow();
         $enforce = [
             'oncePerUser' => $settings->oncePerUser,
             'allowAnonymous' => $settings->allowAnonymous,
@@ -443,7 +445,7 @@ final class SurveysPublicController
         if (!$settings->oncePerUser && !$settings->oncePerSchedule) {
             return null;
         }
-        $window = $settings->oncePerSchedule && !$settings->oncePerUser ? $settings->window() : null;
+        $window = $settings->limitWindow();
         if ($settings->oncePerSchedule && !$settings->oncePerUser && $window === null) {
             return null;
         }
