@@ -90,9 +90,13 @@ SPDX-License-Identifier: MPL-2.0
 }
 
 /* The Creator paints square corners; clip it to the rounded frame around it.
-   Its popups are position: fixed, so the clip does not cut them off. */
+   Its popups are position: fixed, so the clip does not cut them off.
+   `isolation` keeps the Creator's z-indexes (its side panel uses 1000) inside
+   the frame, so they never paint over the host's own layers, such as the
+   impersonation banner. */
 .surveyjs-creator-shell {
   overflow: hidden;
+  isolation: isolate;
 }
 
 /* The survey theme removes the survey's own padding so it fills its section

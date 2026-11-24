@@ -90,6 +90,9 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   survey's own padding so it fills its page section; the Creator's preview now
   adds the spacing a section would give (smaller on a phone or tablet screen).
   Phones and tablets preview upright instead of SurveyJS's default landscape.
+- **The Creator no longer paints over the host's banners.** Its z-indexes
+  (the side panel uses 1000) stay inside the editor frame, so the
+  impersonation banner shows in full.
 - **Fixes from the pre-PR review.**
   - A guest key no longer opens a response a signed-in user owns: a signed-in
     write clears the row's guest key, and guest lookups skip user rows. Before,
