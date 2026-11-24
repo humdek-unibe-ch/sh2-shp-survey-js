@@ -45,7 +45,8 @@ roles.
 - **Answers** is the number of responses. Click it to open them in the
   Data screen. A dash means you may not see this survey's answers.
 - The icons on each row are, in order: **Answers** (eye), **Edit**
-  (pencil), **Duplicate**, **Archive** and **Delete**.
+  (pencil), **Duplicate**, **Archive** and **Delete**. An icon shows only
+  when you may use it: no eye where the count is a dash.
 
 Click a survey's name to open it. A survey has four tabs: **Design**,
 **Answers**, **Versions** and **Settings**. **All surveys** at the top

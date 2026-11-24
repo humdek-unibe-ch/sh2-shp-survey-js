@@ -351,8 +351,18 @@ interface ISurveyRowProps {
     onDelete: () => void;
 }
 
+/**
+ * What a row offers: the tab its name opens, and whether the Answers eye
+ * shows. No count means no access to the answers, where the Answers tab
+ * would only say so; Versions needs nothing beyond seeing the survey.
+ */
+export function surveyRowLinks(survey: Pick<IAdminSurveySummary, 'responseCount' | 'rights'>): { openView: TSurveyView; readsAnswers: boolean } {
+    const readsAnswers = survey.responseCount !== null;
+    return { openView: survey.rights.update ? 'design' : readsAnswers ? 'answers' : 'versions', readsAnswers };
+}
+
 function SurveyRow({ survey, busy, canCreate, onOpen, onDuplicate, onArchive, onDelete }: ISurveyRowProps): React.ReactElement {
-    const openView: TSurveyView = survey.rights.update ? 'design' : 'answers';
+    const { openView, readsAnswers } = surveyRowLinks(survey);
 
     return (
         <Table.Tr>
@@ -392,11 +402,13 @@ function SurveyRow({ survey, busy, canCreate, onOpen, onDuplicate, onArchive, on
             </Table.Td>
             <Table.Td className="sjs-admin-table__actions">
                 <Group gap={4} wrap="nowrap" justify="flex-end">
-                    <Tooltip label="Answers">
-                        <ActionIcon variant="subtle" color="blue" onClick={() => onOpen(survey.id, 'answers')} aria-label={`Answers of ${survey.name}`}>
-                            <IconEye size={16} />
-                        </ActionIcon>
-                    </Tooltip>
+                    {readsAnswers && (
+                        <Tooltip label="Answers">
+                            <ActionIcon variant="subtle" color="blue" onClick={() => onOpen(survey.id, 'answers')} aria-label={`Answers of ${survey.name}`}>
+                                <IconEye size={16} />
+                            </ActionIcon>
+                        </Tooltip>
+                    )}
                     {survey.rights.update && (
                         <Tooltip label="Edit">
                             <ActionIcon variant="subtle" color="gray" onClick={() => onOpen(survey.id, 'design')} aria-label={`Edit ${survey.name}`}>
