@@ -94,3 +94,16 @@ SPDX-License-Identifier: MPL-2.0
 .surveyjs-creator-shell {
   overflow: hidden;
 }
+
+/* The survey theme removes the survey's own padding so it fills its section
+   on a page. In the Creator's Preview tab that left the survey touching the
+   frame or the device screen; the preview gets the spacing a page section
+   would give, smaller on a phone or tablet screen. */
+.svc-creator .svd-simulator-content {
+  padding: var(--mantine-spacing-sm);
+  box-sizing: border-box;
+}
+
+.svc-creator .svd-simulator-main--desktop .svd-simulator-content {
+  padding: var(--mantine-spacing-lg) var(--mantine-spacing-xl);
+}

@@ -311,6 +311,8 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
                 // A survey always takes the site's look, so there is no theme to design.
                 showThemeTab: false,
                 showJSONEditorTab: true,
+                // Phones and tablets preview upright, the way participants hold them (the default is landscape).
+                previewOrientation: 'portrait',
             }) as ICreatorInstance;
             instance.JSON = definition;
             instance.readOnly = !canEdit;
