@@ -81,6 +81,11 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   (its square corners covered the frame's border), and the line under the
   side panel button joins the toolbar line instead of showing as a short
   loose dash.
+- **Saving from the JSON Editor tab.** That tab takes its edits into the survey
+  only when it is left (surveyjs/survey-creator#7212), so Save draft and
+  Publish there sent the survey without them. Like the SelfHelp 1 plugin, they
+  now show a note to check the changes in the Designer tab first; an edit in
+  the JSON tab enables both buttons so the click reaches the note.
 - **Fixes from the pre-PR review.**
   - A guest key no longer opens a response a signed-in user owns: a signed-in
     write clears the row's guest key, and guest lookups skip user rows. Before,

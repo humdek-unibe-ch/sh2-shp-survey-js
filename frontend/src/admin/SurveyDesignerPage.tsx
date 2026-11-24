@@ -46,7 +46,18 @@ interface ICreatorInstance {
     readOnly: boolean;
     saveSurveyFunc: (saveNo: unknown, callback: (no: unknown, success: boolean) => void) => void;
     onModified?: { add: (fn: () => void) => void };
+    activeTab?: string;
+    onActiveTabChanged?: { add: (fn: () => void) => void };
+    getPlugin?: (name: string) => { model?: { onPropertyChanged?: { add: (fn: (sender: unknown, options: { name: string }) => void) => void } } } | undefined;
 }
+
+/**
+ * The Creator's JSON tab keeps edits in its own text and copies them into the
+ * survey only when the tab is left (surveyjs/survey-creator#7212), so saving
+ * or publishing there would send the survey without them. Same guard as the
+ * SelfHelp 1 plugin: point to the Designer tab first.
+ */
+const JSON_TAB = 'json';
 
 async function loadCreator(): Promise<ICreatorBridge> {
     const mod = await import('survey-creator-react');
@@ -91,6 +102,9 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
     const [changeCount, setChangeCount] = useState<number>(0);
     const [presence, setPresence] = useState<Record<number, { name: string; at: string }>>({});
     const [remoteDraft, setRemoteDraft] = useState<TRemoteDraft>(null);
+    // Edited on the JSON tab and not yet taken into the survey; a save or publish there is refused with a note.
+    const [jsonTabEdited, setJsonTabEdited] = useState<boolean>(false);
+    const [jsonTabNote, setJsonTabNote] = useState<boolean>(false);
 
     // The latest survey record, read by the Creator's callbacks, which are
     // set once when it is built.
@@ -136,6 +150,10 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
 
     const save = useCallback(async (force = false): Promise<boolean> => {
         if (!creator || !canEdit) return false;
+        if (creator.activeTab === JSON_TAB) {
+            setJsonTabNote(true);
+            return false;
+        }
         setBusy('save');
         setActionError(null);
         setConflict(null);
@@ -163,6 +181,10 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
 
     const publish = useCallback(async (force = false): Promise<void> => {
         if (!creator || !canPublish) return;
+        if (creator.activeTab === JSON_TAB) {
+            setJsonTabNote(true);
+            return;
+        }
         setBusy('publish');
         setActionError(null);
         setConflict(null);
@@ -299,6 +321,21 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
             instance.onModified?.add(() => {
                 setDirty(true);
                 recomputeChanges(instance);
+            });
+            // An edit on the JSON tab changes nothing the editor sees until the tab
+            // is left; it enables Save and Publish so their click shows the note.
+            instance.onActiveTabChanged?.add(() => {
+                setJsonTabEdited(false);
+                setJsonTabNote(false);
+                if (instance.activeTab !== JSON_TAB) return;
+                const model = instance.getPlugin?.(JSON_TAB)?.model;
+                if (!model?.onPropertyChanged) {
+                    setJsonTabEdited(true);
+                    return;
+                }
+                model.onPropertyChanged.add((_sender, options) => {
+                    if (options.name === 'text' || options.name === '_text') setJsonTabEdited(true);
+                });
             });
             return instance;
         };
@@ -449,13 +486,13 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
                     </Group>
                     <Group gap="xs">
                         {canEdit && (
-                            <Button variant="default" onClick={() => void save()} loading={busy === 'save'} disabled={!dirty || busy !== null}>
+                            <Button variant="default" onClick={() => void save()} loading={busy === 'save'} disabled={(!dirty && !jsonTabEdited) || busy !== null}>
                                 Save draft
                             </Button>
                         )}
                         {canPublish && (
                             <Tooltip label={hasUnpublished ? 'Participants get this version from now on' : 'Nothing to publish'}>
-                                <Button onClick={() => void publish()} loading={busy === 'publish'} disabled={!hasUnpublished || busy !== null}>
+                                <Button onClick={() => void publish()} loading={busy === 'publish'} disabled={(!hasUnpublished && !jsonTabEdited) || busy !== null}>
                                     Publish
                                 </Button>
                             </Tooltip>
@@ -510,6 +547,12 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
                 <Alert color="yellow" title="Someone else is editing this survey">
                     {otherEditors.map((editor) => editor.name).join(', ')} also {otherEditors.length === 1 ? 'has' : 'have'} it
                     open. Saving checks that you do not overwrite their changes.
+                </Alert>
+            )}
+            {jsonTabNote && (
+                <Alert color="yellow" title="Check your changes in the Designer tab" withCloseButton onClose={() => setJsonTabNote(false)}>
+                    Changes made in the JSON Editor are taken into the survey when you open the Designer tab. Open it, check
+                    the survey, then save or publish.
                 </Alert>
             )}
             {actionError && (
