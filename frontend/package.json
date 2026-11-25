@@ -24,7 +24,7 @@
     "peerDependencies": {
         "@mantine/core": "^9.0.0",
         "@mantine/hooks": "^9.0.0",
-        "@selfhelp/shared": "^1.17.0",
+        "@selfhelp/shared": "^1.30.0",
         "@tabler/icons-react": "^3.0.0",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
@@ -37,7 +37,7 @@
         "@mantine/core": "^9.0.2",
         "@mantine/hooks": "^9.0.2",
         "@playwright/test": "^1.49.0",
-        "@selfhelp/shared": "^1.17.0",
+        "@selfhelp/shared": "^1.30.0",
         "@tabler/icons-react": "^3.0.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
