@@ -3,21 +3,20 @@ SPDX-FileCopyrightText: 2026 Humdek, University of Bern
 SPDX-License-Identifier: MPL-2.0
 */
 /**
- * One survey: a header with its state and a tab per task (design, answers,
- * versions, settings). The Design tab stays mounted once opened, so moving
+ * One survey: a compact header (back, name, state, ID) and a tab per task
+ * (design, answers, versions, settings). The Design tab stays mounted once opened, so moving
  * to another tab and back keeps unsaved edits in the editor. Its save and
  * publish bar sits at the right of the tab row, so the editor below keeps
  * as much of the screen as it can.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActionIcon, Alert, Anchor, Badge, Box, Button, CopyButton, Group, Loader, Stack, Tabs, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, CopyButton, Group, Loader, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconChartBar, IconCheck, IconCopy, IconDatabase, IconHistory, IconPencil, IconSettings } from '@tabler/icons-react';
 
 import { getSurvey, SurveyApiError, type IAdminSurveyDetail } from '../api/surveys-admin';
 import type { TSurveyView } from './adminUrl';
 import { dataScreenUrl } from './dataScreenUrl';
-import { PageHeader } from './ui/AdminUi';
 import { SurveyAnswersPage } from './SurveyAnswersPage';
 import { SurveyDesignerPage } from './SurveyDesignerPage';
 import { SurveySettingsPage } from './SurveySettingsPage';
@@ -93,32 +92,47 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
 
     return (
         <Stack gap="sm" className="sjs-admin-fill">
-            {back}
-            <PageHeader title={survey.name}>
-                {survey.archived && <Badge color="gray" variant="light">Archived</Badge>}
-                {survey.currentRevision === null ? (
-                    <Badge color="yellow" variant="light">Not published yet</Badge>
-                ) : (
-                    <Badge color="green" variant="light">Published v{survey.currentRevision}</Badge>
-                )}
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+                <Group gap="xs" wrap="nowrap" miw={0}>
+                    <Tooltip label="All surveys" withArrow>
+                        <ActionIcon variant="subtle" color="gray" size="lg" onClick={onBack} aria-label="All surveys">
+                            <IconArrowLeft size={18} />
+                        </ActionIcon>
+                    </Tooltip>
+                    <Title order={1} size="h3" lineClamp={1} miw={0}>
+                        {survey.name}
+                    </Title>
+                    {survey.archived && <Badge color="gray" variant="light" style={{ flexShrink: 0 }}>Archived</Badge>}
+                    {survey.currentRevision === null ? (
+                        <Badge color="yellow" variant="light" style={{ flexShrink: 0 }}>Not published yet</Badge>
+                    ) : (
+                        <Badge color="green" variant="light" style={{ flexShrink: 0 }}>Published v{survey.currentRevision}</Badge>
+                    )}
+                    <Group gap={2} wrap="nowrap" visibleFrom="md" style={{ flexShrink: 0 }}>
+                        <Text size="sm" c="dimmed" ff="monospace">{survey.surveyId}</Text>
+                        <CopyButton value={survey.surveyId} timeout={1500}>
+                            {({ copied, copy }) => (
+                                <Tooltip label={copied ? 'Copied' : 'Copy survey ID'} withArrow>
+                                    <ActionIcon variant="subtle" color={copied ? 'teal' : 'gray'} size="sm" onClick={copy} aria-label="Copy survey ID">
+                                        {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                                    </ActionIcon>
+                                </Tooltip>
+                            )}
+                        </CopyButton>
+                    </Group>
+                </Group>
                 {survey.dataTableId !== null && (
-                    <Button component="a" href={dataScreenUrl(survey.dataTableId)} variant="light" size="sm" leftSection={<IconDatabase size={16} />}>
+                    <Button
+                        component="a"
+                        href={dataScreenUrl(survey.dataTableId)}
+                        variant="light"
+                        size="sm"
+                        leftSection={<IconDatabase size={16} />}
+                        style={{ flexShrink: 0 }}
+                    >
                         Answers in Data screen
                     </Button>
                 )}
-            </PageHeader>
-            <Group gap={4} mt={-8}>
-                <Text size="sm" c="dimmed">Survey ID</Text>
-                <Text size="sm" c="dimmed" ff="monospace">{survey.surveyId}</Text>
-                <CopyButton value={survey.surveyId} timeout={1500}>
-                    {({ copied, copy }) => (
-                        <Tooltip label={copied ? 'Copied' : 'Copy survey ID'} withArrow>
-                            <ActionIcon variant="subtle" color={copied ? 'teal' : 'gray'} size="sm" onClick={copy} aria-label="Copy survey ID">
-                                {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                            </ActionIcon>
-                        </Tooltip>
-                    )}
-                </CopyButton>
             </Group>
 
             <Tabs
