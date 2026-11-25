@@ -132,6 +132,32 @@ SPDX-License-Identifier: MPL-2.0
   height: 100%;
 }
 
+/* Full screen covers the whole window, admin sidebar included, but stays
+   under the host's modals (200) and the impersonation banner (Affix, 200). */
+.sjs-designer--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md) var(--mantine-spacing-md);
+  background-color: var(--mantine-color-body);
+}
+
+.sjs-designer--fullscreen .surveyjs-creator-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sjs-designer--fullscreen .surveyjs-creator-shell > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.sjs-designer--fullscreen .surveyjs-creator-shell .svc-creator {
+  height: 100%;
+}
+
 .sjs-detail-tabs {
   border-bottom: 1px solid var(--mantine-color-default-border);
 }

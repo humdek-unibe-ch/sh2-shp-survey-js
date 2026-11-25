@@ -34,8 +34,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   copy the host's `ModalWrapper` and admin table.
 - **More room for the editor.** On the Design tab the Creator fills the
   screen's height instead of its 480px minimum; Save draft, Publish and the
-  draft state sit at the right of the tab row. The survey header is one
-  compact line (back button, name, state, survey ID with a copy button).
+  draft state sit at the right of the tab row, with a **Full screen** button
+  that gives the editor the whole window. The survey header is one compact
+  line like the host's app screens (**All surveys**, name, state, survey ID
+  with a copy button).
 - **Archived surveys stay visible (wave 8 fix).** The admin list left them
   out, so an archived survey vanished from every filter. The list now returns
   them; archiving shows a note with **Undo** and **Show archived**. The

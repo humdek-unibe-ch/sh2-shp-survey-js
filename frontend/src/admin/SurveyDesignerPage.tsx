@@ -18,7 +18,8 @@ SPDX-License-Identifier: MPL-2.0
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Alert, Badge, Button, Group, Loader, Paper, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Paper, Stack, Text, Title, Tooltip } from '@mantine/core';
+import { IconArrowsMaximize, IconArrowsMinimize } from '@tabler/icons-react';
 import { usePluginRealtime } from '@selfhelp/shared/plugin-sdk';
 
 import {
@@ -103,6 +104,7 @@ export function SurveyDesignerPage({ survey, onSurveyChanged, actionsTarget = nu
     const canPublish = survey.rights.publish;
 
     const [bridge, setBridge] = useState<ICreatorBridge | null>(null);
+    const [fullscreen, setFullscreen] = useState<boolean>(false);
     const [creator, setCreator] = useState<ICreatorInstance | null>(null);
     const [fatalError, setFatalError] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
@@ -506,13 +508,35 @@ export function SurveyDesignerPage({ survey, onSurveyChanged, actionsTarget = nu
                         </Button>
                     </Tooltip>
                 )}
+                <Tooltip label={fullscreen ? 'Exit full screen' : 'Full screen'}>
+                    <ActionIcon
+                        variant="default"
+                        size={36}
+                        onClick={() => setFullscreen((value) => !value)}
+                        aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+                        aria-pressed={fullscreen}
+                    >
+                        {fullscreen ? <IconArrowsMinimize size={18} /> : <IconArrowsMaximize size={18} />}
+                    </ActionIcon>
+                </Tooltip>
             </Group>
         </Group>
     );
 
     return (
-        <Stack gap="sm" className="sjs-admin-fill">
-            {actionsTarget ? createPortal(toolbar, actionsTarget) : <Paper withBorder p="sm">{toolbar}</Paper>}
+        <Stack gap="sm" className={fullscreen ? 'sjs-admin-fill sjs-designer--fullscreen' : 'sjs-admin-fill'}>
+            {fullscreen ? (
+                <Group justify="space-between" wrap="nowrap" gap="sm">
+                    <Title order={2} size="h4" lineClamp={1}>
+                        {survey.name}
+                    </Title>
+                    {toolbar}
+                </Group>
+            ) : actionsTarget ? (
+                createPortal(toolbar, actionsTarget)
+            ) : (
+                <Paper withBorder p="sm">{toolbar}</Paper>
+            )}
             {!canEdit && (
                 <Alert color="gray">You can look at this survey but not change it.</Alert>
             )}

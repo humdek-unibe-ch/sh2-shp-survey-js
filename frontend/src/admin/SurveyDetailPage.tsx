@@ -93,13 +93,11 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
     return (
         <Stack gap="sm" className="sjs-admin-fill">
             <Group justify="space-between" wrap="nowrap" gap="sm">
-                <Group gap="xs" wrap="nowrap" miw={0}>
-                    <Tooltip label="All surveys" withArrow>
-                        <ActionIcon variant="subtle" color="gray" size="lg" onClick={onBack} aria-label="All surveys">
-                            <IconArrowLeft size={18} />
-                        </ActionIcon>
-                    </Tooltip>
-                    <Title order={1} size="h3" lineClamp={1} miw={0}>
+                <Group gap="sm" wrap="nowrap" miw={0}>
+                    <Button variant="subtle" onClick={onBack} leftSection={<IconArrowLeft size="1rem" />} style={{ flexShrink: 0 }}>
+                        All surveys
+                    </Button>
+                    <Title order={2} lineClamp={1} miw={0}>
                         {survey.name}
                     </Title>
                     {survey.archived && <Badge color="gray" variant="light" style={{ flexShrink: 0 }}>Archived</Badge>}
