@@ -32,6 +32,10 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
   version" or "overwrite" on a draft conflict, and warns before leaving with
   unsaved changes. Duplicate makes an unpublished draft. Modals and tables
   copy the host's `ModalWrapper` and admin table.
+- **More room for the editor.** On the Design tab the Creator fills the
+  screen's height instead of its 480px minimum; Save draft, Publish and the
+  draft state sit at the right of the tab row, and the survey ID has a copy
+  button.
 - **Archived surveys stay visible (wave 8 fix).** The admin list left them
   out, so an archived survey vanished from every filter. The list now returns
   them; archiving shows a note with **Undo** and **Show archived**. The

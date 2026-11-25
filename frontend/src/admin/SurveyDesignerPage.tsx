@@ -17,6 +17,7 @@ SPDX-License-Identifier: MPL-2.0
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Alert, Badge, Button, Group, Loader, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { usePluginRealtime } from '@selfhelp/shared/plugin-sdk';
 
@@ -71,6 +72,7 @@ async function loadCreator(): Promise<ICreatorBridge> {
 export interface ISurveyDesignerPageProps {
     survey: IAdminSurveyDetail;
     onSurveyChanged: (survey: IAdminSurveyDetail) => void;
+    actionsTarget?: HTMLElement | null;
 }
 
 interface IEditingEvent {
@@ -87,7 +89,15 @@ type TConflict = { action: 'save' | 'publish'; message: string } | null;
 /** A draft saved in another window or by another editor: loaded here, or held back because of unsaved edits. */
 type TRemoteDraft = 'loaded' | 'held' | null;
 
-export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerPageProps): React.ReactElement {
+/** "Saved" with the time for a draft saved today, with the date otherwise. */
+export function draftSavedLabel(savedAt: string, now: Date = new Date()): string {
+    const saved = new Date(savedAt);
+    return saved.toDateString() === now.toDateString()
+        ? `Saved ${saved.toLocaleTimeString(undefined, { timeStyle: 'short' })}`
+        : `Saved ${saved.toLocaleDateString(undefined, { dateStyle: 'medium' })}`;
+}
+
+export function SurveyDesignerPage({ survey, onSurveyChanged, actionsTarget = null }: ISurveyDesignerPageProps): React.ReactElement {
     const surveyId = survey.id;
     const canEdit = survey.rights.update;
     const canPublish = survey.rights.publish;
@@ -463,45 +473,46 @@ export function SurveyDesignerPage({ survey, onSurveyChanged }: ISurveyDesignerP
 
     const hasUnpublished = changeCount > 0;
     const Component = bridge.SurveyCreatorComponent;
+    const toolbar = (
+        <Group gap="sm" align="center" wrap="wrap" justify="flex-end" className="surveyjs-designer-toolbar">
+            <Group gap="xs" aria-live="polite">
+                {hasUnpublished && (
+                    <Tooltip label="Changes since the last published version; participants do not see them yet">
+                        <Badge color="orange" variant="light">
+                            {changeCount} unpublished {changeCount === 1 ? 'change' : 'changes'}
+                        </Badge>
+                    </Tooltip>
+                )}
+                {dirty ? (
+                    <Text size="sm" c="orange">Unsaved changes</Text>
+                ) : survey.draftUpdatedAt ? (
+                    <Tooltip label={`Draft saved ${new Date(survey.draftUpdatedAt).toLocaleString()}`}>
+                        <Text size="sm" c="dimmed">
+                            {draftSavedLabel(survey.draftUpdatedAt)}
+                        </Text>
+                    </Tooltip>
+                ) : null}
+            </Group>
+            <Group gap="xs">
+                {canEdit && (
+                    <Button variant="default" onClick={() => void save()} loading={busy === 'save'} disabled={(!dirty && !jsonTabEdited) || busy !== null}>
+                        Save draft
+                    </Button>
+                )}
+                {canPublish && (
+                    <Tooltip label={hasUnpublished ? 'Participants get this version from now on' : 'Nothing to publish'}>
+                        <Button onClick={() => void publish()} loading={busy === 'publish'} disabled={(!hasUnpublished && !jsonTabEdited) || busy !== null}>
+                            Publish
+                        </Button>
+                    </Tooltip>
+                )}
+            </Group>
+        </Group>
+    );
+
     return (
-        <Stack gap="sm">
-            <Paper withBorder p="sm" className="surveyjs-designer-toolbar">
-                <Group justify="space-between" align="center" wrap="wrap" gap="sm">
-                    <Group gap="xs" aria-live="polite">
-                        {survey.currentRevision ? (
-                            <Badge color="green" variant="light">Published v{survey.currentRevision}</Badge>
-                        ) : (
-                            <Badge color="yellow" variant="light">Not published yet</Badge>
-                        )}
-                        {hasUnpublished && (
-                            <Tooltip label="Changes since the last published version; participants do not see them yet">
-                                <Badge color="orange" variant="light">
-                                    {changeCount} unpublished {changeCount === 1 ? 'change' : 'changes'}
-                                </Badge>
-                            </Tooltip>
-                        )}
-                        {dirty ? (
-                            <Text size="sm" c="orange">Unsaved changes</Text>
-                        ) : survey.draftUpdatedAt ? (
-                            <Text size="sm" c="dimmed">Draft saved {new Date(survey.draftUpdatedAt).toLocaleString()}</Text>
-                        ) : null}
-                    </Group>
-                    <Group gap="xs">
-                        {canEdit && (
-                            <Button variant="default" onClick={() => void save()} loading={busy === 'save'} disabled={(!dirty && !jsonTabEdited) || busy !== null}>
-                                Save draft
-                            </Button>
-                        )}
-                        {canPublish && (
-                            <Tooltip label={hasUnpublished ? 'Participants get this version from now on' : 'Nothing to publish'}>
-                                <Button onClick={() => void publish()} loading={busy === 'publish'} disabled={(!hasUnpublished && !jsonTabEdited) || busy !== null}>
-                                    Publish
-                                </Button>
-                            </Tooltip>
-                        )}
-                    </Group>
-                </Group>
-            </Paper>
+        <Stack gap="sm" className="sjs-admin-fill">
+            {actionsTarget ? createPortal(toolbar, actionsTarget) : <Paper withBorder p="sm">{toolbar}</Paper>}
             {!canEdit && (
                 <Alert color="gray">You can look at this survey but not change it.</Alert>
             )}

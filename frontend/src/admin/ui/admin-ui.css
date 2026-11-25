@@ -99,6 +99,48 @@ SPDX-License-Identifier: MPL-2.0
   isolation: isolate;
 }
 
+/* The Design tab as a workspace: the page is the screen's height and the
+   Creator takes what the header and tab row leave. Below 640px of height the
+   page scrolls instead of squeezing the editor. */
+.sjs-admin-workspace {
+  height: 100dvh;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sjs-admin-workspace .sjs-admin-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sjs-admin-workspace .surveyjs-creator-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sjs-admin-workspace .surveyjs-creator-shell > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.sjs-admin-workspace .surveyjs-creator-shell .svc-creator {
+  height: 100%;
+}
+
+.sjs-detail-tabs {
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.sjs-detail-tabs__list {
+  --tab-border-color: transparent;
+  margin-bottom: -1px;
+}
+
 /* The survey theme removes the survey's own padding so it fills its section
    on a page. In the Creator's Preview tab that left the survey touching the
    frame or the device screen; the preview gets the spacing a page section

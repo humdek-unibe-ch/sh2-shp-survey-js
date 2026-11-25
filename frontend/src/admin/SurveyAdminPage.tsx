@@ -50,8 +50,10 @@ export function SurveyAdminPage(): React.ReactElement {
         setLocation(next);
     }, []);
 
+    // The Design tab is a workspace: the page takes the screen's height and the editor fills what is left.
+    const workspace = location.surveyId !== null && location.view === 'design';
     return (
-        <Box p="lg" pb="xl" maw={1600} mx="auto" w="100%">
+        <Box p="lg" pb={workspace ? 'lg' : 'xl'} maw={1600} mx="auto" w="100%" className={workspace ? 'sjs-admin-workspace' : undefined}>
             {location.surveyId === null ? (
                 <SurveyListPage onOpen={(surveyId: number, view: TSurveyView) => go({ surveyId, view }, 'push')} />
             ) : (

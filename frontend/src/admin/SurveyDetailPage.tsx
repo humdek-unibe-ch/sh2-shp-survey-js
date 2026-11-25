@@ -5,12 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 /**
  * One survey: a header with its state and a tab per task (design, answers,
  * versions, settings). The Design tab stays mounted once opened, so moving
- * to another tab and back keeps unsaved edits in the editor.
+ * to another tab and back keeps unsaved edits in the editor. Its save and
+ * publish bar sits at the right of the tab row, so the editor below keeps
+ * as much of the screen as it can.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Anchor, Badge, Button, Group, Loader, Stack, Tabs, Text } from '@mantine/core';
-import { IconArrowLeft, IconChartBar, IconDatabase, IconHistory, IconPencil, IconSettings } from '@tabler/icons-react';
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, CopyButton, Group, Loader, Stack, Tabs, Text, Tooltip } from '@mantine/core';
+import { IconArrowLeft, IconChartBar, IconCheck, IconCopy, IconDatabase, IconHistory, IconPencil, IconSettings } from '@tabler/icons-react';
 
 import { getSurvey, SurveyApiError, type IAdminSurveyDetail } from '../api/surveys-admin';
 import type { TSurveyView } from './adminUrl';
@@ -34,6 +36,7 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
     const [designOpened, setDesignOpened] = useState<boolean>(view === 'design');
     // A restored version replaces the draft: the editor is rebuilt on it.
     const [designerKey, setDesignerKey] = useState<number>(0);
+    const [designActions, setDesignActions] = useState<HTMLDivElement | null>(null);
 
     const reload = useCallback(async (): Promise<void> => {
         try {
@@ -58,7 +61,7 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
     }, [view]);
 
     const back = (
-        <Anchor component="button" type="button" onClick={onBack} size="sm">
+        <Anchor component="button" type="button" onClick={onBack} size="sm" w="fit-content">
             <Group gap={4}>
                 <IconArrowLeft size={14} />
                 All surveys
@@ -89,9 +92,9 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
     }
 
     return (
-        <Stack gap="md">
+        <Stack gap="sm" className="sjs-admin-fill">
             {back}
-            <PageHeader title={survey.name} subtitle={`Survey ID ${survey.surveyId}`}>
+            <PageHeader title={survey.name}>
                 {survey.archived && <Badge color="gray" variant="light">Archived</Badge>}
                 {survey.currentRevision === null ? (
                     <Badge color="yellow" variant="light">Not published yet</Badge>
@@ -104,24 +107,47 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
                     </Button>
                 )}
             </PageHeader>
+            <Group gap={4} mt={-8}>
+                <Text size="sm" c="dimmed">Survey ID</Text>
+                <Text size="sm" c="dimmed" ff="monospace">{survey.surveyId}</Text>
+                <CopyButton value={survey.surveyId} timeout={1500}>
+                    {({ copied, copy }) => (
+                        <Tooltip label={copied ? 'Copied' : 'Copy survey ID'} withArrow>
+                            <ActionIcon variant="subtle" color={copied ? 'teal' : 'gray'} size="sm" onClick={copy} aria-label="Copy survey ID">
+                                {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                            </ActionIcon>
+                        </Tooltip>
+                    )}
+                </CopyButton>
+            </Group>
 
-            <Tabs value={view} onChange={(next) => next && onViewChange(next as TSurveyView)} keepMounted={false}>
-                <Tabs.List>
-                    <Tabs.Tab value="design" leftSection={<IconPencil size={14} />}>
-                        Design
-                    </Tabs.Tab>
-                    <Tabs.Tab value="answers" leftSection={<IconChartBar size={14} />}>
-                        Answers{survey.responseCount !== null ? ` (${survey.responseCount})` : ''}
-                    </Tabs.Tab>
-                    <Tabs.Tab value="versions" leftSection={<IconHistory size={14} />}>
-                        Versions
-                    </Tabs.Tab>
-                    <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />}>
-                        Settings
-                    </Tabs.Tab>
-                </Tabs.List>
-                <Tabs.Panel value="design" pt="md" keepMounted={designOpened}>
-                    {designOpened && <SurveyDesignerPage key={designerKey} survey={survey} onSurveyChanged={setSurvey} />}
+            <Tabs
+                value={view}
+                onChange={(next) => next && onViewChange(next as TSurveyView)}
+                keepMounted={false}
+                className="sjs-admin-fill"
+            >
+                <Group justify="space-between" align="flex-end" wrap="wrap" gap="xs" className="sjs-detail-tabs">
+                    <Tabs.List className="sjs-detail-tabs__list">
+                        <Tabs.Tab value="design" leftSection={<IconPencil size={14} />}>
+                            Design
+                        </Tabs.Tab>
+                        <Tabs.Tab value="answers" leftSection={<IconChartBar size={14} />}>
+                            Answers{survey.responseCount !== null ? ` (${survey.responseCount})` : ''}
+                        </Tabs.Tab>
+                        <Tabs.Tab value="versions" leftSection={<IconHistory size={14} />}>
+                            Versions
+                        </Tabs.Tab>
+                        <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />}>
+                            Settings
+                        </Tabs.Tab>
+                    </Tabs.List>
+                    <Box ref={setDesignActions} hidden={view !== 'design'} pb={6} />
+                </Group>
+                <Tabs.Panel value="design" pt="sm" keepMounted={designOpened} className="sjs-admin-fill">
+                    {designOpened && (
+                        <SurveyDesignerPage key={designerKey} survey={survey} onSurveyChanged={setSurvey} actionsTarget={designActions} />
+                    )}
                 </Tabs.Panel>
                 <Tabs.Panel value="answers" pt="md">
                     <SurveyAnswersPage survey={survey} />
