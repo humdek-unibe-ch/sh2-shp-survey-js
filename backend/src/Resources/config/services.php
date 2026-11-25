@@ -7,7 +7,6 @@ SPDX-License-Identifier: MPL-2.0
 declare(strict_types=1);
 
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysAdminController;
-use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysHealthController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysLicenseController;
 use Humdek\SurveyJsBundle\Controller\Api\V1\SurveysPublicController;
 use Humdek\SurveyJsBundle\EventSubscriber\SurveyJsDataAccessResourcesSubscriber;
@@ -81,8 +80,10 @@ return static function (ContainerConfigurator $configurator): void {
     // bundle requires the host realtime layer to be present.
     $services->set(SurveyJsRealtimePublisher::class)->autowire();
 
+    // Found by the host's plugin health report through this tag.
     $services->set(SurveyJsHealthCheck::class)
-        ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%');
+        ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%')
+        ->tag('selfhelp.plugin.health_check');
 
     $services->set(SurveysLicenseController::class)
         ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%')
@@ -92,7 +93,6 @@ return static function (ContainerConfigurator $configurator): void {
     $services->set(SurveysPublicController::class)
         ->arg('$licenseKey', '%env(default::SURVEYJS_LICENSE_KEY)%')
         ->tag('controller.service_arguments');
-    $services->set(SurveysHealthController::class)->tag('controller.service_arguments');
 
     $services->set(SurveyJsStyleRegistrySubscriber::class)->tag('kernel.event_subscriber');
     $services->set(SurveyJsLookupRegistrySubscriber::class)->tag('kernel.event_subscriber');

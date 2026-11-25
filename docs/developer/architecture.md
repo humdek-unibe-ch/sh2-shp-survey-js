@@ -50,7 +50,7 @@ The bundle exposes a single `HumdekSurveyJsBundle` class registered dynamically 
 | `Service\SurveyDashboardService`         | Totals and chart rows for the Answers tab, read from the store.      |
 | `Service\SurveyPdfService`               | One response as a PDF (dompdf when installed, else a printable page). |
 | `Service\SurveyFileAnswers`               | File answers: keys stored without links, links added on load, keys of other responses dropped. |
-| `Service\SurveyJsHealthCheck`            | Health report consumed by the host doctor command.                   |
+| `Service\SurveyJsHealthCheck`            | Subchecks (database, licence key) in the host's plugin health report, tagged `selfhelp.plugin.health_check`. |
 | `Service\SurveyJsRealtimePublisher`      | Wraps the host's `App\Plugin\Realtime\PluginRealtimePublisherInterface`. |
 | `EventSubscriber\SurveyJsStyleRegistrySubscriber`| Contributes `surveyjs` + `gpx-map` styles to the admin catalog. |
 | `EventSubscriber\SurveyJsLookupRegistrySubscriber`| Declares `surveyJsTheme` as `plugin_owned`.                   |
@@ -77,7 +77,7 @@ The npm package's entry point (`src/index.ts`) returns an `IPluginRegistration` 
 - **Menu items**: one entry under the host's `admin` section.
 - **Feature flags**: `gpx`, `video`, `rich-text`, `pdf-export`, `dashboard`, `collab-editing`.
 - **Realtime topics**: `surveys/{surveyId}/editing`, `surveys/{surveyId}/responses`.
-- **Health checks**: license-key reachability.
+- **Health checks**: database and licence key, in the host's plugin health report.
 
 SurveyJS modules (`survey-core`, `survey-react-ui`, `survey-creator-react`) are declared as `peerDependencies` and imported through dynamic `import()` inside the style/admin components, so the host shell only pays for them when the SurveyJS plugin is actively rendering something.
 
@@ -280,7 +280,7 @@ sh2-shp-survey-js/
 │   │                SurveyResponseDraftService, SurveyDashboardService, SurveyPdfService,
 │   │                SurveyAnswerNormalizer, SurveyJsHtmlSanitizer, SurveyJsRealtimePublisher,
 │   │                SurveyJsApi, SurveyJsHealthCheck, SurveyFileAnswers, SignedFileUrlService, …}.php
-│   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense, SurveysHealth}Controller.php
+│   ├── src/Controller/Api/V1/{SurveysAdmin, SurveysPublic, SurveysLicense}Controller.php
 │   ├── src/EventSubscriber/{SurveyJsStyleRegistry, SurveyJsLookupRegistry, SurveyJsRealtimeTopic,
 │   │                        SurveyJsDataAccessResources, SurveyJsSectionBinding}Subscriber.php
 │   ├── src/Resources/{config/services.php, schemas/requests/*.json}

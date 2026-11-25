@@ -776,21 +776,6 @@
             ]
         },
         {
-            "name": "surveyjs_admin_health",
-            "path": "/admin/plugins/sh2-shp-survey-js/health",
-            "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysHealthController::__invoke",
-            "methods": [
-                "GET"
-            ],
-            "permissions": [
-                "surveyjs.survey.read",
-                "surveyjs.survey.create",
-                "surveyjs.survey.update",
-                "surveyjs.survey.publish",
-                "surveyjs.survey.delete"
-            ]
-        },
-        {
             "name": "surveyjs_public_published",
             "path": "/plugins/sh2-shp-survey-js/published/{key}",
             "controller": "Humdek\\SurveyJsBundle\\Controller\\Api\\V1\\SurveysPublicController::published",
@@ -878,10 +863,6 @@
     ],
     "scheduledJobs": [],
     "assets": [],
-    "health": {
-        "endpoint": "/admin/plugins/sh2-shp-survey-js/health",
-        "serviceId": "humdek.surveyjs.health_check"
-    },
     "labels": {
         "category": "forms",
         "namespace": "surveyjs"

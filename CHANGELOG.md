@@ -99,6 +99,15 @@ Wave 5 ships a migration, so the release is a **minor** version (plugin SemVer r
 - **No Answers eye without access to the answers.** A row whose count is a
   dash has no eye, and its name opens Versions instead of an Answers tab that
   only says "no access".
+- **SurveyJS shows up in the host's plugin health report.** `SurveyJsHealthCheck`
+  now implements the host's `PluginHealthCheckInterface` and carries the
+  `selfhelp.plugin.health_check` tag, so the plugin's Health tab and the doctor
+  list its subchecks (`database`, `license-key`; an unreadable table is a
+  failed subcheck, not an exception). Before, it had its own format and no tag,
+  and the host never ran it. The plugin's own route
+  `/admin/plugins/sh2-shp-survey-js/health` (`SurveysHealthController`) and the
+  manifest `health` block are removed: the route had the same address as the
+  host's report for this plugin and answered in its place.
 - **The Creator no longer paints over the host's banners.** Its z-indexes
   (the side panel uses 1000) stay inside the editor frame, so the
   impersonation banner shows in full.

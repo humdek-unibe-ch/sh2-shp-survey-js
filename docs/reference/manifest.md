@@ -111,14 +111,14 @@ Admin routes are mounted under `/cms-api/v1/admin/plugins/sh2-shp-survey-js/...`
 | Publish, restore | `/admin/.../surveys/{id}/versions` (POST), `/restore` | `surveyjs.survey.publish` + update grant |
 | Delete | `/admin/.../surveys/{id}` (DELETE) | `surveyjs.survey.delete` + delete grant |
 | Answers: counts, chart rows, one response, its PDF | `/admin/.../surveys/{id}/dashboard[/results]`, `/responses/{rid}[/pdf]` (GET) | any `surveyjs.survey.*` + read grant on the data table |
-| License key + health | `/admin/.../license-key`, `/health` | any `surveyjs.survey.*` |
+| License key | `/admin/.../license-key` | any `surveyjs.survey.*` |
 | Public survey (published/submit/progress/edit/files) | `/plugins/.../published/{key}/...` | public; the core section check decides (page, section) |
 
 The plugin has no route that lists, exports or deletes responses (removed in wave 8): that is the core Data screen, under the grant on the survey's data table.
 
 The list reply is `{items, canCreate}`; every survey in it and the single-survey reply carry `rights: {update, publish, delete}` (route permission plus grant) and `dataTableId` (null before the first response or without the read grant on the table), so the admin screen shows only the actions that will succeed. A refused save or publish says why in `data.reason`: `draft_conflict` (409, someone else saved the draft), `answered_question_renamed` (409, a question with answers renamed or removed; the draft is saved), `reserved_question_name` (422; the draft is saved).
 
-The health endpoint (`/admin/plugins/sh2-shp-survey-js/health`, service `humdek.surveyjs.health_check`) backs the manifest `health` declaration.
+No own health route and no manifest `health` block: `SurveyJsHealthCheck` is tagged `selfhelp.plugin.health_check`, and the host's report (`GET /admin/plugins/sh2-shp-survey-js/health`, the plugin's Health tab) runs it in process.
 
 ## Configuration
 
