@@ -37,6 +37,22 @@ export interface IAdminSurveySummary {
     rights: IAdminSurveyRights;
 }
 
+/** One page that places the survey, in the editor's draft (host `SectionPlacementService`). */
+export interface IAdminSurveyPlacement {
+    pageId: number;
+    keyword: string;
+    isPublished: boolean;
+    sectionId: number;
+    /** The section's name in the page editor; may be generated (`1795444910-surveyjs`). */
+    sectionName: string;
+}
+
+/** Where a survey is placed: pages the caller may open, and how many others there are. */
+export interface IAdminSurveyUsage {
+    pages: IAdminSurveyPlacement[];
+    hiddenPages: number;
+}
+
 export interface IAdminSurveyList {
     items: IAdminSurveySummary[];
     canCreate: boolean;
@@ -45,6 +61,8 @@ export interface IAdminSurveyList {
 export interface IAdminSurveyDetail extends IAdminSurveySummary {
     definition: Record<string, unknown> | null;
     publishedDefinition?: Record<string, unknown> | null;
+    /** Only on `GET /surveys/{id}`; saves and publishes do not send it. */
+    usage?: IAdminSurveyUsage;
 }
 
 export interface IAdminSurveyVersion {

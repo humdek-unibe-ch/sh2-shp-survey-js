@@ -48,8 +48,8 @@ roles.
   (pencil), **Duplicate**, **Archive** and **Delete**. An icon shows only
   when you may use it: no eye where the count is a dash.
 
-Click a survey's name to open it. A survey has four tabs: **Design**,
-**Answers**, **Versions** and **Settings**. **All surveys** at the top
+Click a survey's name to open it. A survey has five tabs: **Design**,
+**Answers**, **Versions**, **Usage** and **Settings**. **All surveys** at the top
 takes you back to the list; the browser's back button works too.
 
 ---
@@ -175,6 +175,13 @@ with. **Restore** shows only if you may publish.
 
 The section shows the latest published version. Archived surveys are
 not shown to participants.
+
+To see where a survey is placed, open its **Usage** tab. It lists each page
+with the section's name (both open the page editor), whether the page is
+published, and a pencil that opens the section in the page editor. Pages you
+may not open are only counted. An archived survey is marked there: no page
+shows it. A section reused on other pages through a reference container is
+not listed. The delete dialog shows the same pages before you delete a survey.
 
 ---
 

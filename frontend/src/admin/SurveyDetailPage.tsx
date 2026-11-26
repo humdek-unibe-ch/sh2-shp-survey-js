@@ -12,7 +12,7 @@ SPDX-License-Identifier: MPL-2.0
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActionIcon, Alert, Anchor, Badge, Box, Button, CopyButton, Group, Loader, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
-import { IconArrowLeft, IconChartBar, IconCheck, IconCopy, IconDatabase, IconHistory, IconPencil, IconSettings } from '@tabler/icons-react';
+import { IconArrowLeft, IconChartBar, IconCheck, IconCopy, IconDatabase, IconHistory, IconLayoutList, IconPencil, IconSettings } from '@tabler/icons-react';
 
 import { getSurvey, SurveyApiError, type IAdminSurveyDetail } from '../api/surveys-admin';
 import type { TSurveyView } from './adminUrl';
@@ -20,6 +20,7 @@ import { dataScreenUrl } from './dataScreenUrl';
 import { SurveyAnswersPage } from './SurveyAnswersPage';
 import { SurveyDesignerPage } from './SurveyDesignerPage';
 import { SurveySettingsPage } from './SurveySettingsPage';
+import { SurveyUsagePage } from './SurveyUsagePage';
 import { SurveyVersionsPage } from './SurveyVersionsPage';
 
 interface ISurveyDetailPageProps {
@@ -150,6 +151,9 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
                         <Tabs.Tab value="versions" leftSection={<IconHistory size={14} />}>
                             Versions
                         </Tabs.Tab>
+                        <Tabs.Tab value="usage" leftSection={<IconLayoutList size={14} />}>
+                            Usage
+                        </Tabs.Tab>
                         <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />}>
                             Settings
                         </Tabs.Tab>
@@ -172,6 +176,9 @@ export function SurveyDetailPage({ surveyId, view, onViewChange, onBack }: ISurv
                         // Rebuild the editor only once the restored draft is loaded, or it starts from the old one.
                         onRestored={() => void reload().then(() => setDesignerKey((key) => key + 1))}
                     />
+                </Tabs.Panel>
+                <Tabs.Panel value="usage" pt="md">
+                    <SurveyUsagePage surveyId={survey.id} />
                 </Tabs.Panel>
                 <Tabs.Panel value="settings" pt="md">
                     <SurveySettingsPage survey={survey} onSurveyChanged={setSurvey} />

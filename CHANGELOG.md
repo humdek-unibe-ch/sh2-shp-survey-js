@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 SurveyJS 3 upgrade (`docs/developer/upgrade-plan.md`), waves 1, 5, 6, 7 and 8. Web only; mobile still ships SurveyJS 2 and the old field names (wave 9).
 
+- **Usage tab.** A survey's new Usage tab (`?view=usage`) lists the pages it is
+  placed on: page, section, published or not, and a link to the section in the
+  page editor. Pages the caller may not open are counted, never named. The
+  delete dialog lists the same pages. The data comes with `GET /surveys/{id}`
+  (`usage`), from the host's `SectionPlacementService` (backend `Unreleased`),
+  a stand-in until the host's own service for this lands.
+
 **Needs** a core with the section access check and section variables (H4, H1),
 plugin resource types and the section field check (H6, H7), core form files
 for a record without a form (`FormFileUploadService::storeRecordFile`, value

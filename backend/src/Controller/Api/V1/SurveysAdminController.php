@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace Humdek\SurveyJsBundle\Controller\Api\V1;
 
+use App\Service\CMS\Admin\SectionPlacementService;
 use Humdek\SurveyJsBundle\Entity\Survey;
 use Humdek\SurveyJsBundle\Entity\SurveyVersion;
 use Humdek\SurveyJsBundle\Repository\SurveyRepository;
@@ -19,6 +20,7 @@ use Humdek\SurveyJsBundle\Service\SurveyJsRealtimePublisher;
 use Humdek\SurveyJsBundle\Service\SurveyPdfService;
 use Humdek\SurveyJsBundle\Service\SurveyResponseRecord;
 use Humdek\SurveyJsBundle\Service\SurveyResponseStore;
+use Humdek\SurveyJsBundle\Service\SurveySectionResolver;
 use Humdek\SurveyJsBundle\Service\SurveyService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -56,6 +58,7 @@ final class SurveysAdminController
         private readonly SurveyAccessService $access,
         private readonly SurveyJsRealtimePublisher $realtime,
         private readonly SurveyFileAnswers $fileAnswers,
+        private readonly SectionPlacementService $placements,
     ) {
     }
 
@@ -101,7 +104,14 @@ final class SurveysAdminController
         if (!$this->access->can($survey, SurveyAccessService::READ)) {
             return $this->forbidden();
         }
-        return $this->api->success($this->detail($survey));
+        // Where the survey is placed (the Usage tab, the delete dialog): pages the caller may open, the rest counted.
+        $usage = $this->placements->placementsOf(
+            SurveySectionResolver::STYLE_NAME,
+            [SurveySectionResolver::FIELD_SURVEY, SurveySectionResolver::FIELD_SURVEY_OLD],
+            [$survey->getSurveyId()],
+        )[$survey->getSurveyId()];
+
+        return $this->api->success([...$this->detail($survey), 'usage' => $usage]);
     }
 
     public function update(int $id, Request $request): JsonResponse

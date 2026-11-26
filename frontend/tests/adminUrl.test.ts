@@ -14,6 +14,7 @@ describe('survey admin location', () => {
 
     it('opens a survey on the tab the link names, the editor by default', () => {
         expect(parseAdminLocation('?id=12&view=versions')).toEqual({ surveyId: 12, view: 'versions' });
+        expect(parseAdminLocation('?id=12&view=usage')).toEqual({ surveyId: 12, view: 'usage' });
         expect(parseAdminLocation('?id=12')).toEqual({ surveyId: 12, view: 'design' });
         expect(parseAdminLocation('?id=12&view=nonsense')).toEqual({ surveyId: 12, view: 'design' });
     });

@@ -9,14 +9,14 @@ SPDX-License-Identifier: MPL-2.0
  * `dashboard`, `responses`) still land on the matching tab.
  */
 
-export type TSurveyView = 'design' | 'answers' | 'versions' | 'settings';
+export type TSurveyView = 'design' | 'answers' | 'versions' | 'usage' | 'settings';
 
 export interface IAdminLocation {
     surveyId: number | null;
     view: TSurveyView;
 }
 
-const VIEWS: readonly TSurveyView[] = ['design', 'answers', 'versions', 'settings'];
+const VIEWS: readonly TSurveyView[] = ['design', 'answers', 'versions', 'usage', 'settings'];
 
 const OLD_VIEWS: Readonly<Record<string, TSurveyView>> = {
     designer: 'design',

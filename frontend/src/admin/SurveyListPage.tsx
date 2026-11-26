@@ -41,11 +41,13 @@ import {
     updateSurvey,
     type IAdminSurveyList,
     type IAdminSurveySummary,
+    type IAdminSurveyUsage,
 } from '../api/surveys-admin';
 import { IS_DEV_RUNTIME } from '../runtime-mode';
 import type { TSurveyView } from './adminUrl';
 import { dataScreenUrl } from './dataScreenUrl';
 import { filterSurveys, type TStateFilter } from './surveyListFilter';
+import { sectionEditorUrl } from './SurveyUsagePage';
 import { AdminModal, EmptyState, FilterActions, PageHeader } from './ui/AdminUi';
 
 interface ISurveyFilters {
@@ -69,6 +71,8 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
     const [fetching, setFetching] = useState<boolean>(false);
     const [creating, setCreating] = useState<boolean>(false);
     const [pendingDelete, setPendingDelete] = useState<IAdminSurveySummary | null>(null);
+    // Where the survey to delete is placed, loaded when the dialog opens.
+    const [deleteUsage, setDeleteUsage] = useState<IAdminSurveyUsage | null>(null);
     // The last archive or unarchive, so the row leaving the current filter is explained and can be undone.
     const [archivedNotice, setArchivedNotice] = useState<{ survey: IAdminSurveySummary; archived: boolean } | null>(null);
 
@@ -92,6 +96,20 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
     useEffect(() => {
         void reload();
     }, [reload]);
+
+    useEffect(() => {
+        setDeleteUsage(null);
+        if (pendingDelete === null) return undefined;
+        let current = true;
+        getSurvey(pendingDelete.id)
+            .then((survey) => {
+                if (current) setDeleteUsage(survey.usage ?? null);
+            })
+            .catch(() => undefined);
+        return () => {
+            current = false;
+        };
+    }, [pendingDelete]);
 
     const run = useCallback(async (survey: IAdminSurveySummary, action: () => Promise<unknown>): Promise<boolean> => {
         setBusyId(survey.id);
@@ -331,6 +349,12 @@ export function SurveyListPage({ onOpen }: ISurveyListPageProps): React.ReactEle
                         archive it instead.
                     </Text>
                 </Alert>
+                {deleteUsage !== null && (deleteUsage.pages.length > 0 || deleteUsage.hiddenPages > 0) && (
+                    <Stack gap={4} mt="sm">
+                        <Text size="sm" fw={500}>Placed on</Text>
+                        <UsageBadges usage={deleteUsage} />
+                    </Stack>
+                )}
                 {error && (
                     <Text size="sm" c="red" mt="sm" role="alert">
                         Could not delete: {error}
@@ -359,6 +383,40 @@ interface ISurveyRowProps {
 export function surveyRowLinks(survey: Pick<IAdminSurveySummary, 'responseCount' | 'rights'>): { openView: TSurveyView; readsAnswers: boolean } {
     const readsAnswers = survey.responseCount !== null;
     return { openView: survey.rights.update ? 'design' : readsAnswers ? 'answers' : 'versions', readsAnswers };
+}
+
+/**
+ * The pages a survey is placed on, for the delete dialog: one badge per page,
+ * linking to the section in the page editor. Pages the caller may not open
+ * are only counted; the server leaves them out.
+ */
+function UsageBadges({ usage }: { usage: IAdminSurveyUsage }): React.ReactElement {
+    const pages = usage.pages.filter((page, index, all) => all.findIndex((other) => other.pageId === page.pageId) === index);
+
+    return (
+        <Group gap={4} wrap="wrap">
+            {pages.map((page) => (
+                <Tooltip key={page.pageId} label={page.isPublished ? 'Open the section in the page editor' : 'Page not published yet. Open the section in the page editor'}>
+                    <Badge
+                        component="a"
+                        href={sectionEditorUrl(page.keyword, page.sectionId)}
+                        variant="light"
+                        color={page.isPublished ? 'gray' : 'yellow'}
+                        size="sm"
+                        radius="sm"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        {page.keyword}
+                    </Badge>
+                </Tooltip>
+            ))}
+            {usage.hiddenPages > 0 && (
+                <Text size="xs" c="dimmed">
+                    +{usage.hiddenPages} {usage.hiddenPages === 1 ? 'page' : 'pages'} you cannot open
+                </Text>
+            )}
+        </Group>
+    );
 }
 
 function SurveyRow({ survey, busy, canCreate, onOpen, onDuplicate, onArchive, onDelete }: ISurveyRowProps): React.ReactElement {
